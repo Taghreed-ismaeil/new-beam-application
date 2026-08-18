@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { StyleSheet, TouchableOpacity } from "react-native";
 
-export default function BackButton({ color = "#111", style }) {
+export default function BackButton({ color = "#111", style = undefined }) {
   return (
     <TouchableOpacity
       style={[styles.button, style]}

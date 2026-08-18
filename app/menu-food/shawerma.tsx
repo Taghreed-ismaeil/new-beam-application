@@ -1,4 +1,3 @@
-import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,25 +24,58 @@ const LIGHT_ORANGE = "#FFF0EA";
 const LIGHT_TEAL = "#E8F5F2";
 const WHITE = "#FFFFFF";
 
-const FALLBACK_IMAGE = require("../../assets/img/menu-4.jpg");
+const FALLBACK_IMAGE = require("../../assets/img/menu-1.jpg");
 
-const CATEGORY_ID = 2;
+const CATEGORY_ID = 1;
 
-export default function Sandwiches() {
+/* =========================================================
+   TYPES
+========================================================= */
+
+type MenuItem = {
+  id: number;
+  name?: string;
+  nameEn?: string;
+  description?: string;
+  descriptionEn?: string;
+  price: number | string;
+  imageUrl?: string | null;
+};
+
+type MenuCategory = {
+  id: number;
+  name?: string;
+  nameEn?: string;
+  items?: MenuItem[];
+};
+
+type MenuResponse = {
+  categories?: MenuCategory[];
+};
+
+/* =========================================================
+   SCREEN
+========================================================= */
+
+export default function Shawerma() {
   const { width } = useWindowDimensions();
 
   const cart = useCart();
 
-  const [category, setCategory] = useState(null);
+  const [category, setCategory] = useState<MenuCategory | null>(null);
   const [loading, setLoading] = useState(true);
 
   const isSmall = width < 360;
 
+  /* ================= FETCH MENU ================= */
+
   useEffect(() => {
     apiRequest("/api/menu")
-      .then((data) => {
+      .then((data: MenuResponse) => {
         const foundCategory =
-          data.categories?.find((c) => c.id === CATEGORY_ID) ?? null;
+          data.categories?.find(
+            (categoryItem) => categoryItem.id === CATEGORY_ID,
+          ) ?? null;
 
         setCategory(foundCategory);
       })
@@ -55,23 +87,39 @@ export default function Sandwiches() {
       });
   }, []);
 
-  function handleAdd(item) {
+  /* ================= CART ================= */
+
+  function handleAdd(item: MenuItem) {
     cart.add({
       id: item.id,
-      name: item.nameEn || item.name,
+      name: item.nameEn || item.name || "Menu item",
       price: Number(item.price),
     });
   }
 
-  function getQuantity(itemId) {
-    const line = cart.lines?.find((line) => line.menuItemId === itemId);
+  function getQuantity(itemId: number) {
+    const line = cart.lines.find((cartLine) => cartLine.menuItemId === itemId);
 
     return line?.quantity ?? 0;
   }
 
-  function handleCardPress(item) {
-    router.push(`/menu/item/${item.id}`);
+  function increaseQuantity(item: MenuItem) {
+    cart.add({
+      id: item.id,
+      name: item.nameEn || item.name || "Menu item",
+      price: Number(item.price),
+    });
   }
+
+  function decreaseQuantity(item: MenuItem) {
+    const quantity = getQuantity(item.id);
+
+    if (quantity > 0) {
+      cart.setQuantity(item.id, quantity - 1);
+    }
+  }
+
+  /* ================= LOADING ================= */
 
   if (loading) {
     return (
@@ -79,17 +127,19 @@ export default function Sandwiches() {
         <BackButton />
 
         <View style={styles.loadingIcon}>
-          <Text style={styles.loadingEmoji}>🥪</Text>
+          <Text style={styles.loadingEmoji}>🌯</Text>
         </View>
 
-        <ActivityIndicator size="small" color={ORANGE} />
+        <ActivityIndicator size="small" color={TEAL} />
 
-        <Text style={styles.loadingText}>Preparing your sandwiches...</Text>
+        <Text style={styles.loadingText}>Preparing your shawerma...</Text>
       </View>
     );
   }
 
   const items = category?.items ?? [];
+
+  /* ================= SCREEN ================= */
 
   return (
     <View style={styles.screen}>
@@ -103,7 +153,7 @@ export default function Sandwiches() {
 
         <View style={styles.heroContainer}>
           <Image
-            source={require("../../assets/img/menu-4.jpg")}
+            source={require("../../assets/img/menu-1.jpg")}
             style={[
               styles.heroImage,
               {
@@ -112,8 +162,10 @@ export default function Sandwiches() {
             ]}
           />
 
+          {/* soft overlay */}
           <View style={styles.heroOverlay} />
 
+          {/* Shawerma title */}
           <Text
             style={[
               styles.heroTitle,
@@ -122,9 +174,10 @@ export default function Sandwiches() {
               },
             ]}
           >
-            Sandwiches
+            Shawerma
           </Text>
 
+          {/* wave */}
           <Svg
             width="100%"
             height={85}
@@ -153,10 +206,10 @@ export default function Sandwiches() {
           {items.length === 0 ? (
             <View style={styles.emptyCard}>
               <View style={styles.emptyIcon}>
-                <Text style={styles.emptyEmoji}>🥪</Text>
+                <Text style={styles.emptyEmoji}>🌯</Text>
               </View>
 
-              <Text style={styles.emptyTitle}>No sandwiches yet</Text>
+              <Text style={styles.emptyTitle}>No shawerma yet</Text>
 
               <Text style={styles.emptyText}>
                 We’re preparing something delicious.
@@ -169,11 +222,8 @@ export default function Sandwiches() {
                 item={item}
                 quantity={getQuantity(item.id)}
                 onAdd={() => handleAdd(item)}
-                onIncrease={() => handleAdd(item)}
-                onDecrease={() =>
-                  cart.setQuantity(item.id, getQuantity(item.id) - 1)
-                }
-                onPress={() => handleCardPress(item)}
+                onIncrease={() => increaseQuantity(item)}
+                onDecrease={() => decreaseQuantity(item)}
                 index={index}
                 isSmall={isSmall}
               />
@@ -195,32 +245,42 @@ export default function Sandwiches() {
   );
 }
 
+/* =========================================================
+   FOOD CARD
+========================================================= */
+
+type FoodCardProps = {
+  item: MenuItem;
+  quantity: number;
+  onAdd: () => void;
+  onIncrease: () => void;
+  onDecrease: () => void;
+  index: number;
+  isSmall: boolean;
+};
+
 function FoodCard({
   item,
   quantity,
   onAdd,
   onIncrease,
   onDecrease,
-  onPress,
   index,
   isSmall,
-}) {
+}: FoodCardProps) {
   const itemName = item.nameEn || item.name || "Menu item";
 
   const itemDescription = item.descriptionEn || item.description;
 
   const price = Number(item.price).toFixed(2);
 
-  const accent = index % 2 === 0 ? ORANGE : TEAL;
+  const accent = index % 2 === 0 ? TEAL : ORANGE;
 
-  const soft = index % 2 === 0 ? LIGHT_ORANGE : LIGHT_TEAL;
+  const soft = index % 2 === 0 ? LIGHT_TEAL : LIGHT_ORANGE;
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-    >
-      {/* ACCENT LINE */}
+    <View style={styles.card}>
+      {/* accent line */}
 
       <View
         style={[
@@ -231,7 +291,7 @@ function FoodCard({
         ]}
       />
 
-      {/* IMAGE */}
+      {/* image */}
 
       <Image
         source={
@@ -250,7 +310,7 @@ function FoodCard({
         ]}
       />
 
-      {/* CONTENT */}
+      {/* content */}
 
       <View style={styles.foodContent}>
         <Text style={styles.foodName} numberOfLines={2}>
@@ -290,10 +350,7 @@ function FoodCard({
 
           {quantity === 0 ? (
             <Pressable
-              onPress={(event) => {
-                event.stopPropagation?.();
-                onAdd();
-              }}
+              onPress={onAdd}
               style={({ pressed }) => [
                 styles.addButton,
                 {
@@ -314,17 +371,13 @@ function FoodCard({
                 },
               ]}
             >
+              {/* MINUS */}
+
               <Pressable
-                onPress={(event) => {
-                  event.stopPropagation?.();
-                  onDecrease();
-                }}
+                onPress={onDecrease}
                 style={({ pressed }) => [
                   styles.quantityButton,
-                  {
-                    borderColor: accent,
-                  },
-                  pressed && styles.quantityPressed,
+                  pressed && styles.addPressed,
                 ]}
               >
                 <Text
@@ -339,6 +392,8 @@ function FoodCard({
                 </Text>
               </Pressable>
 
+              {/* NUMBER */}
+
               <Text
                 style={[
                   styles.quantityText,
@@ -350,18 +405,16 @@ function FoodCard({
                 {quantity}
               </Text>
 
+              {/* PLUS */}
+
               <Pressable
-                onPress={(event) => {
-                  event.stopPropagation?.();
-                  onIncrease();
-                }}
+                onPress={onIncrease}
                 style={({ pressed }) => [
                   styles.quantityButton,
                   {
                     backgroundColor: accent,
-                    borderColor: accent,
                   },
-                  pressed && styles.quantityPressed,
+                  pressed && styles.addPressed,
                 ]}
               >
                 <Text style={styles.quantityPlusText}>+</Text>
@@ -370,9 +423,13 @@ function FoodCard({
           )}
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
+
+/* =========================================================
+   STYLES
+========================================================= */
 
 const styles = StyleSheet.create({
   /* ================= SCREEN ================= */
@@ -399,7 +456,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 25,
-    backgroundColor: LIGHT_ORANGE,
+    backgroundColor: LIGHT_TEAL,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 15,
@@ -421,8 +478,8 @@ const styles = StyleSheet.create({
   heroTitle: {
     position: "absolute",
     bottom: 5,
-    left: 110,
-    color: ORANGE,
+    left: 140,
+    color: TEAL,
     fontWeight: "900",
     letterSpacing: -1.2,
     zIndex: 2,
@@ -463,90 +520,6 @@ const styles = StyleSheet.create({
     right: 0,
   },
 
-  heroBadge: {
-    position: "absolute",
-    top: 92,
-    right: 18,
-    backgroundColor: WHITE,
-    borderRadius: 18,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-
-  heroBadgeText: {
-    color: TEAL,
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
-
-  /* ================= HEADER ================= */
-
-  header: {
-    marginTop: -4,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    minWidth: 0,
-  },
-
-  titleAccent: {
-    width: 5,
-    height: 52,
-    borderRadius: 3,
-    backgroundColor: TEAL,
-    marginRight: 12,
-  },
-
-  titleContent: {
-    flex: 1,
-    minWidth: 0,
-  },
-
-  title: {
-    color: DARK,
-    fontWeight: "900",
-    letterSpacing: -1.1,
-    marginBottom: 2,
-  },
-
-  subtitle: {
-    color: MUTED,
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: "500",
-  },
-
-  categoryPill: {
-    backgroundColor: LIGHT_ORANGE,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 13,
-    marginLeft: 10,
-  },
-
-  categoryPillText: {
-    color: ORANGE,
-    fontSize: 9,
-    fontWeight: "900",
-  },
-
   /* ================= SECTION ================= */
 
   section: {
@@ -576,11 +549,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.045,
     shadowRadius: 10,
     elevation: 2,
-  },
-
-  cardPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.995 }],
   },
 
   cardAccent: {
@@ -627,6 +595,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+  /* ================= PRICE ================= */
+
   pricePill: {
     alignSelf: "flex-start",
     borderRadius: 10,
@@ -656,30 +626,24 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
-  addPressed: {
-    opacity: 0.65,
-    transform: [{ scale: 0.97 }],
-  },
-
   /* ================= QUANTITY ================= */
 
   quantityControl: {
-    height: 38,
-    borderRadius: 15,
+    height: 34,
+    minWidth: 96,
+    borderRadius: 12,
     borderWidth: 1,
+    paddingHorizontal: 3,
 
     flexDirection: "row",
     alignItems: "center",
-
-    paddingHorizontal: 3,
+    justifyContent: "space-between",
   },
 
   quantityButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 12,
-
-    borderWidth: 1,
+    width: 28,
+    height: 28,
+    borderRadius: 10,
 
     alignItems: "center",
     justifyContent: "center",
@@ -688,37 +652,39 @@ const styles = StyleSheet.create({
   quantityButtonText: {
     fontSize: 18,
     fontWeight: "900",
-    lineHeight: 20,
   },
 
   quantityPlusText: {
     color: WHITE,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "900",
-    lineHeight: 20,
   },
 
   quantityText: {
-    minWidth: 28,
+    minWidth: 25,
     textAlign: "center",
     fontSize: 13,
     fontWeight: "900",
   },
 
-  quantityPressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.94 }],
+  addPressed: {
+    opacity: 0.65,
+    transform: [
+      {
+        scale: 0.97,
+      },
+    ],
   },
 
   /* ================= EMPTY ================= */
 
   emptyCard: {
-    backgroundColor: LIGHT_ORANGE,
+    backgroundColor: LIGHT_TEAL,
     borderRadius: 24,
     padding: 25,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#F6DDD6",
+    borderColor: "#D5EBE7",
   },
 
   emptyIcon: {

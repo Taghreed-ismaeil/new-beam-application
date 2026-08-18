@@ -54,6 +54,22 @@ const FIXED_CATEGORIES = [
     color: ORANGE,
     light: LIGHT_ORANGE,
   },
+  {
+    id: "drinks",
+    name: "Drinks",
+    image: require("../assets/img/drinks_kinza.jpg"),
+    route: "/menu-food/drinks",
+    color: TEAL,
+    light: LIGHT_TEAL,
+  },
+  {
+    id: "salad",
+    name: "Salad",
+    image: require("../assets/img/salat_menu.jpg"),
+    route: "/menu-food/salad",
+    color: ORANGE,
+    light: LIGHT_ORANGE,
+  },
 ];
 
 const QUICK_CATEGORIES = [
@@ -76,6 +92,11 @@ const QUICK_CATEGORIES = [
     id: "drinks",
     name: "Drinks",
     target: "drinks",
+  },
+  {
+    id: "salad",
+    name: "Salad",
+    target: "salad",
   },
 ];
 
@@ -103,6 +124,10 @@ const getCategoryKey = (item) => {
     return "drinks";
   }
 
+  if (name.includes("salad")) {
+    return "salad";
+  }
+
   return null;
 };
 
@@ -128,12 +153,14 @@ export default function Menu() {
     });
   }, []);
 
-  const realCategories = categories.map((item, index) => ({
-    ...item,
-    route: `/menu-food/${item.id}`,
-    color: index % 2 === 0 ? TEAL : ORANGE,
-    light: index % 2 === 0 ? LIGHT_TEAL : LIGHT_ORANGE,
-  }));
+  const realCategories = categories
+    .filter((item) => getCategoryKey(item) !== "drinks")
+    .map((item, index) => ({
+      ...item,
+      route: `/menu-food/${item.id}`,
+      color: index % 2 === 0 ? TEAL : ORANGE,
+      light: index % 2 === 0 ? LIGHT_TEAL : LIGHT_ORANGE,
+    }));
 
   const allCategories = [...FIXED_CATEGORIES, ...realCategories];
 
@@ -602,7 +629,7 @@ const styles = StyleSheet.create({
   },
 
   imageWrapper: {
-    height: 195,
+    height: 100,
     width: "100%",
     position: "relative",
     overflow: "hidden",

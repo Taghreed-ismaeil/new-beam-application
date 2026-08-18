@@ -15,6 +15,7 @@ import BackButton from "@/components/BackButton";
 import { useCart } from "@/context/CartContext";
 import { apiRequest, imageUrl } from "@/lib/api-client";
 
+
 const ORANGE = "#ED5529";
 const TEAL = "#008E82";
 const DARK = "#17201F";
@@ -35,7 +36,6 @@ export default function Burger() {
 
   const [category, setCategory] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [addedId, setAddedId] = useState(null);
 
   const isSmall = width < 360;
 
@@ -55,19 +55,40 @@ export default function Burger() {
       });
   }, []);
 
+  /* ================= CART ================= */
+
   function handleAdd(item) {
     cart.add({
       id: item.id,
       name: item.nameEn || item.name,
       price: Number(item.price),
     });
-
-    setAddedId(item.id);
-
-    setTimeout(() => {
-      setAddedId(null);
-    }, 900);
+    // router.push("/cart");
   }
+
+  function getQuantity(itemId) {
+    const line = cart.lines.find((l) => l.menuItemId === itemId);
+
+    return line?.quantity ?? 0;
+  }
+
+  function increaseQuantity(item) {
+    cart.add({
+      id: item.id,
+      name: item.nameEn || item.name,
+      price: Number(item.price),
+    });
+  }
+
+  function decreaseQuantity(item) {
+    const quantity = getQuantity(item.id);
+
+    if (quantity > 0) {
+      cart.setQuantity(item.id, quantity - 1);
+    }
+  }
+
+  /* ================= LOADING ================= */
 
   if (loading) {
     return (
@@ -134,14 +155,14 @@ export default function Burger() {
             <Path
               fill={WHITE}
               d="
-        M0,55
-        C180,110 320,20 520,55
-        C760,100 980,15 1180,50
-        C1310,72 1380,65 1440,45
-        L1440,120
-        L0,120
-        Z
-      "
+                M0,55
+                C180,110 320,20 520,55
+                C760,100 980,15 1180,50
+                C1310,72 1380,65 1440,45
+                L1440,120
+                L0,120
+                Z
+              "
             />
           </Svg>
         </View>
@@ -166,8 +187,10 @@ export default function Burger() {
               <FoodCard
                 key={item.id}
                 item={item}
-                added={addedId === item.id}
+                quantity={getQuantity(item.id)}
                 onAdd={() => handleAdd(item)}
+                onIncrease={() => increaseQuantity(item)}
+                onDecrease={() => decreaseQuantity(item)}
                 index={index}
                 isSmall={isSmall}
               />
@@ -189,7 +212,19 @@ export default function Burger() {
   );
 }
 
-function FoodCard({ item, added, onAdd, index, isSmall }) {
+/* =========================================================
+   FOOD CARD
+========================================================= */
+
+function FoodCard({
+  item,
+  quantity,
+  onAdd,
+  onIncrease,
+  onDecrease,
+  index,
+  isSmall,
+}) {
   const itemName = item.nameEn || item.name || "Menu item";
 
   const itemDescription = item.descriptionEn || item.description;
@@ -246,6 +281,8 @@ function FoodCard({ item, added, onAdd, index, isSmall }) {
         )}
 
         <View style={styles.bottomRow}>
+          {/* PRICE */}
+
           <View
             style={[
               styles.pricePill,
@@ -266,23 +303,90 @@ function FoodCard({ item, added, onAdd, index, isSmall }) {
             </Text>
           </View>
 
-          <Pressable
-            onPress={onAdd}
-            style={({ pressed }) => [
-              styles.addButton,
-              {
-                backgroundColor: added ? TEAL : accent,
-              },
-              pressed && styles.addPressed,
-            ]}
-          >
-            <Text style={styles.addText}>{added ? "Added ✓" : "Add"}</Text>
-          </Pressable>
+          {/* ADD / QUANTITY */}
+
+          {quantity === 0 ? (
+            <Pressable
+              onPress={onAdd}
+              style={({ pressed }) => [
+                styles.addButton,
+                {
+                  backgroundColor: accent,
+                },
+                pressed && styles.addPressed,
+              ]}
+            >
+              <Text style={styles.addText}>Add</Text>
+            </Pressable>
+          ) : (
+            <View
+              style={[
+                styles.quantityControl,
+                {
+                  backgroundColor: soft,
+                  borderColor: accent,
+                },
+              ]}
+            >
+              {/* MINUS */}
+
+              <Pressable
+                onPress={onDecrease}
+                style={({ pressed }) => [
+                  styles.quantityButton,
+                  pressed && styles.addPressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.quantityButtonText,
+                    {
+                      color: accent,
+                    },
+                  ]}
+                >
+                  −
+                </Text>
+              </Pressable>
+
+              {/* NUMBER */}
+
+              <Text
+                style={[
+                  styles.quantityText,
+                  {
+                    color: accent,
+                  },
+                ]}
+              >
+                {quantity}
+              </Text>
+
+              {/* PLUS */}
+
+              <Pressable
+                onPress={onIncrease}
+                style={({ pressed }) => [
+                  styles.quantityButton,
+                  {
+                    backgroundColor: accent,
+                  },
+                  pressed && styles.addPressed,
+                ]}
+              >
+                <Text style={styles.quantityPlusText}>+</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       </View>
     </View>
   );
 }
+
+/* =========================================================
+   STYLES
+========================================================= */
 
 const styles = StyleSheet.create({
   /* ================= SCREEN ================= */
@@ -336,6 +440,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: -1.2,
     zIndex: 2,
+
     textShadowColor: "rgba(0,0,0,0.25)",
     textShadowOffset: {
       width: 0,
@@ -380,6 +485,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 11,
     paddingVertical: 7,
+
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -542,6 +648,8 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
+  /* ================= ADD BUTTON ================= */
+
   addButton: {
     minWidth: 62,
     height: 34,
@@ -554,6 +662,47 @@ const styles = StyleSheet.create({
   addText: {
     color: WHITE,
     fontSize: 10.5,
+    fontWeight: "900",
+  },
+
+  /* ================= QUANTITY ================= */
+
+  quantityControl: {
+    height: 34,
+    minWidth: 96,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 3,
+
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  quantityButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  quantityButtonText: {
+    fontSize: 18,
+    fontWeight: "900",
+  },
+
+  quantityPlusText: {
+    color: WHITE,
+    fontSize: 17,
+    fontWeight: "900",
+  },
+
+  quantityText: {
+    minWidth: 25,
+    textAlign: "center",
+    fontSize: 13,
     fontWeight: "900",
   },
 

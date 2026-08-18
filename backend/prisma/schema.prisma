@@ -1,0 +1,376 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StaffRole {
+  admin
+  chef
+  cashier
+  manager
+  waiter
+}
+
+enum TableStatus {
+  available
+  occupied
+  reserved
+}
+
+enum ReservationStatus {
+  pending
+  confirmed
+  seated
+  completed
+  cancelled
+  no_show
+}
+
+enum OrderType {
+  pickup
+  delivery
+  dine_in
+  counter
+}
+
+enum OrderStatus {
+  pending
+  accepted
+  preparing
+  ready
+  out_for_delivery
+  completed
+  cancelled
+}
+
+enum PaymentMethod {
+  cash
+  cliq
+}
+
+enum PaymentStatus {
+  unpaid
+  awaiting_confirmation
+  paid
+}
+
+enum RewardType {
+  free
+  discount
+}
+
+/// Single-row table holding the restaurant's own info.
+model Restaurant {
+  id             Int      @id @default(1)
+  name           String
+  logoUrl        String?
+  coverImageUrl  String?
+  phone          String?
+  address        String?
+  lat            Float?
+  lng            Float?
+  openingHours   Json?
+  socialLinks    Json?
+  cliqAlias      String?
+  updatedAt      DateTime @updatedAt
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  phone        String   @unique
+  passwordHash String?
+  createdAt    DateTime @default(now())
+
+  orders           Order[]
+  loyaltyProgress  LoyaltyProgress[]
+  vouchers         Voucher[]
+  scanLogs         ScanLog[]
+  reservations     Reservation[]
+}
+
+model OtpCode {
+  id           Int       @id @default(autoincrement())
+  phone        String
+  codeHash     String
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  attemptCount Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  @@index([phone])
+}
+
+model Staff {
+  id           Int       @id @default(autoincrement())
+  name         String
+  phone        String    @unique
+  passwordHash String
+  role         StaffRole
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+
+  statusChanges     OrderStatusLog[]
+  confirmedOrders   Order[]             @relation("PaymentConfirmedBy")
+  waitedOrders      Order[]             @relation("OrderWaiter")
+  confirmedPayments Payment[]
+  createdReservations Reservation[]
+  inventoryMovements InventoryMovement[]
+  recordedExpenses  Expense[]
+}
+
+model RestaurantTable {
+  id          Int         @id @default(autoincrement())
+  tableNumber String      @unique
+  qrToken     String      @unique
+  seats       Int?
+  status      TableStatus @default(available)
+
+  orders       Order[]
+  reservations Reservation[]
+}
+
+model MenuCategory {
+  id        Int    @id @default(autoincrement())
+  name      String
+  nameEn    String?
+  sortOrder Int    @default(0)
+  imageUrl  String?
+
+  items MenuItem[]
+}
+
+model MenuItem {
+  id           Int      @id @default(autoincrement())
+  categoryId   Int
+  category     MenuCategory @relation(fields: [categoryId], references: [id])
+  name         String
+  nameEn       String?
+  description  String?
+  descriptionEn String?
+  price        Decimal  @db.Decimal(10, 2)
+  imageUrl     String?
+  isAvailable  Boolean  @default(true)
+  preparationTimeMinutes Int?
+
+  // Loyalty fields — only set for items enrolled in the "collect & win" QR program.
+  // Exactly one of qrToken (this item has its own printed QR) or qrGroupToken (this item is one
+  // option behind a QR shared with other items — scanning it shows a selection screen) is set.
+  qrToken      String?     @unique
+  qrGroupToken String?
+  colorImage   String?
+  grayImage    String?
+  layers       Json?
+  rewardType   RewardType?
+  rewardValue  String?
+
+  orderItems       OrderItem[]
+  loyaltyProgress  LoyaltyProgress[]
+  vouchers         Voucher[]
+  scanLogs         ScanLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([qrGroupToken])
+}
+
+model Offer {
+  id            Int       @id @default(autoincrement())
+  title         String
+  description   String?
+  imageUrl      String?
+  discountType  String    // 'percentage' | 'fixed'
+  discountValue Decimal   @db.Decimal(10, 2)
+  menuItemIds   Int[]
+  startsAt      DateTime?
+  endsAt        DateTime?
+  active        Boolean   @default(true)
+
+  orderItems OrderItem[]
+}
+
+model Order {
+  id       Int       @id @default(autoincrement())
+  userId   Int
+  user     User      @relation(fields: [userId], references: [id])
+
+  orderType OrderType
+  status    OrderStatus @default(pending)
+
+  tableId          Int?
+  table            RestaurantTable? @relation(fields: [tableId], references: [id])
+  deliveryAddress  String?
+  deliveryLat      Float?
+  deliveryLng      Float?
+
+  paymentMethod    PaymentMethod
+  paymentStatus    PaymentStatus @default(unpaid)
+  paymentProofUrl  String?
+  confirmedByStaffId Int?
+  confirmedByStaff   Staff? @relation("PaymentConfirmedBy", fields: [confirmedByStaffId], references: [id])
+
+  waiterId Int?
+  waiter   Staff? @relation("OrderWaiter", fields: [waiterId], references: [id])
+
+  subtotal      Decimal @db.Decimal(10, 2)
+  discountTotal Decimal @default(0) @db.Decimal(10, 2)
+  total         Decimal @db.Decimal(10, 2)
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items       OrderItem[]
+  statusLogs  OrderStatusLog[]
+  payments    Payment[]
+}
+
+model OrderItem {
+  id                Int      @id @default(autoincrement())
+  orderId           Int
+  order             Order    @relation(fields: [orderId], references: [id])
+  menuItemId        Int
+  menuItem          MenuItem @relation(fields: [menuItemId], references: [id])
+  nameSnapshot       String
+  unitPriceSnapshot  Decimal @db.Decimal(10, 2)
+  quantity           Int
+  notes              String?
+  offerId            Int?
+  offer              Offer?  @relation(fields: [offerId], references: [id])
+}
+
+model OrderStatusLog {
+  id             Int         @id @default(autoincrement())
+  orderId        Int
+  order          Order       @relation(fields: [orderId], references: [id])
+  status         OrderStatus
+  changedByStaffId Int?
+  changedByStaff Staff?      @relation(fields: [changedByStaffId], references: [id])
+  changedAt      DateTime    @default(now())
+}
+
+model LoyaltyProgress {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  user          User      @relation(fields: [userId], references: [id])
+  menuItemId    Int
+  menuItem      MenuItem  @relation(fields: [menuItemId], references: [id])
+  revealedCount Int       @default(0) // for display only — resets to 0 each time a voucher is redeemed
+  consumedCount Int       @default(0) // all-time credits ever spent by a scan — NEVER resets, gates against all-time earned
+  completedAt   DateTime?
+
+  @@unique([userId, menuItemId])
+}
+
+model Voucher {
+  id         Int       @id @default(autoincrement())
+  code       String    @unique
+  userId     Int
+  user       User      @relation(fields: [userId], references: [id])
+  menuItemId Int
+  menuItem   MenuItem  @relation(fields: [menuItemId], references: [id])
+  createdAt  DateTime  @default(now())
+  redeemedAt DateTime?
+}
+
+model ScanLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  user       User?    @relation(fields: [userId], references: [id])
+  menuItemId Int?
+  menuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
+  scannedAt  DateTime @default(now())
+  accepted   Boolean
+  reason     String?
+}
+
+/// Ledger of actual payment transactions for an order. Order.paymentMethod/paymentStatus stay as
+/// a fast summary; this table is the detailed record (supports split/multiple payment attempts).
+model Payment {
+  id                 Int           @id @default(autoincrement())
+  orderId            Int
+  order              Order         @relation(fields: [orderId], references: [id])
+  amount             Decimal       @db.Decimal(10, 2)
+  method             PaymentMethod
+  status             PaymentStatus @default(unpaid)
+  proofUrl           String?
+  confirmedByStaffId Int?
+  confirmedByStaff   Staff?        @relation(fields: [confirmedByStaffId], references: [id])
+  confirmedAt        DateTime?
+  createdAt          DateTime      @default(now())
+}
+
+model Reservation {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
+  guestName   String?
+  guestPhone  String?
+  partySize   Int
+  reservationTime DateTime
+  tableId     Int?
+  table       RestaurantTable? @relation(fields: [tableId], references: [id])
+  status      ReservationStatus @default(pending)
+  notes       String?
+  createdByStaffId Int?
+  createdByStaff   Staff? @relation(fields: [createdByStaffId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Supplier {
+  id          Int      @id @default(autoincrement())
+  name        String
+  contactName String?
+  phone       String?
+  email       String?
+  address     String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items InventoryItem[]
+}
+
+model InventoryItem {
+  id             Int      @id @default(autoincrement())
+  name           String
+  unit           String
+  quantityOnHand Decimal  @default(0) @db.Decimal(10, 2)
+  minQuantity    Decimal  @default(0) @db.Decimal(10, 2)
+  supplierId     Int?
+  supplier       Supplier? @relation(fields: [supplierId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  movements InventoryMovement[]
+}
+
+/// Audit log of every stock change — mirrors OrderStatusLog/ScanLog's append-only pattern.
+model InventoryMovement {
+  id        Int           @id @default(autoincrement())
+  itemId    Int
+  item      InventoryItem @relation(fields: [itemId], references: [id])
+  change    Decimal       @db.Decimal(10, 2)
+  reason    String?
+  staffId   Int?
+  staff     Staff?        @relation(fields: [staffId], references: [id])
+  createdAt DateTime      @default(now())
+}
+
+model Expense {
+  id                Int      @id @default(autoincrement())
+  category          String
+  description       String?
+  amount            Decimal  @db.Decimal(10, 2)
+  receiptUrl        String?
+  expenseDate       DateTime
+  recordedByStaffId Int?
+  recordedByStaff   Staff?   @relation(fields: [recordedByStaffId], references: [id])
+  createdAt         DateTime @default(now())
+}

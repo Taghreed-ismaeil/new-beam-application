@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
+    ActivityIndicator,
+    Image,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    useWindowDimensions,
+    View,
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
@@ -19,30 +19,49 @@ const ORANGE = "#ED5529";
 const TEAL = "#008E82";
 const DARK = "#17201F";
 const MUTED = "#68706E";
-const LIGHT_TEAL = "#E8F5F2";
+
 const LIGHT_ORANGE = "#FFF0EA";
+const LIGHT_TEAL = "#E8F5F2";
+
 const WHITE = "#FFFFFF";
 
-const FALLBACK_IMAGE = require("../../assets/img/menu-1.jpg");
+const FALLBACK_IMAGE = require("../../assets/img/drinks_kinza.jpg");
 
-const CATEGORY_ID = 1;
+/* =========================================================
+   DRINKS
+========================================================= */
 
-export default function Shawerma() {
+const CATEGORY_ID = "drinks";
+
+export default function Drinks() {
   const { width } = useWindowDimensions();
 
   const cart = useCart();
 
   const [category, setCategory] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [addedId, setAddedId] = useState(null);
 
   const isSmall = width < 360;
+
+  /* =========================================================
+     FETCH DRINKS
+  ========================================================= */
 
   useEffect(() => {
     apiRequest("/api/menu")
       .then((data) => {
         const foundCategory =
-          data.categories?.find((c) => c.id === CATEGORY_ID) ?? null;
+          data.categories?.find((c) => {
+            const name = `${c.nameEn || ""} ${c.name || ""}`
+              .trim()
+              .toLowerCase();
+
+            return (
+              c.id === CATEGORY_ID ||
+              name.includes("drink") ||
+              name.includes("beverage")
+            );
+          }) ?? null;
 
         setCategory(foundCategory);
       })
@@ -54,19 +73,43 @@ export default function Shawerma() {
       });
   }, []);
 
+  /* =========================================================
+     CART
+  ========================================================= */
+
   function handleAdd(item) {
     cart.add({
       id: item.id,
       name: item.nameEn || item.name,
       price: Number(item.price),
     });
-
-    setAddedId(item.id);
-
-    setTimeout(() => {
-      setAddedId(null);
-    }, 900);
   }
+
+  function getQuantity(itemId) {
+    const line = cart.lines.find((l) => l.menuItemId === itemId);
+
+    return line?.quantity ?? 0;
+  }
+
+  function increaseQuantity(item) {
+    cart.add({
+      id: item.id,
+      name: item.nameEn || item.name,
+      price: Number(item.price),
+    });
+  }
+
+  function decreaseQuantity(item) {
+    const quantity = getQuantity(item.id);
+
+    if (quantity > 0) {
+      cart.setQuantity(item.id, quantity - 1);
+    }
+  }
+
+  /* =========================================================
+     LOADING
+  ========================================================= */
 
   if (loading) {
     return (
@@ -74,17 +117,21 @@ export default function Shawerma() {
         <BackButton />
 
         <View style={styles.loadingIcon}>
-          <Text style={styles.loadingEmoji}>🌯</Text>
+          <Text style={styles.loadingEmoji}>🥤</Text>
         </View>
 
         <ActivityIndicator size="small" color={TEAL} />
 
-        <Text style={styles.loadingText}>Preparing your shawerma...</Text>
+        <Text style={styles.loadingText}>Preparing your drinks...</Text>
       </View>
     );
   }
 
   const items = category?.items ?? [];
+
+  /* =========================================================
+     PAGE
+  ========================================================= */
 
   return (
     <View style={styles.screen}>
@@ -94,10 +141,20 @@ export default function Shawerma() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        {/* ================= HERO ================= */}
-        <View style={styles.heroContainer}>
+        {/* =================================================
+            HERO
+        ================================================= */}
+
+        <View
+          style={[
+            styles.heroContainer,
+            {
+              height: isSmall ? 270 : 315,
+            },
+          ]}
+        >
           <Image
-            source={require("../../assets/img/menu-1.jpg")}
+            source={FALLBACK_IMAGE}
             style={[
               styles.heroImage,
               {
@@ -116,7 +173,7 @@ export default function Shawerma() {
               },
             ]}
           >
-            Shawerma
+            Drinks
           </Text>
 
           <Svg
@@ -129,31 +186,33 @@ export default function Shawerma() {
             <Path
               fill={WHITE}
               d="
-        M0,55
-        C180,110 320,20 520,55
-        C760,100 980,15 1180,50
-        C1310,72 1380,65 1440,45
-        L1440,120
-        L0,120
-        Z
-      "
+                M0,55
+                C180,110 320,20 520,55
+                C760,100 980,15 1180,50
+                C1310,72 1380,65 1440,45
+                L1440,120
+                L0,120
+                Z
+              "
             />
           </Svg>
         </View>
 
-        {/* ================= MENU ================= */}
+        {/* =================================================
+            MENU
+        ================================================= */}
 
         <View style={styles.section}>
           {items.length === 0 ? (
             <View style={styles.emptyCard}>
               <View style={styles.emptyIcon}>
-                <Text style={styles.emptyEmoji}>🌯</Text>
+                <Text style={styles.emptyEmoji}>🥤</Text>
               </View>
 
-              <Text style={styles.emptyTitle}>No shawerma yet</Text>
+              <Text style={styles.emptyTitle}>No drinks yet</Text>
 
               <Text style={styles.emptyText}>
-                We’re preparing something delicious.
+                We’re preparing something refreshing.
               </Text>
             </View>
           ) : (
@@ -161,8 +220,10 @@ export default function Shawerma() {
               <FoodCard
                 key={item.id}
                 item={item}
-                added={addedId === item.id}
+                quantity={getQuantity(item.id)}
                 onAdd={() => handleAdd(item)}
+                onIncrease={() => increaseQuantity(item)}
+                onDecrease={() => decreaseQuantity(item)}
                 index={index}
                 isSmall={isSmall}
               />
@@ -170,12 +231,14 @@ export default function Shawerma() {
           )}
         </View>
 
-        {/* ================= FOOTER ================= */}
+        {/* =================================================
+            FOOTER
+        ================================================= */}
 
         <View style={styles.footer}>
           <View style={styles.footerLine} />
 
-          <Text style={styles.footerText}>MADE FRESH FOR YOU</Text>
+          <Text style={styles.footerText}>FRESH & REFRESHING</Text>
 
           <View style={styles.footerLine} />
         </View>
@@ -184,12 +247,33 @@ export default function Shawerma() {
   );
 }
 
-function FoodCard({ item, added, onAdd, index, isSmall }) {
-  const itemName = item.nameEn || item.name || "Menu item";
+/* =========================================================
+   DRINK CARD
+========================================================= */
+
+function FoodCard({
+  item,
+  quantity,
+  onAdd,
+  onIncrease,
+  onDecrease,
+  index,
+  isSmall,
+}) {
+  const itemName = item.nameEn || item.name || "Drink";
 
   const itemDescription = item.descriptionEn || item.description;
 
   const price = Number(item.price).toFixed(2);
+
+  /*
+    IMPORTANT:
+    Alternating colors exactly like Burger page:
+    0 = Orange
+    1 = Teal
+    2 = Orange
+    3 = Teal
+  */
 
   const accent = index % 2 === 0 ? TEAL : ORANGE;
 
@@ -197,6 +281,8 @@ function FoodCard({ item, added, onAdd, index, isSmall }) {
 
   return (
     <View style={styles.card}>
+      {/* ACCENT */}
+
       <View
         style={[
           styles.cardAccent,
@@ -205,6 +291,8 @@ function FoodCard({ item, added, onAdd, index, isSmall }) {
           },
         ]}
       />
+
+      {/* IMAGE */}
 
       <Image
         source={
@@ -223,6 +311,8 @@ function FoodCard({ item, added, onAdd, index, isSmall }) {
         ]}
       />
 
+      {/* CONTENT */}
+
       <View style={styles.foodContent}>
         <Text style={styles.foodName} numberOfLines={2}>
           {itemName}
@@ -235,6 +325,8 @@ function FoodCard({ item, added, onAdd, index, isSmall }) {
         )}
 
         <View style={styles.bottomRow}>
+          {/* PRICE */}
+
           <View
             style={[
               styles.pricePill,
@@ -255,23 +347,90 @@ function FoodCard({ item, added, onAdd, index, isSmall }) {
             </Text>
           </View>
 
-          <Pressable
-            onPress={onAdd}
-            style={({ pressed }) => [
-              styles.addButton,
-              {
-                backgroundColor: added ? TEAL : accent,
-              },
-              pressed && styles.addPressed,
-            ]}
-          >
-            <Text style={styles.addText}>{added ? "Added ✓" : "Add"}</Text>
-          </Pressable>
+          {/* ADD / QUANTITY */}
+
+          {quantity === 0 ? (
+            <Pressable
+              onPress={onAdd}
+              style={({ pressed }) => [
+                styles.addButton,
+                {
+                  backgroundColor: accent,
+                },
+                pressed && styles.addPressed,
+              ]}
+            >
+              <Text style={styles.addText}>Add</Text>
+            </Pressable>
+          ) : (
+            <View
+              style={[
+                styles.quantityControl,
+                {
+                  backgroundColor: soft,
+                  borderColor: accent,
+                },
+              ]}
+            >
+              {/* MINUS */}
+
+              <Pressable
+                onPress={onDecrease}
+                style={({ pressed }) => [
+                  styles.quantityButton,
+                  pressed && styles.addPressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.quantityButtonText,
+                    {
+                      color: accent,
+                    },
+                  ]}
+                >
+                  −
+                </Text>
+              </Pressable>
+
+              {/* NUMBER */}
+
+              <Text
+                style={[
+                  styles.quantityText,
+                  {
+                    color: accent,
+                  },
+                ]}
+              >
+                {quantity}
+              </Text>
+
+              {/* PLUS */}
+
+              <Pressable
+                onPress={onIncrease}
+                style={({ pressed }) => [
+                  styles.quantityButton,
+                  {
+                    backgroundColor: accent,
+                  },
+                  pressed && styles.addPressed,
+                ]}
+              >
+                <Text style={styles.quantityPlusText}>+</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       </View>
     </View>
   );
 }
+
+/* =========================================================
+   STYLES
+========================================================= */
 
 const styles = StyleSheet.create({
   /* ================= SCREEN ================= */
@@ -316,25 +475,9 @@ const styles = StyleSheet.create({
   },
 
   /* ================= HERO ================= */
-  heroTitle: {
-    position: "absolute",
-    bottom: 10,
-    left: 110,
-    color: TEAL,
-    fontWeight: "900",
-    letterSpacing: -1.2,
-    zIndex: 2,
-    textShadowColor: "rgba(0,0,0,0.25)",
-    textShadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    textShadowRadius: 5,
-  },
 
   heroContainer: {
     width: "100%",
-    height: 315,
     position: "relative",
     overflow: "hidden",
   },
@@ -353,94 +496,30 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.08)",
   },
 
+  heroTitle: {
+    position: "absolute",
+    bottom: 5,
+    left: 0,
+    right: 0,
+    color: TEAL,
+    fontWeight: "900",
+    letterSpacing: -1.2,
+    textAlign: "center",
+    zIndex: 2,
+
+    textShadowColor: "rgba(0,0,0,0.25)",
+    textShadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    textShadowRadius: 5,
+  },
+
   wave: {
     position: "absolute",
     bottom: -1,
     left: 0,
     right: 0,
-  },
-
-  heroBadge: {
-    position: "absolute",
-    top: 92,
-    right: 18,
-    backgroundColor: WHITE,
-    borderRadius: 18,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-
-  heroBadgeText: {
-    color: TEAL,
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
-
-  /* ================= HEADER ================= */
-
-  header: {
-    marginTop: -4,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    minWidth: 0,
-  },
-
-  titleAccent: {
-    width: 5,
-    height: 52,
-    borderRadius: 3,
-    backgroundColor: TEAL,
-    marginRight: 12,
-  },
-
-  titleContent: {
-    flex: 1,
-    minWidth: 0,
-  },
-
-  title: {
-    color: DARK,
-    fontWeight: "900",
-    letterSpacing: -1.1,
-    marginBottom: 2,
-  },
-
-  subtitle: {
-    color: MUTED,
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: "500",
-  },
-
-  categoryPill: {
-    backgroundColor: LIGHT_ORANGE,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 13,
-    marginLeft: 10,
-  },
-
-  categoryPillText: {
-    color: ORANGE,
-    fontSize: 9,
-    fontWeight: "900",
   },
 
   /* ================= SECTION ================= */
@@ -450,7 +529,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 18,
   },
 
-  /* ================= FOOD CARD ================= */
+  /* ================= CARD ================= */
 
   card: {
     minHeight: 120,
@@ -463,6 +542,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     overflow: "hidden",
+
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -517,6 +597,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+  /* ================= PRICE ================= */
+
   pricePill: {
     alignSelf: "flex-start",
     borderRadius: 10,
@@ -528,6 +610,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
   },
+
+  /* ================= ADD ================= */
 
   addButton: {
     minWidth: 62,
@@ -544,6 +628,47 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
+  /* ================= QUANTITY ================= */
+
+  quantityControl: {
+    height: 34,
+    minWidth: 96,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 3,
+
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  quantityButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  quantityButtonText: {
+    fontSize: 18,
+    fontWeight: "900",
+  },
+
+  quantityPlusText: {
+    color: WHITE,
+    fontSize: 17,
+    fontWeight: "900",
+  },
+
+  quantityText: {
+    minWidth: 25,
+    textAlign: "center",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
   addPressed: {
     opacity: 0.65,
     transform: [{ scale: 0.97 }],
@@ -557,7 +682,7 @@ const styles = StyleSheet.create({
     padding: 25,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#D5EBE7",
+    borderColor: "#CDE8E3",
   },
 
   emptyIcon: {
