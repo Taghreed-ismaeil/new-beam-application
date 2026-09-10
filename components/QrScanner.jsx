@@ -50,6 +50,7 @@ function PhotoScanner({ cameraModule, onDecode }) {
   async function takeAndScan() {
     setError("");
     setBusy(true);
+    let stage = "permission";
     try {
       const ImagePicker = require("expo-image-picker");
       const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -61,6 +62,8 @@ function PhotoScanner({ cameraModule, onDecode }) {
         );
         return;
       }
+
+      stage = "camera";
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
         quality: 1,
@@ -70,6 +73,7 @@ function PhotoScanner({ cameraModule, onDecode }) {
       // The photo comes straight off the system camera, which on iOS can be HEIC and
       // full sensor resolution — scanFromURLAsync misses the code more often on those.
       // Normalizing to a resized JPEG first makes the scan reliable.
+      stage = "resize";
       const ImageManipulator = require("expo-image-manipulator");
       const normalized = await ImageManipulator.manipulateAsync(
         result.assets[0].uri,
@@ -77,6 +81,7 @@ function PhotoScanner({ cameraModule, onDecode }) {
         { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG },
       );
 
+      stage = "decode";
       const matches = await cameraModule.scanFromURLAsync(normalized.uri, [
         "qr",
       ]);
@@ -86,7 +91,10 @@ function PhotoScanner({ cameraModule, onDecode }) {
         setError("Couldn't find a QR code in that photo, try again");
       }
     } catch (e) {
-      setError(e?.message ?? "Something went wrong");
+      console.error(`[QrScanner:${stage}]`, e);
+      setError(
+        `Something went wrong (${stage}): ${e?.message || e?.code || String(e)}`,
+      );
     } finally {
       setBusy(false);
     }
