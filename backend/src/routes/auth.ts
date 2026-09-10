@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requestOtp, checkOtp, consumeOtp } from '../lib/otp';
 import { signToken } from '../lib/jwt';
+import { requireUser } from '../middleware/auth';
 
 export const authRouter = Router();
 
@@ -15,8 +16,10 @@ const requestSchema = z.object({
   phone: z.string().min(6),
   // "register" rejects up front if the phone already has an account, so the
   // customer finds out before ever seeing the code screen instead of after
-  // typing the code in. Password-reset omits this (or sends "reset") since
-  // it needs the account to already exist.
+  // typing the code in. "reset" mirrors that in the other direction — it
+  // needs the account to already exist (and not be a deleted one, see
+  // passwordHash check below), so it rejects up front too instead of sending
+  // a code the customer would never be able to use.
   purpose: z.enum(['register', 'reset']).optional(),
 });
 
@@ -28,6 +31,9 @@ authRouter.post('/otp/request', async (req, res) => {
   if (purpose === 'register') {
     const existing = await prisma.user.findUnique({ where: { phone } });
     if (existing) return res.status(409).json({ error: 'phone_already_registered' });
+  } else if (purpose === 'reset') {
+    const existing = await prisma.user.findUnique({ where: { phone } });
+    if (!existing || !existing.passwordHash) return res.status(404).json({ error: 'no_account_for_phone' });
   }
 
   await requestOtp(phone);
@@ -74,7 +80,12 @@ authRouter.post('/login', async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
 
   const user = await prisma.user.findUnique({ where: { phone: parsed.data.phone } });
-  if (!user?.passwordHash) return res.status(401).json({ error: 'invalid_credentials' });
+  if (!user) return res.status(401).json({ error: 'no_account_for_phone' });
+  // A deleted account keeps its row (see DELETE /account) so this phone number
+  // still resolves to something — passwordHash is cleared as the deletion
+  // marker, which lets the customer be told their account is gone instead of
+  // just "wrong password".
+  if (!user.passwordHash) return res.status(401).json({ error: 'account_deleted' });
 
   const ok = await bcrypt.compare(parsed.data.password, user.passwordHash);
   if (!ok) return res.status(401).json({ error: 'invalid_credentials' });
@@ -100,6 +111,9 @@ authRouter.post('/password-reset/confirm', async (req, res) => {
 
   const user = await prisma.user.findUnique({ where: { phone } });
   if (!user) return res.status(404).json({ error: 'no_account_for_phone' });
+  // Resetting the password would otherwise resurrect a deleted account —
+  // same passwordHash-null marker as the login check above.
+  if (!user.passwordHash) return res.status(404).json({ error: 'no_account_for_phone' });
 
   const result = await checkOtp(phone, code);
   if (!result.valid) return res.status(400).json({ error: 'invalid_or_expired_code' });
@@ -110,6 +124,36 @@ authRouter.post('/password-reset/confirm', async (req, res) => {
 
   const token = signToken({ kind: 'user', userId: updated.id });
   res.json({ token, user: publicUser(updated) });
+});
+
+// Full hard-delete isn't possible here: Order.userId is required (not nullable),
+// and deleting completed orders would erase real payment/revenue history the
+// restaurant needs to keep. So this wipes everything that's purely personal —
+// loyalty progress, vouchers, scan history — detaches the customer from any
+// reservations (which support a null userId, same as a walk-in booking), then
+// anonymizes the User row's name and clears passwordHash so the account can
+// never be logged into (or password-reset) again. Their past orders stay
+// intact for accounting, just no longer tied to identifying info.
+// The phone number is deliberately left as-is (not scrambled): login and
+// password-reset both look the account up by phone and check passwordHash to
+// tell a deleted account apart from a wrong password, so they can show "this
+// account no longer exists" instead of a misleading generic error. The
+// tradeoff is that phone number can't be reused for a new signup.
+authRouter.delete('/account', requireUser, async (req, res) => {
+  const userId = (req.auth as any).userId;
+
+  await prisma.$transaction([
+    prisma.voucher.deleteMany({ where: { userId } }),
+    prisma.loyaltyProgress.deleteMany({ where: { userId } }),
+    prisma.scanLog.deleteMany({ where: { userId } }),
+    prisma.reservation.updateMany({ where: { userId }, data: { userId: null } }),
+    prisma.user.update({
+      where: { id: userId },
+      data: { name: 'Deleted User', passwordHash: null },
+    }),
+  ]);
+
+  res.json({ ok: true });
 });
 
 export const staffAuthRouter = Router();

@@ -20,7 +20,7 @@ adminStaffRouter.get('/', requireStaff('admin', 'manager'), async (_req, res) =>
 
 adminStaffRouter.use(requireStaff('admin'));
 
-const roleEnum = z.enum(['admin', 'chef', 'cashier', 'manager', 'waiter']);
+const roleEnum = z.enum(['admin', 'chef', 'cashier', 'manager', 'waiter', 'driver']);
 
 const createSchema = z.object({
   name: z.string().min(1),

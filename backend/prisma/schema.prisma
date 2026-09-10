@@ -13,6 +13,7 @@ enum StaffRole {
   cashier
   manager
   waiter
+  driver
 }
 
 enum TableStatus {
@@ -117,6 +118,7 @@ model Staff {
   statusChanges     OrderStatusLog[]
   confirmedOrders   Order[]             @relation("PaymentConfirmedBy")
   waitedOrders      Order[]             @relation("OrderWaiter")
+  drivenOrders      Order[]             @relation("OrderDriver")
   confirmedPayments Payment[]
   createdReservations Reservation[]
   inventoryMovements InventoryMovement[]
@@ -167,6 +169,10 @@ model MenuItem {
   layers       Json?
   rewardType   RewardType?
   rewardValue  String?
+  // false only for promo items not on the real orderable menu yet (e.g. a launch campaign) —
+  // scanning skips the "did you actually buy this?" credit check. Every real menu item stays
+  // true (the default), same anti-fraud gate as before.
+  requiresPurchase Boolean @default(true)
 
   orderItems       OrderItem[]
   loyaltyProgress  LoyaltyProgress[]
@@ -216,6 +222,16 @@ model Order {
 
   waiterId Int?
   waiter   Staff? @relation("OrderWaiter", fields: [waiterId], references: [id])
+
+  // Delivery driver assignment + their last-known live position, polled from
+  // the driver's own device while an order is out for delivery. Only ever
+  // holds the single latest point (not a route history) — that's all the
+  // customer's live tracking map needs.
+  driverId         Int?
+  driver           Staff?    @relation("OrderDriver", fields: [driverId], references: [id])
+  driverLat        Float?
+  driverLng        Float?
+  driverLocationAt DateTime?
 
   subtotal      Decimal @db.Decimal(10, 2)
   discountTotal Decimal @default(0) @db.Decimal(10, 2)
@@ -272,8 +288,14 @@ model Voucher {
   code       String    @unique
   userId     Int
   user       User      @relation(fields: [userId], references: [id])
-  menuItemId Int
-  menuItem   MenuItem  @relation(fields: [menuItemId], references: [id])
+  // Loyalty (collect & win) vouchers are tied to the menu item they were
+  // collected for; wheel-of-fortune vouchers aren't tied to any one item, so
+  // menuItemId is null for those and `label` carries the prize text instead
+  // (e.g. "10% OFF", "Free Drink").
+  menuItemId Int?
+  menuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
+  label      String?
+  source     String    @default("loyalty")
   createdAt  DateTime  @default(now())
   redeemedAt DateTime?
 }

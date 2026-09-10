@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -73,6 +74,7 @@ export default function AccountScreen() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const isSmall = width < 360;
 
@@ -100,6 +102,34 @@ export default function AccountScreen() {
       console.log("Logout error:", error);
       setLoggingOut(false);
     }
+  }
+
+  function onDeleteAccount() {
+    Alert.alert(
+      "Delete account?",
+      "This permanently deletes your account and loyalty rewards. This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await apiRequest("/api/auth/account", { method: "DELETE" });
+              await logout();
+              router.replace("/login");
+            } catch {
+              setDeleting(false);
+              Alert.alert(
+                "Something went wrong",
+                "Couldn't delete your account, try again",
+              );
+            }
+          },
+        },
+      ],
+    );
   }
 
   const userName = user?.name || "Guest";
@@ -141,9 +171,6 @@ export default function AccountScreen() {
         ]}
       >
         {/* ================= DECORATIVE UTENSILS ================= */}
-
-        {/* ================= DECORATIVE UTENSILS ================= */}
-
         {/* Right - BIG teal fork */}
         <View
           pointerEvents="none"
@@ -475,16 +502,32 @@ export default function AccountScreen() {
           ]}
         >
           {loggingOut ? (
-            <ActivityIndicator size="small" color="#C0392B" />
+            <ActivityIndicator size="small" color="ORANGE" />
           ) : (
             <>
-              <Ionicons name="log-out-outline" size={18} color="#C0392B" />
+              <Ionicons name="log-out-outline" size={18} color={ORANGE} />
 
               <Text style={styles.logoutText}>Log out</Text>
             </>
           )}
         </Pressable>
+        {/* =========  DELETE =============== */}
 
+        <Pressable
+          onPress={onDeleteAccount}
+          disabled={deleting}
+          style={({ pressed }) => [
+            styles.deleteBtn,
+            pressed && styles.pressed,
+            deleting && styles.logoutDisabled,
+          ]}
+        >
+          <Ionicons name="trash-outline" size={18} color={TEAL} />
+
+          <Text style={styles.deleteBtnText}>
+            {deleting ? "Deleting..." : "Delete account"}
+          </Text>
+        </Pressable>
         {/* ================= FOOTER ================= */}
 
         <View style={styles.footer}>
@@ -923,7 +966,7 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: "#F0D8D4",
+    borderColor: ORANGE,
     backgroundColor: WHITE,
     flexDirection: "row",
     alignItems: "center",
@@ -934,8 +977,8 @@ const styles = StyleSheet.create({
   },
 
   logoutText: {
-    color: "#C0392B",
-    fontSize: 12,
+    color: ORANGE,
+    fontSize: 18,
     fontWeight: "900",
   },
 
@@ -973,5 +1016,25 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.65,
     transform: [{ scale: 0.985 }],
+  },
+
+  deleteBtn: {
+    height: 50,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: TEAL,
+    backgroundColor: WHITE,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 17,
+    zIndex: 2,
+  },
+
+  deleteBtnText: {
+    color: TEAL,
+    fontSize: 18,
+    fontWeight: "900",
   },
 });

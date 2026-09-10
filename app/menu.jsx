@@ -31,18 +31,10 @@ const BOTTOM_NAV_SPACE = 110;
 
 const FIXED_CATEGORIES = [
   {
-    id: "burger",
-    name: "Burger",
-    image: require("../assets/img/menu-5.jpg"),
-    route: "/menu-food/burger",
-    color: ORANGE,
-    light: LIGHT_ORANGE,
-  },
-  {
-    id: "shawerma",
-    name: "Shawerma",
-    image: require("../assets/img/menu-1.jpg"),
-    route: "/menu-food/shawerma",
+    id: "Breakfast",
+    name: "Breakfast",
+    image: require("../assets/img/salat_menu.jpg"),
+    route: "/menu-food/breakfast",
     color: TEAL,
     light: LIGHT_TEAL,
   },
@@ -54,14 +46,32 @@ const FIXED_CATEGORIES = [
     color: ORANGE,
     light: LIGHT_ORANGE,
   },
+
   {
-    id: "drinks",
-    name: "Drinks",
-    image: require("../assets/img/drinks_kinza.jpg"),
-    route: "/menu-food/drinks",
+    id: "burger",
+    name: "Burger",
+    image: require("../assets/img/menu-5.jpg"),
+    route: "/menu-food/burger",
     color: TEAL,
     light: LIGHT_TEAL,
   },
+  {
+    id: "shawerma",
+    name: "Shawerma",
+    image: require("../assets/img/menu-1.jpg"),
+    route: "/menu-food/shawerma",
+    color: ORANGE,
+    light: LIGHT_ORANGE,
+  },
+  {
+    id: "FATTEH",
+    name: "FATTEH",
+    image: require("../assets/img/menu-1.jpg"),
+    route: "/menu-food/fattah",
+    color: TEAL,
+    light: LIGHT_TEAL,
+  },
+
   {
     id: "salad",
     name: "Salad",
@@ -70,9 +80,23 @@ const FIXED_CATEGORIES = [
     color: ORANGE,
     light: LIGHT_ORANGE,
   },
+  {
+    id: "drinks",
+    name: "Drinks",
+    image: require("../assets/img/drinks_kinza.jpg"),
+    route: "/menu-food/drinks",
+    color: TEAL,
+    light: LIGHT_TEAL,
+  },
 ];
 
 const QUICK_CATEGORIES = [
+  {
+    id: "breakfast",
+    name: "Breakfast",
+    target: "breakfast",
+  },
+
   {
     id: "burger",
     name: "Burger",
@@ -98,12 +122,20 @@ const QUICK_CATEGORIES = [
     name: "Salad",
     target: "salad",
   },
+  {
+    id: "fattah",
+    name: "Fatteh",
+    target: "fattah",
+  },
 ];
 
 const COVERED_REAL_IDS = [1, 2];
 
 const getCategoryKey = (item) => {
   const name = `${item?.nameEn || ""} ${item?.name || ""}`.trim().toLowerCase();
+  if (name.includes("breakfast")) {
+    return "breakfast";
+  }
 
   if (name.includes("burger")) return "burger";
 
@@ -126,6 +158,10 @@ const getCategoryKey = (item) => {
 
   if (name.includes("salad")) {
     return "salad";
+  }
+
+  if (name.includes("fatteh")) {
+    return "fattah";
   }
 
   return null;

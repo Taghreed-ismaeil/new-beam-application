@@ -1,35 +1,42 @@
 import BackButton from "@/components/BackButton";
+import { apiRequest } from "@/lib/api-client";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-    Animated,
-    Dimensions,
-    Easing,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Animated,
+  Dimensions,
+  Easing,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import Svg, {
-    Circle,
-    Defs,
-    G,
-    LinearGradient,
-    Path,
-    RadialGradient,
-    Stop,
-    Text as SvgText,
+  Circle,
+  Defs,
+  G,
+  LinearGradient,
+  Path,
+  RadialGradient,
+  Stop,
+  Text as SvgText,
 } from "react-native-svg";
 
-// A client-side prize wheel — no backend involved. Landing on a real prize
-// mints a short voucher code the customer shows the cashier; "Try Again"
-// segments just wish them luck next visit.
+// The spin itself happens server-side (POST /api/loyalty/wheel/spin) — it
+// picks the weighted segment and, if it's a prize, mints a real Voucher row
+// so it actually shows up on My Rewards. This SEGMENTS array is the visual
+// side only (colors, description, wheel text); keep key/weight/prize in sync
+// with WHEEL_SEGMENTS in backend/src/routes/loyalty.ts.
+// wheelLabel is plain text only — SvgText can't render color emoji (they were
+// showing up as broken tofu glyphs on the wheel itself), so the emoji lives
+// only in `label`, which is shown via a normal RN <Text> on the result card.
 const SEGMENTS = [
   {
     key: "again1",
     label: "TRY AGAIN",
+    wheelLabel: "TRY AGAIN",
     desc: "No luck this time — come back and spin again on your next visit!",
     weight: 3,
     color: "#B7BDC6",
@@ -39,6 +46,7 @@ const SEGMENTS = [
   {
     key: "off5",
     label: "5% OFF 🏷️",
+    wheelLabel: "5% OFF",
     desc: "5% off your next order",
     weight: 2,
     color: "#FFC9B0",
@@ -48,6 +56,7 @@ const SEGMENTS = [
   {
     key: "drink",
     label: "DRINK 🧋",
+    wheelLabel: "DRINK",
     desc: "A free drink with your order",
     weight: 2,
     color: "#7FD1CC",
@@ -57,6 +66,7 @@ const SEGMENTS = [
   {
     key: "off10",
     label: "10% OFF 🏷️",
+    wheelLabel: "10% OFF",
     desc: "10% off your next order",
     weight: 2,
     color: "#FF9F73",
@@ -66,6 +76,7 @@ const SEGMENTS = [
   {
     key: "again2",
     label: "TRY AGAIN",
+    wheelLabel: "TRY AGAIN",
     desc: "So close! Better luck on your next visit.",
     weight: 2,
     color: "#CBD0D6",
@@ -75,6 +86,7 @@ const SEGMENTS = [
   {
     key: "side",
     label: "SIDE 🍟",
+    wheelLabel: "FREE SIDE",
     desc: "Free fries with your order",
     weight: 1.4,
     color: "#4FBDB8",
@@ -84,6 +96,7 @@ const SEGMENTS = [
   {
     key: "off15",
     label: "15% OFF 🏷️",
+    wheelLabel: "15% OFF",
     desc: "15% off your next order",
     weight: 1,
     color: "#ED5529",
@@ -93,6 +106,7 @@ const SEGMENTS = [
   {
     key: "meal",
     label: "MEAL 🍽️",
+    wheelLabel: "FREE MEAL",
     desc: "A completely free random meal, on us!",
     weight: 0.8,
     color: "#B084F5",
@@ -102,6 +116,7 @@ const SEGMENTS = [
   {
     key: "grand",
     label: "GRAND 🏆",
+    wheelLabel: "GRAND",
     desc: "Free meal + free drink — today's biggest win!",
     weight: 0.3,
     color: "#F7C948",
@@ -114,31 +129,12 @@ const SEGMENT_ANGLE = 360 / SEGMENTS.length;
 const SCREEN_W = Dimensions.get("window").width;
 const WHEEL_SIZE = Math.min(SCREEN_W - 60, 340);
 const RADIUS = WHEEL_SIZE / 2;
-const LABEL_RADIUS_FRACTION = 0.72;
 const PEG_COUNT = SEGMENTS.length * 2;
 const SPIN_LAPS = 6;
 
 function toXY(angleDeg, radius, cx = RADIUS, cy = RADIUS) {
   const rad = (angleDeg * Math.PI) / 180;
   return { x: cx + radius * Math.sin(rad), y: cy - radius * Math.cos(rad) };
-}
-
-function pickWeightedIndex() {
-  const total = SEGMENTS.reduce((sum, s) => sum + s.weight, 0);
-  let r = Math.random() * total;
-  for (let i = 0; i < SEGMENTS.length; i++) {
-    r -= SEGMENTS[i].weight;
-    if (r <= 0) return i;
-  }
-  return SEGMENTS.length - 1;
-}
-
-function makeVoucherCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 6; i++)
-    code += chars[Math.floor(Math.random() * chars.length)];
-  return `WHEEL-${code}`;
 }
 
 function fireHaptics(kind) {
@@ -164,14 +160,32 @@ export default function WheelScreen() {
   const [spinning, setSpinning] = useState(false);
   const [winner, setWinner] = useState(null);
   const [voucherCode, setVoucherCode] = useState(null);
+  const [error, setError] = useState("");
 
-  function spin() {
+  async function spin() {
     if (spinning) return;
     setSpinning(true);
     setWinner(null);
+    setError("");
     fireHaptics("spin");
 
-    const index = pickWeightedIndex();
+    // The wheel doesn't move until the server answers — it decides the prize
+    // (and mints the real voucher), so the wheel can only ever land on
+    // whatever it actually picked, not something the client made up.
+    let index, voucher;
+    try {
+      const res = await apiRequest("/api/loyalty/wheel/spin", {
+        method: "POST",
+      });
+      index = SEGMENTS.findIndex((s) => s.key === res.key);
+      if (index < 0) index = res.index ?? 0;
+      voucher = res.voucher;
+    } catch {
+      setSpinning(false);
+      setError("Something went wrong, try again");
+      return;
+    }
+
     const segment = SEGMENTS[index];
     const centerAngle = index * SEGMENT_ANGLE + SEGMENT_ANGLE / 2;
     const jitter = (Math.random() - 0.5) * (SEGMENT_ANGLE * 0.6);
@@ -186,7 +200,7 @@ export default function WheelScreen() {
     }).start(() => {
       setSpinning(false);
       setWinner(segment);
-      setVoucherCode(segment.prize ? makeVoucherCode() : null);
+      setVoucherCode(voucher?.code ?? null);
       fireHaptics(
         segment.key === "grand" ? "grand" : segment.prize ? "win" : "lose",
       );
@@ -261,27 +275,34 @@ export default function WheelScreen() {
               const d = `M ${RADIUS} ${RADIUS} L ${p1.x} ${p1.y} A ${RADIUS - 2} ${RADIUS - 2} 0 ${large} 1 ${p2.x} ${p2.y} Z`;
 
               const mid = a1 + SEGMENT_ANGLE / 2;
-              const labelPos = toXY(mid, RADIUS * LABEL_RADIUS_FRACTION);
-              const upsideDown = mid > 90 && mid < 270;
-              const textRotate = upsideDown ? mid + 180 : mid;
+              // Radial label, centered at the same distance from the hub for
+              // every segment (so none sit lower/closer to the center than the
+              // rest) — but never upside down: the half of the wheel where that
+              // would read upside down gets an extra 180° so every letter stays
+              // right-side up no matter where it sits on the wheel. (The
+              // boundary is 180°/360° here, not 90°/270°, since this rotation
+              // is measured from the radial base angle, not the tangent.)
+              const upsideDown = mid >= 180;
+              const labelPos = toXY(mid, RADIUS * 0.6);
+              const textRotate = upsideDown ? mid + 90 : mid - 90;
+              const fontSize = WHEEL_SIZE < 300 ? 15 : 17;
 
               return (
                 <G key={seg.key + i}>
                   <Path d={d} fill={seg.color} stroke="#fff" strokeWidth={2} />
-                  <G
+                  <SvgText
+                    x={labelPos.x}
+                    y={labelPos.y}
+                    fill={seg.text}
+                    fontSize={fontSize}
+                    fontWeight="800"
+                    fontStyle="italic"
+                    textAnchor="middle"
+                    alignmentBaseline="middle"
                     transform={`rotate(${textRotate}, ${labelPos.x}, ${labelPos.y})`}
                   >
-                    <SvgText
-                      x={labelPos.x}
-                      y={labelPos.y}
-                      fill={seg.text}
-                      fontSize={WHEEL_SIZE < 300 ? 9 : 10}
-                      fontWeight="800"
-                      textAnchor="middle"
-                    >
-                      {seg.label}
-                    </SvgText>
-                  </G>
+                    {seg.wheelLabel}
+                  </SvgText>
                 </G>
               );
             })}
@@ -363,13 +384,16 @@ export default function WheelScreen() {
           {spinning ? "Spinning..." : "SPIN"}
         </Text>
       </TouchableOpacity>
+      {!!error && <Text style={styles.errorText}>{error}</Text>}
 
       {winner && (
         <WheelResult
           segment={winner}
           code={voucherCode}
           onClose={() => setWinner(null)}
-          onDone={() => router.push("/(tabs)")}
+          // A real prize takes you straight to My Rewards to redeem the code
+          // at the restaurant; "Try again" just closes the card.
+          onDone={() => router.replace("/loyalty/vouchers")}
         />
       )}
     </View>
@@ -664,6 +688,13 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 17,
     letterSpacing: 1,
+  },
+  errorText: {
+    color: "#c0392b",
+    fontWeight: "700",
+    fontSize: 13,
+    marginTop: 12,
+    textAlign: "center",
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

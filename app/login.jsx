@@ -89,6 +89,10 @@ export default function Login() {
       if (isRegister && e?.data?.error === "phone_already_registered") {
         setIsRegister(false);
         setError("This number already has an account — please log in instead");
+      } else if (!isRegister && e?.data?.error === "account_deleted") {
+        setError("This account no longer exists");
+      } else if (!isRegister && e?.data?.error === "no_account_for_phone") {
+        setError("No account with this number — switch to Register");
       } else if (!isRegister && e?.status === 401) {
         setError("Wrong phone number or password");
       } else {

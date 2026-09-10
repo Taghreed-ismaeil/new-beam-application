@@ -121,7 +121,7 @@ ordersRouter.get('/:id', async (req, res) => {
   const userId = (req.auth as any).userId;
   const order = await prisma.order.findUnique({
     where: { id: Number(req.params.id) },
-    include: { items: true, statusLogs: true, table: true },
+    include: { items: true, statusLogs: true, table: true, driver: { select: { id: true, name: true, phone: true } } },
   });
   if (!order || order.userId !== userId) return res.status(404).json({ error: 'not_found' });
   res.json({ order });
@@ -138,22 +138,76 @@ adminOrdersRouter.get('/', requireStaff(), async (req, res) => {
       ...(status ? { status: status as any } : {}),
       ...(orderType ? { orderType: orderType as any } : {}),
     },
-    include: { items: true, user: { select: { id: true, name: true, phone: true, createdAt: true } }, table: true },
+    include: {
+      items: true,
+      user: { select: { id: true, name: true, phone: true, createdAt: true } },
+      table: true,
+      driver: { select: { id: true, name: true, phone: true } },
+    },
     orderBy: { createdAt: 'desc' },
     take: 200,
   });
   res.json({ orders });
 });
 
+// A driver only ever needs their own assigned deliveries, never the full
+// order list — filtering server-side by req.auth.staffId (not a client-
+// supplied query param) keeps one driver from ever seeing another
+// customer's order just by guessing/omitting a filter.
+adminOrdersRouter.get('/driver/mine', requireStaff('driver'), async (req, res) => {
+  const staffId = (req.auth as any).staffId;
+  const orders = await prisma.order.findMany({
+    where: { driverId: staffId, orderType: 'delivery' },
+    include: { items: true, user: { select: { id: true, name: true, phone: true, createdAt: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  });
+  res.json({ orders });
+});
+
+// Registered after the /driver/mine literal path above so that path keeps
+// matching first — otherwise Express would treat "driver" as this route's
+// :id param and this would swallow that request instead.
+adminOrdersRouter.get('/:id', requireStaff(), async (req, res) => {
+  const order = await prisma.order.findUnique({
+    where: { id: Number(req.params.id) },
+    include: {
+      items: true,
+      user: { select: { id: true, name: true, phone: true, createdAt: true } },
+      table: true,
+      driver: { select: { id: true, name: true, phone: true } },
+    },
+  });
+  if (!order) return res.status(404).json({ error: 'not_found' });
+  res.json({ order });
+});
+
 const statusSchema = z.object({
   status: z.enum(['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'completed', 'cancelled']),
 });
 
-adminOrdersRouter.patch('/:id/status', requireStaff('admin', 'chef'), async (req, res) => {
+// A driver moving an order forward can only ever do the two steps that are
+// actually theirs to do — pick it up, then mark it dropped off — never any
+// other transition, and only for the delivery assigned to them.
+const DRIVER_ALLOWED_TRANSITIONS: Record<string, string> = {
+  ready: 'out_for_delivery',
+  out_for_delivery: 'completed',
+};
+
+adminOrdersRouter.patch('/:id/status', requireStaff('admin', 'chef', 'driver'), async (req, res) => {
   const parsed = statusSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
   const id = Number(req.params.id);
   const staffId = (req.auth as any).staffId;
+  const role = (req.auth as any).role;
+
+  if (role === 'driver') {
+    const existing = await prisma.order.findUnique({ where: { id } });
+    if (!existing || existing.driverId !== staffId) return res.status(404).json({ error: 'not_found' });
+    if (DRIVER_ALLOWED_TRANSITIONS[existing.status] !== parsed.data.status) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+  }
 
   const order = await prisma.order.update({
     where: { id },
@@ -206,6 +260,44 @@ adminOrdersRouter.patch('/:id/waiter', requireStaff('admin', 'manager'), async (
   const order = await prisma.order.update({
     where: { id: Number(req.params.id) },
     data: { waiterId: parsed.data.waiterId },
+  });
+
+  emitOrderEvent('order:updated', order);
+  res.json({ order });
+});
+
+const driverSchema = z.object({ driverId: z.number().nullable() });
+
+adminOrdersRouter.patch('/:id/driver', requireStaff('admin', 'manager'), async (req, res) => {
+  const parsed = driverSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+
+  // Reassigning/clearing the driver also clears their last known position —
+  // a stale pin from the previous driver would be actively misleading on the
+  // customer's tracking map.
+  const order = await prisma.order.update({
+    where: { id: Number(req.params.id) },
+    data: { driverId: parsed.data.driverId, driverLat: null, driverLng: null, driverLocationAt: null },
+  });
+
+  emitOrderEvent('order:updated', order);
+  res.json({ order });
+});
+
+const locationSchema = z.object({ lat: z.number(), lng: z.number() });
+
+adminOrdersRouter.patch('/:id/location', requireStaff('driver'), async (req, res) => {
+  const parsed = locationSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
+  const id = Number(req.params.id);
+  const staffId = (req.auth as any).staffId;
+
+  const existing = await prisma.order.findUnique({ where: { id } });
+  if (!existing || existing.driverId !== staffId) return res.status(404).json({ error: 'not_found' });
+
+  const order = await prisma.order.update({
+    where: { id },
+    data: { driverLat: parsed.data.lat, driverLng: parsed.data.lng, driverLocationAt: new Date() },
   });
 
   emitOrderEvent('order:updated', order);

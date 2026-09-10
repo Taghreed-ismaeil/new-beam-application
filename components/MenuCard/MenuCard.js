@@ -27,21 +27,23 @@ const MOMENTUM_DECAY = 0.94;
 const MAX_TILT_DEG = 38;
 
 /* =====================================================
-   HEADING RING
-   Two copies of the sentence, sitting on opposite sides of
-   the exact same circle as the food images (180deg apart),
-   driven by the exact same `rotation` value — so they swing
-   left/right and scale up/down in perfect sync with the ring.
-   Each copy's text is wrapped along its own small arc, and
-   every character fades/shrinks by how far around that arc
-   it sits — like it's wrapping around a cylinder.
+   HEADING
 ===================================================== */
 
 const HEADING_TEXT = "SEE TODAY'S BEST DEAL";
-const HEADING_COPIES = 2;
+const HEADING_COPIES = 3;
 
-const HEADING_ARC_RADIUS = 150;
-const HEADING_ARC_SPAN = 80; // degrees the sentence wraps across — bigger = more of a side-wrap look
+/*
+  3 sentences distributed around the same
+  circular path as the food carousel.
+*/
+const HEADING_CIRCLE_STEP = (Math.PI * 2) / HEADING_COPIES;
+
+/*
+  How much the COMPLETE sentence rotates
+  backward when it moves to the sides.
+*/
+const HEADING_TILT = 38;
 
 /* =====================================================
    MENU
@@ -53,7 +55,7 @@ export default function Menu() {
 
   /* =====================================================
      FOOD ROTATION REFS
-  ====================================================== */
+  ===================================================== */
 
   const rotationRef = useRef(0);
   const velocityRef = useRef(0);
@@ -64,7 +66,7 @@ export default function Menu() {
 
   /* =====================================================
      FETCH DEALS
-  ====================================================== */
+  ===================================================== */
 
   useEffect(() => {
     apiRequestCached("/api/menu", (data) => {
@@ -85,7 +87,7 @@ export default function Menu() {
 
   /* =====================================================
      FOOD AUTO ROTATION
-  ====================================================== */
+  ===================================================== */
 
   useEffect(() => {
     function tick(time) {
@@ -125,7 +127,7 @@ export default function Menu() {
 
   /* =====================================================
      FOOD DRAG
-  ====================================================== */
+  ===================================================== */
 
   const panResponder = useRef(
     PanResponder.create({
@@ -165,13 +167,13 @@ export default function Menu() {
 
   /* =====================================================
      ACTIVE FOOD
-  ====================================================== */
+  ===================================================== */
 
   const frontIndex = deals.length ? ((Math.trunc(rotation) % n) + n) % n : 0;
 
   /* =====================================================
      GO TO ACTIVE
-  ====================================================== */
+  ===================================================== */
 
   function goToActive() {
     const target = deals[frontIndex] ?? deals[0];
@@ -183,18 +185,18 @@ export default function Menu() {
 
   /* =====================================================
      RENDER
-  ====================================================== */
+  ===================================================== */
 
   return (
     <View style={styles.container}>
       {/* =================================================
-          HEADING RING
-          Rides the exact same `rotation` as the food ring
-          below it, so both move together as one carousel.
+          HEADING
       ================================================= */}
 
       <View style={styles.headingArea}>
-        {Array.from({ length: HEADING_COPIES }).map((_, index) => (
+        {Array.from({
+          length: HEADING_COPIES,
+        }).map((_, index) => (
           <HeadingCopy key={index} index={index} rotation={rotation} />
         ))}
       </View>
@@ -223,48 +225,75 @@ export default function Menu() {
 
 /* =========================================================
    HEADING COPY
-   Same circular math as RingItem, just spread evenly around
-   the circle (180deg apart for 2 copies) and driven by the
-   same shared `rotation` value as the food images.
+
+   IMPORTANT:
+   The complete sentence is ONE Text element.
+
+   The letters never move individually.
+   The complete sentence moves as one object.
 ========================================================= */
 
 function HeadingCopy({ index, rotation }) {
-  const angle = ((index - rotation) / HEADING_COPIES) * Math.PI * 2;
+  /*
+    Position of this sentence around the circle.
+  */
+
+  const angle = index * HEADING_CIRCLE_STEP - rotation;
 
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
 
+  /*
+    SAME horizontal movement as the food images.
+  */
+
+  const translateX = sin * RADIUS_X;
+
+  /*
+    Depth of the sentence.
+  */
+
   const depth = (cos + 1) / 2;
 
-  const side = (sin + 1) / 2;
+  /*
+    Keep the sentence readable.
+  */
 
-  const scale = 0.7 + depth * (1.15 - 0.7);
+  const scale = 0.9 + depth * 0.1;
 
-  const opacity = 0.35 + depth * (1 - 0.35);
+  /*
+    Do not make it disappear.
+  */
 
-  const rotateY = MAX_TILT_DEG - side * (MAX_TILT_DEG * 2);
+  const opacity = 0.8 + depth * 0.2;
+
+  /*
+    Rotate the COMPLETE sentence.
+
+    Left/right sides go backwards,
+    exactly like an object sitting on a cylinder.
+  */
+
+  const rotateY = -sin * HEADING_TILT;
 
   return (
     <View
+      pointerEvents="none"
       style={[
         styles.headingWord,
-
         {
           transform: [
             {
-              translateX: sin * RADIUS_X,
+              translateX,
             },
-
             {
               perspective: 1000,
             },
-
-            {
-              scale,
-            },
-
             {
               rotateY: `${rotateY}deg`,
+            },
+            {
+              scale,
             },
           ],
 
@@ -273,74 +302,9 @@ function HeadingCopy({ index, rotation }) {
           zIndex: Math.round(cos * 100),
         },
       ]}
-      pointerEvents="none"
     >
-      <CurvedText text={HEADING_TEXT} />
+      <Text style={styles.headingText}>{HEADING_TEXT}</Text>
     </View>
-  );
-}
-
-/* =========================================================
-   CURVED TEXT
-   Wraps a sentence along an arc instead of a straight line.
-   Every character gets its own position and rotation along
-   the arc, and its own scale/opacity based on how far around
-   the arc it sits — so the ends look like they're wrapping
-   away to the side, like text wrapped around a cylinder.
-========================================================= */
-
-function CurvedText({ text }) {
-  const chars = text.split("");
-
-  const step = chars.length > 1 ? HEADING_ARC_SPAN / (chars.length - 1) : 0;
-
-  const start = -HEADING_ARC_SPAN / 2;
-
-  return (
-    <>
-      {chars.map((ch, i) => {
-        const angleDeg = start + step * i;
-        const angleRad = (angleDeg * Math.PI) / 180;
-
-        const x = HEADING_ARC_RADIUS * Math.sin(angleRad);
-        const y = HEADING_ARC_RADIUS * (1 - Math.cos(angleRad));
-
-        const depth = (Math.cos(angleRad) + 1) / 2;
-
-        const charScale = 0.75 + depth * 0.25;
-        const charOpacity = 0.4 + depth * 0.6;
-
-        return (
-          <Text
-            key={i}
-            style={[
-              styles.headingChar,
-              {
-                opacity: charOpacity,
-                zIndex: Math.round(depth * 100),
-
-                transform: [
-                  {
-                    translateX: x,
-                  },
-                  {
-                    translateY: y,
-                  },
-                  {
-                    rotate: `${angleDeg}deg`,
-                  },
-                  {
-                    scale: charScale,
-                  },
-                ],
-              },
-            ]}
-          >
-            {ch}
-          </Text>
-        );
-      })}
-    </>
   );
 }
 
@@ -370,21 +334,17 @@ function RingItem({ item, index, n, rotation, activeIndex }) {
     <View
       style={[
         styles.slot,
-
         {
           transform: [
             {
               translateX: sin * RADIUS_X,
             },
-
             {
               perspective: 1000,
             },
-
             {
               scale,
             },
-
             {
               rotateY: `${rotateY}deg`,
             },
@@ -438,7 +398,19 @@ const styles = StyleSheet.create({
     height: 100,
 
     marginBottom: 5,
+
+    overflow: "hidden",
+
+    alignItems: "center",
+
+    justifyContent: "center",
   },
+
+  /*
+    Container for the COMPLETE sentence.
+
+    Same width as the food rotation area.
+  */
 
   headingWord: {
     position: "absolute",
@@ -447,26 +419,28 @@ const styles = StyleSheet.create({
 
     top: "50%",
 
-    width: 260,
+    width: RADIUS_X * 2,
 
-    height: 90,
+    height: 55,
 
-    marginLeft: -130,
+    marginLeft: -RADIUS_X,
 
-    marginTop: -45,
+    marginTop: -27.5,
+
+    alignItems: "center",
+
+    justifyContent: "center",
+
+    overflow: "visible",
   },
 
-  headingChar: {
-    position: "absolute",
+  /*
+    ONE single Text.
 
-    left: "50%",
+    No character-by-character animation.
+  */
 
-    top: 0,
-
-    width: 20,
-
-    marginLeft: -10,
-
+  headingText: {
     color: "#ED5529",
 
     fontSize: 18,
@@ -474,6 +448,14 @@ const styles = StyleSheet.create({
     fontWeight: "900",
 
     textAlign: "center",
+
+    width: "100%",
+
+    includeFontPadding: false,
+
+    flexWrap: "nowrap",
+
+    whiteSpace: "nowrap",
   },
 
   /* ================= FOOD RING ================= */
@@ -525,7 +507,6 @@ const styles = StyleSheet.create({
 
     shadowOffset: {
       width: 0,
-
       height: 3,
     },
   },

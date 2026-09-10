@@ -7,7 +7,9 @@ import {
   View,
 } from "react-native";
 
-// Native (real device / Expo Go): expo-camera's live barcode scanner.
+// Native (real device / Expo Go): opens the phone's own system camera app to take a still photo,
+// then decodes it with expo-camera's scanFromURLAsync — Expo Go's live in-app preview has been
+// an unreliable black-screen trouble spot (a native-side bug frozen into the Expo Go binary).
 // Web (Expo web): an image upload decoded with jsQR, since the dev sandbox has no camera access.
 
 export default function QrScanner({ onDecode }) {
@@ -35,70 +37,83 @@ function NativeCameraScanner({ onDecode }) {
     );
   }
 
-  return (
-    <CameraPermissionGate cameraModule={cameraModule} onDecode={onDecode} />
-  );
+  return <PhotoScanner cameraModule={cameraModule} onDecode={onDecode} />;
 }
 
-function CameraPermissionGate({ cameraModule, onDecode }) {
-  const { CameraView, useCameraPermissions } = cameraModule;
-  const [permission, requestPermission] = useCameraPermissions();
-  const scannedRef = useRef(false);
-  const [requesting, setRequesting] = useState(false);
+// Opens the phone's own system camera app (always reliable, no custom preview to break),
+// then decodes the still photo with expo-camera's scanFromURLAsync.
+function PhotoScanner({ cameraModule, onDecode }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const launchedRef = useRef(false);
 
-  useEffect(() => {
-    if (
-      permission &&
-      !permission.granted &&
-      permission.canAskAgain &&
-      !requesting
-    ) {
-      setRequesting(true);
-      requestPermission();
+  async function takeAndScan() {
+    setError("");
+    setBusy(true);
+    try {
+      const ImagePicker = require("expo-image-picker");
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        setError(
+          perm.canAskAgain
+            ? "Camera access was denied"
+            : "Camera access was denied — enable it in device Settings → Expo Go",
+        );
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 1,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+
+      // The photo comes straight off the system camera, which on iOS can be HEIC and
+      // full sensor resolution — scanFromURLAsync misses the code more often on those.
+      // Normalizing to a resized JPEG first makes the scan reliable.
+      const ImageManipulator = require("expo-image-manipulator");
+      const normalized = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 1200 } }],
+        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG },
+      );
+
+      const matches = await cameraModule.scanFromURLAsync(normalized.uri, [
+        "qr",
+      ]);
+      if (matches?.[0]?.data) {
+        onDecode(matches[0].data);
+      } else {
+        setError("Couldn't find a QR code in that photo, try again");
+      }
+    } catch (e) {
+      setError(e?.message ?? "Something went wrong");
+    } finally {
+      setBusy(false);
     }
-  }, [permission]);
-
-  if (!permission) {
-    return (
-      <View style={styles.box}>
-        <Text style={styles.hint}>Checking camera permission...</Text>
-      </View>
-    );
   }
 
-  if (!permission.granted) {
-    return (
-      <View style={styles.box}>
-        <Text style={styles.hint}>
-          {permission.canAskAgain
-            ? "We need camera access"
-            : "Camera access was denied in device settings"}
-        </Text>
-        {permission.canAskAgain ? (
-          <TouchableOpacity style={styles.btn} onPress={requestPermission}>
-            <Text style={styles.btnText}>Allow camera</Text>
-          </TouchableOpacity>
-        ) : (
-          <Text style={styles.hint}>
-            Go to device Settings → Expo Go → enable camera access
-          </Text>
-        )}
-      </View>
-    );
-  }
+  // Opens the camera automatically the moment this screen mounts, so
+  // tapping "Scan QR" goes straight into the system camera with no extra tap.
+  useEffect(() => {
+    if (launchedRef.current) return;
+    launchedRef.current = true;
+    takeAndScan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <View style={styles.cameraBox}>
-      <CameraView
-        style={StyleSheet.absoluteFillObject}
-        facing="back"
-        barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-        onBarcodeScanned={({ data }) => {
-          if (scannedRef.current) return;
-          scannedRef.current = true;
-          onDecode(data);
-        }}
-      />
+    <View style={styles.box}>
+      {busy ? (
+        <Text style={styles.hint}>Opening camera...</Text>
+      ) : (
+        <>
+          <Text style={styles.hint}>📷 Ready to scan a QR code</Text>
+          <TouchableOpacity style={styles.btn} onPress={takeAndScan}>
+            <Text style={styles.btnText}>Open camera</Text>
+          </TouchableOpacity>
+        </>
+      )}
+      {!!error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
 }
@@ -157,12 +172,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 16,
-  },
-  cameraBox: {
-    height: 280,
-    borderRadius: 16,
-    backgroundColor: "#1a1a1a",
-    overflow: "hidden",
   },
   hint: { color: "#fff", textAlign: "center" },
   error: { color: "#ff8080", marginTop: 8, textAlign: "center" },

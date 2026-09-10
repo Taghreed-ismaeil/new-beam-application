@@ -7,70 +7,52 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-// Rarity QR codes are real loyalty scans underneath — each one is mapped
-// to that item's real qrToken/qrGroupToken from the database. Scanning a
-// "rare" or "super rare" sticker just calls the normal /api/loyalty/scan
-// endpoint 2 or 3 times in a row instead of once, so it genuinely reveals
-// that many extra pieces of the real collectible art (and can genuinely
-// complete the collection and mint a real voucher). "Normal" reveals one
-// piece exactly like scanning the item's real QR directly — no celebration,
-// just the plain reveal. The sandwich group still asks the customer which
-// sandwich they bought (same picker the app already uses); rarity scans
-// just remember that answer and re-use it for the extra reveals instead of
-// asking again.
-const RARITY_ITEMS = [
-  {
-    itemId: 1,
-    itemName: "Pizza 🍕",
-    route: "/menu-food/shawerma",
-    realToken: "MENU_f12908d6",
-    tokens: {
-      PIZZA_QR_NORMAL: { tier: "normal", reveals: 1 },
-      PIZZA_QR_RARE: { tier: "rare", reveals: 2 },
-      PIZZA_QR_SUPER: { tier: "super", reveals: 3 },
-    },
-  },
-  {
-    itemId: 2,
-    itemName: "Shawarma 🌯",
-    route: "/menu-food/shawerma",
-    realToken: "MENU_d3051fc2",
-    tokens: {
-      SHAWARMA_QR_NORMAL: { tier: "normal", reveals: 1 },
-      SHAWARMA_QR_RARE: { tier: "rare", reveals: 2 },
-      SHAWARMA_QR_SUPER: { tier: "super", reveals: 3 },
-    },
-  },
-  {
-    itemId: 3,
-    itemName: "Burger 🍔",
-    route: "/menu-food/burger",
-    realToken: "MENU_72952981",
-    tokens: {
-      BURGER_QR_NORMAL: { tier: "normal", reveals: 1 },
-      BURGER_QR_RARE: { tier: "rare", reveals: 2 },
-      BURGER_QR_SUPER: { tier: "super", reveals: 3 },
-    },
-  },
-  {
-    itemId: 20,
-    itemName: "Sandwiches 🥪",
-    route: "/menu-food/sandwiches",
-    realToken: "SANDWICH_GROUP_e40422b2",
-    tokens: {
-      SANDWICH_QR_NORMAL: { tier: "normal", reveals: 1 },
-      SANDWICH_QR_RARE: { tier: "rare", reveals: 2 },
-      SANDWICH_QR_SUPER: { tier: "super", reveals: 3 },
-    },
-  },
-];
+// Rarity QR codes are real loyalty scans underneath — the backend maps each
+// one to that item's real qrToken/qrGroupToken (RARITY_TOKEN_MAP in
+// backend/src/routes/loyalty.ts, keep the two in sync) and reveals 1/2/3
+// pieces in a single /api/loyalty/scan call. A "rare" or "super rare"
+// sticker is still printed on exactly one physical meal, so it only costs
+// one purchase credit — it's just a luckier scan, not extra purchases.
+// Every tier opens the same celebration card (see RarityCelebration) so the
+// customer always lands somewhere consistent, then Continue sends them back
+// to the Gifts tab to keep collecting. The sandwich group still asks the
+// customer which sandwich they bought (same picker the app already uses).
+// itemName + tier per rarity token, purely for the celebration card's display —
+// the actual item lookup and reveal count are resolved server-side (see
+// RARITY_TOKEN_MAP in backend/src/routes/loyalty.ts, keep the two in sync).
+const RARITY_TOKEN_LOOKUP = {
+  PIZZA_QR_NORMAL: { itemName: "Pizza 🍕", tier: "normal" },
+  PIZZA_QR_RARE: { itemName: "Pizza 🍕", tier: "rare" },
+  PIZZA_QR_SUPER: { itemName: "Pizza 🍕", tier: "super" },
+  SHAWARMA_QR_NORMAL: { itemName: "Shawarma 🌯", tier: "normal" },
+  SHAWARMA_QR_RARE: { itemName: "Shawarma 🌯", tier: "rare" },
+  SHAWARMA_QR_SUPER: { itemName: "Shawarma 🌯", tier: "super" },
+  BURGER_QR_NORMAL: { itemName: "Burger 🍔", tier: "normal" },
+  BURGER_QR_RARE: { itemName: "Burger 🍔", tier: "rare" },
+  BURGER_QR_SUPER: { itemName: "Burger 🍔", tier: "super" },
+  SANDWICH_QR_NORMAL: { itemName: "Sandwiches 🥪", tier: "normal" },
+  SANDWICH_QR_RARE: { itemName: "Sandwiches 🥪", tier: "rare" },
+  SANDWICH_QR_SUPER: { itemName: "Sandwiches 🥪", tier: "super" },
 
-// token -> { item, tier, reveals } lookup built once from the list above
-const RARITY_TOKEN_LOOKUP = RARITY_ITEMS.reduce((map, item) => {
-  for (const [token, cfg] of Object.entries(item.tokens))
-    map[token] = { item, ...cfg };
-  return map;
-}, {});
+  GREEK_SALAD_QR_NORMAL: { itemName: "Greek Salad 🥗", tier: "normal" },
+  GREEK_SALAD_QR_RARE: { itemName: "Greek Salad 🥗", tier: "rare" },
+  GREEK_SALAD_QR_SUPER: { itemName: "Greek Salad 🥗", tier: "super" },
+  ARUGULA_SALAD_QR_NORMAL: { itemName: "Arugula Salad 🥬", tier: "normal" },
+  ARUGULA_SALAD_QR_RARE: { itemName: "Arugula Salad 🥬", tier: "rare" },
+  ARUGULA_SALAD_QR_SUPER: { itemName: "Arugula Salad 🥬", tier: "super" },
+  CAESAR_SALAD_QR_NORMAL: { itemName: "Caesar Salad 🥗", tier: "normal" },
+  CAESAR_SALAD_QR_RARE: { itemName: "Caesar Salad 🥗", tier: "rare" },
+  CAESAR_SALAD_QR_SUPER: { itemName: "Caesar Salad 🥗", tier: "super" },
+  SHAWARMA_SALAD_QR_NORMAL: { itemName: "Shawarma Salad 🌯", tier: "normal" },
+  SHAWARMA_SALAD_QR_RARE: { itemName: "Shawarma Salad 🌯", tier: "rare" },
+  SHAWARMA_SALAD_QR_SUPER: { itemName: "Shawarma Salad 🌯", tier: "super" },
+  FATTOUSH_QR_NORMAL: { itemName: "Fattoush 🥗", tier: "normal" },
+  FATTOUSH_QR_RARE: { itemName: "Fattoush 🥗", tier: "rare" },
+  FATTOUSH_QR_SUPER: { itemName: "Fattoush 🥗", tier: "super" },
+  QUINOA_SALAD_QR_NORMAL: { itemName: "Quinoa Salad 🌾", tier: "normal" },
+  QUINOA_SALAD_QR_RARE: { itemName: "Quinoa Salad 🌾", tier: "rare" },
+  QUINOA_SALAD_QR_SUPER: { itemName: "Quinoa Salad 🌾", tier: "super" },
+};
 
 // Same idea for the prize wheel — one dedicated QR code, no backend call,
 // just jumps straight into the wheel screen.
@@ -81,26 +63,25 @@ export default function LoyaltyScanScreen() {
   const [options, setOptions] = useState(null);
   const [busy, setBusy] = useState(false);
   const [activeRarity, setActiveRarity] = useState(null);
-  // Set only while waiting on the "which sandwich did you buy?" picker that
-  // a rarity scan triggered — remembers how many total reveals are owed.
+  // Set only while waiting on the "which sandwich did you buy?" picker that a
+  // rarity scan triggered — remembers the tier so the follow-up call (once the
+  // customer picks an item) still applies the right reveal count.
   const [pendingRarity, setPendingRarity] = useState(null);
 
-  // Turns a completed reveal (possibly the last of several) into the right
-  // screen: plain result for "normal" tier or any failure, celebration
-  // overlay for "rare"/"super".
-  function applyRarityResult(match, lastRes) {
-    if (match.tier === "normal" || !lastRes?.accepted) {
+  // Turns a scan result into the right screen: every successful tier —
+  // "normal" included — opens the same celebration card (RarityCelebration
+  // renders "normal" as a plain reveal, no confetti/badge/haptics). Only a
+  // failed scan falls back to the plain error card.
+  function applyRarityResult(match, res) {
+    if (!res?.accepted) {
       setResult(
-        lastRes ?? {
-          accepted: false,
-          message: "Something went wrong, try again",
-        },
+        res ?? { accepted: false, message: "Something went wrong, try again" },
       );
     } else {
       setActiveRarity({
         tier: match.tier,
-        item: match.item,
-        apiResult: lastRes,
+        itemName: match.itemName,
+        apiResult: res,
       });
     }
   }
@@ -115,27 +96,20 @@ export default function LoyaltyScanScreen() {
     if (match) {
       setBusy(true);
       try {
-        const first = await apiRequest("/api/loyalty/scan", {
+        // The rarity token goes straight to the backend — it resolves the
+        // real item and reveal count itself (RARITY_TOKEN_MAP), so this is
+        // always exactly one call, one purchase credit, regardless of tier.
+        const res = await apiRequest("/api/loyalty/scan", {
           method: "POST",
-          body: { token: match.item.realToken },
+          body: { token },
         });
-        if (first.needsSelection) {
-          // pause here — the picker below asks once, then the extra
-          // reveals (if any) replay automatically with that same answer
-          setPendingRarity(match);
-          setOptions(first.options);
+        if (res.needsSelection) {
+          setPendingRarity({ ...match, token });
+          setOptions(res.options);
           setBusy(false);
           return;
         }
-        let lastRes = first;
-        for (let i = 1; i < match.reveals; i++) {
-          if (!lastRes?.accepted) break;
-          lastRes = await apiRequest("/api/loyalty/scan", {
-            method: "POST",
-            body: { token: match.item.realToken },
-          });
-        }
-        applyRarityResult(match, lastRes);
+        applyRarityResult(match, res);
       } catch {
         setResult({
           accepted: false,
@@ -176,24 +150,11 @@ export default function LoyaltyScanScreen() {
       setPendingRarity(null);
       setBusy(true);
       try {
-        let lastRes = await apiRequest("/api/loyalty/scan", {
+        const res = await apiRequest("/api/loyalty/scan", {
           method: "POST",
-          body: { selectedItemId },
+          body: { selectedItemId, token: match.token },
         });
-        for (let i = 1; i < match.reveals; i++) {
-          if (!lastRes?.accepted) break;
-          const again = await apiRequest("/api/loyalty/scan", {
-            method: "POST",
-            body: { token: match.item.realToken },
-          });
-          lastRes = again.needsSelection
-            ? await apiRequest("/api/loyalty/scan", {
-                method: "POST",
-                body: { selectedItemId },
-              })
-            : again;
-        }
-        applyRarityResult(match, lastRes);
+        applyRarityResult(match, res);
       } catch {
         setResult({
           accepted: false,
@@ -228,19 +189,20 @@ export default function LoyaltyScanScreen() {
     setPendingRarity(null);
   }
 
-  function goToRarityItem() {
-    const route = activeRarity.item.route;
+  // Continue always sends the customer back to the Gifts (loyalty) tab, not
+  // to the item's menu page — they're here to keep collecting, not to order.
+  function backToGifts() {
     setActiveRarity(null);
-    router.push(route);
+    router.replace("/loyalty");
   }
 
   if (activeRarity) {
     return (
       <RarityCelebration
         tier={activeRarity.tier}
-        itemName={activeRarity.item.itemName}
+        itemName={activeRarity.itemName}
         apiResult={activeRarity.apiResult}
-        onContinue={goToRarityItem}
+        onContinue={backToGifts}
       />
     );
   }
