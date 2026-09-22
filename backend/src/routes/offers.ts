@@ -68,6 +68,8 @@ adminOffersRouter.put('/:id', upload.single('image'), async (req, res) => {
       ...(body.discountValue ? { discountValue: Number(body.discountValue) } : {}),
       ...(body.menuItemIds ? { menuItemIds: JSON.parse(body.menuItemIds) } : {}),
       ...(body.active !== undefined ? { active: body.active === 'true' } : {}),
+      ...(body.startsAt !== undefined ? { startsAt: body.startsAt ? new Date(body.startsAt) : null } : {}),
+      ...(body.endsAt !== undefined ? { endsAt: body.endsAt ? new Date(body.endsAt) : null } : {}),
       ...(req.file ? { imageUrl: await uploadedFileUrl(req.file) } : {}),
     },
   });

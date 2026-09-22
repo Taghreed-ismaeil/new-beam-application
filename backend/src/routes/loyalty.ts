@@ -326,8 +326,8 @@ adminLoyaltyRouter.post('/redeem', requireStaff('admin', 'cashier'), async (req,
   if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
 
   const voucher = await prisma.voucher.findUnique({ where: { code: parsed.data.code } });
-  if (!voucher) return res.status(404).json({ error: 'كود غير موجود' });
-  if (voucher.redeemedAt) return res.status(400).json({ error: 'الكود مستخدم مسبقاً' });
+  if (!voucher) return res.status(404).json({ error: 'voucher_not_found' });
+  if (voucher.redeemedAt) return res.status(400).json({ error: 'already_redeemed' });
 
   await prisma.voucher.update({ where: { id: voucher.id }, data: { redeemedAt: new Date() } });
 
@@ -350,11 +350,36 @@ adminLoyaltyRouter.post('/redeem', requireStaff('admin', 'cashier'), async (req,
   res.json({ ok: true, user, item, label: voucher.label });
 });
 
-adminLoyaltyRouter.get('/scanlogs', requireStaff('admin'), async (_req, res) => {
+// Best-effort result classification — the scan log only ever recorded accept/reject + a reason,
+// never the richer revealed/completed/tier/from→to detail the admin panel's Scans tab shows, so
+// that finer detail isn't available for history captured before this endpoint existed.
+function scanResult(l: { accepted: boolean; reason: string | null }): string {
+  if (l.accepted) return 'revealed';
+  if (l.reason === 'invalid_qr') return 'unknown_code';
+  return 'inactive';
+}
+
+adminLoyaltyRouter.get('/scanlogs', requireStaff('admin'), async (req, res) => {
+  const result = req.query.result as string | undefined;
+  const limit = req.query.limit ? Number(req.query.limit) : 200;
+
   const logs = await prisma.scanLog.findMany({
-    include: { user: { select: { id: true, name: true, phone: true, createdAt: true } }, menuItem: true },
+    include: { user: { select: { id: true, name: true, phone: true } }, menuItem: true },
     orderBy: { scannedAt: 'desc' },
-    take: 200,
+    take: 500,
   });
-  res.json({ logs });
+
+  const scans = logs.map((l) => ({
+    id: l.id,
+    result: scanResult(l),
+    customer: l.user ? { id: l.user.id, name: l.user.name, phone: l.user.phone } : null,
+    item: l.menuItem ? { id: l.menuItem.id, name: l.menuItem.name, nameEn: l.menuItem.nameEn } : null,
+    at: l.scannedAt,
+  }));
+
+  const counts: Record<string, number> = { all: scans.length };
+  for (const s of scans) counts[s.result] = (counts[s.result] ?? 0) + 1;
+
+  const filtered = (result ? scans.filter((s) => s.result === result) : scans).slice(0, limit);
+  res.json({ scans: filtered, counts });
 });

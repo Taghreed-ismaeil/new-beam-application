@@ -29,6 +29,7 @@ enum ReservationStatus {
   completed
   cancelled
   no_show
+  rejected
 }
 
 enum OrderType {
@@ -51,6 +52,7 @@ enum OrderStatus {
 enum PaymentMethod {
   cash
   cliq
+  card
 }
 
 enum PaymentStatus {
@@ -66,18 +68,39 @@ enum RewardType {
 
 /// Single-row table holding the restaurant's own info.
 model Restaurant {
-  id             Int      @id @default(1)
-  name           String
-  logoUrl        String?
-  coverImageUrl  String?
-  phone          String?
-  address        String?
-  lat            Float?
-  lng            Float?
-  openingHours   Json?
-  socialLinks    Json?
-  cliqAlias      String?
-  updatedAt      DateTime @updatedAt
+  id                Int      @id @default(1)
+  name              String
+  nameEn            String?
+  logoUrl           String?
+  coverImageUrl     String?
+  phone             String?
+  email             String?
+  address           String?
+  addressEn         String?
+  lat               Float?
+  lng               Float?
+  openingHours      Json?
+  openingHoursText  String?
+  socialLinks       Json?
+  cliqAlias         String?
+  paymentsCash      Boolean  @default(true)
+  paymentsCard      Boolean  @default(false)
+  paymentsCliq      Boolean  @default(true)
+  deliveryEnabled   Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+
+  deliveryZones DeliveryZone[]
+}
+
+model DeliveryZone {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int      @default(1)
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  name         String
+  nameEn       String?
+  fee          Decimal  @db.Decimal(10, 2)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
 }
 
 model User {
@@ -221,8 +244,12 @@ model Offer {
 
 model Order {
   id       Int       @id @default(autoincrement())
-  userId   Int
-  user     User      @relation(fields: [userId], references: [id])
+  // Optional: a counter sale rung up by a cashier doesn't need a registered customer account —
+  // customerName carries a plain walk-in name instead when there's no user behind the order.
+  userId   Int?
+  user     User?     @relation(fields: [userId], references: [id])
+  customerName String?
+  cancelReason String?
 
   orderType OrderType
   status    OrderStatus @default(pending)
@@ -272,6 +299,7 @@ model OrderItem {
   menuItemId        Int
   menuItem          MenuItem @relation(fields: [menuItemId], references: [id])
   nameSnapshot       String
+  nameEnSnapshot     String?
   unitPriceSnapshot  Decimal @db.Decimal(10, 2)
   quantity           Int
   notes              String?
@@ -358,6 +386,7 @@ model Reservation {
   table       RestaurantTable? @relation(fields: [tableId], references: [id])
   status      ReservationStatus @default(pending)
   notes       String?
+  reason      String?
   createdByStaffId Int?
   createdByStaff   Staff? @relation(fields: [createdByStaffId], references: [id])
   createdAt   DateTime @default(now())

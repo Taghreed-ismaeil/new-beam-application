@@ -30,11 +30,20 @@ async function buildOrderPayload(items: z.infer<typeof orderItemSchema>[]) {
 
   const lines = items.map((i) => {
     const menuItem = byId.get(i.menuItemId);
-    if (!menuItem) throw new Error(`menu_item_not_found:${i.menuItemId}`);
-    if (!menuItem.isAvailable) throw new Error(`menu_item_unavailable:${i.menuItemId}`);
+    if (!menuItem) {
+      const err: any = new Error('item_unavailable');
+      err.item = `#${i.menuItemId}`;
+      throw err;
+    }
+    if (!menuItem.isAvailable) {
+      const err: any = new Error('item_unavailable');
+      err.item = menuItem.name;
+      throw err;
+    }
     return {
       menuItemId: menuItem.id,
       nameSnapshot: menuItem.name,
+      nameEnSnapshot: menuItem.nameEn,
       unitPriceSnapshot: menuItem.price,
       quantity: i.quantity,
       notes: i.notes,
@@ -61,11 +70,13 @@ ordersRouter.post('/', async (req, res) => {
     return res.status(400).json({ error: 'table_required' });
   }
 
+  if (!data.items.length) return res.status(400).json({ error: 'empty_order' });
+
   let payload;
   try {
     payload = await buildOrderPayload(data.items);
   } catch (e: any) {
-    return res.status(400).json({ error: e.message });
+    return res.status(400).json({ error: e.message, item: e.item });
   }
 
   const userId = (req.auth as any).userId;
@@ -130,24 +141,96 @@ ordersRouter.get('/:id', async (req, res) => {
 // ---------- Staff ----------
 export const adminOrdersRouter = Router();
 
+const ORDER_INCLUDE = {
+  items: true,
+  user: { select: { id: true, name: true, phone: true, createdAt: true } },
+  table: true,
+  driver: { select: { id: true, name: true, phone: true } },
+} as const;
+
+// The linear kitchen/delivery flow — "what's the one next step from here" — per order type.
+// Terminal statuses (last entry, plus 'cancelled') have no next step.
+function flowFor(orderType: string): string[] {
+  return orderType === 'delivery'
+    ? ['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'completed']
+    : ['pending', 'accepted', 'preparing', 'ready', 'completed'];
+}
+
+function computeCan(order: { status: string; orderType: string; paymentStatus: string }, role: string) {
+  const terminal = order.status === 'completed' || order.status === 'cancelled';
+  let setStatus: string[] = [];
+  if (!terminal) {
+    if (role === 'driver') {
+      const next = DRIVER_ALLOWED_TRANSITIONS[order.status];
+      if (next) setStatus = [next];
+    } else if (role === 'admin' || role === 'chef') {
+      const flow = flowFor(order.orderType);
+      const idx = flow.indexOf(order.status);
+      if (idx !== -1 && idx < flow.length - 1) setStatus = [flow[idx + 1]];
+    }
+  }
+  return {
+    setStatus,
+    takePayment: (role === 'admin' || role === 'cashier') && order.paymentStatus !== 'paid',
+    cancel: role === 'admin' && !terminal,
+  };
+}
+
+function toAdminOrder(order: any, role: string) {
+  return {
+    ...order,
+    customerName: order.customerName ?? order.user?.name ?? null,
+    customerPhone: order.user?.phone ?? null,
+    tableNumber: order.table?.tableNumber ?? null,
+    source: order.orderType === 'counter' ? 'counter' : 'app',
+    deliveryFee: 0,
+    items: order.items.map((i: any) => ({
+      ...i,
+      name: i.nameSnapshot,
+      nameEn: i.nameEnSnapshot,
+      unitPrice: i.unitPriceSnapshot,
+    })),
+    can: computeCan(order, role),
+  };
+}
+
 adminOrdersRouter.get('/', requireStaff(), async (req, res) => {
   const status = req.query.status as string | undefined;
   const orderType = req.query.orderType as string | undefined;
-  const orders = await prisma.order.findMany({
-    where: {
-      ...(status ? { status: status as any } : {}),
-      ...(orderType ? { orderType: orderType as any } : {}),
-    },
-    include: {
-      items: true,
-      user: { select: { id: true, name: true, phone: true, createdAt: true } },
-      table: true,
-      driver: { select: { id: true, name: true, phone: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 200,
-  });
-  res.json({ orders });
+  const search = (req.query.search as string | undefined)?.trim();
+  const limit = req.query.limit ? Number(req.query.limit) : 200;
+  const role = (req.auth as any).role;
+
+  const statusFilter =
+    !status || status === 'all' ? {} : status === 'open' ? { status: { notIn: ['completed', 'cancelled'] as any } } : { status: status as any };
+
+  const searchFilter = search
+    ? {
+        OR: [
+          { customerName: { contains: search, mode: 'insensitive' as const } },
+          { user: { name: { contains: search, mode: 'insensitive' as const } } },
+          { user: { phone: { contains: search } } },
+          ...(Number.isFinite(Number(search)) ? [{ id: Number(search) }] : []),
+        ],
+      }
+    : {};
+
+  const where = { ...statusFilter, ...(orderType ? { orderType: orderType as any } : {}), ...searchFilter };
+
+  const [orders, total, byStatus] = await Promise.all([
+    prisma.order.findMany({ where, include: ORDER_INCLUDE, orderBy: { createdAt: 'desc' }, take: limit }),
+    prisma.order.count({ where }),
+    prisma.order.groupBy({ by: ['status'], _count: true }),
+  ]);
+
+  const counts: Record<string, number> = { all: 0 };
+  for (const row of byStatus) {
+    counts[row.status] = row._count;
+    counts.all += row._count;
+    if (row.status !== 'completed' && row.status !== 'cancelled') counts.open = (counts.open ?? 0) + row._count;
+  }
+
+  res.json({ orders: orders.map((o) => toAdminOrder(o, role)), total, counts });
 });
 
 // A driver only ever needs their own assigned deliveries, never the full
@@ -169,21 +252,14 @@ adminOrdersRouter.get('/driver/mine', requireStaff('driver'), async (req, res) =
 // matching first — otherwise Express would treat "driver" as this route's
 // :id param and this would swallow that request instead.
 adminOrdersRouter.get('/:id', requireStaff(), async (req, res) => {
-  const order = await prisma.order.findUnique({
-    where: { id: Number(req.params.id) },
-    include: {
-      items: true,
-      user: { select: { id: true, name: true, phone: true, createdAt: true } },
-      table: true,
-      driver: { select: { id: true, name: true, phone: true } },
-    },
-  });
+  const order = await prisma.order.findUnique({ where: { id: Number(req.params.id) }, include: ORDER_INCLUDE });
   if (!order) return res.status(404).json({ error: 'not_found' });
-  res.json({ order });
+  res.json({ order: toAdminOrder(order, (req.auth as any).role) });
 });
 
 const statusSchema = z.object({
   status: z.enum(['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'completed', 'cancelled']),
+  reason: z.string().optional(),
 });
 
 // A driver moving an order forward can only ever do the two steps that are
@@ -201,11 +277,16 @@ adminOrdersRouter.patch('/:id/status', requireStaff('admin', 'chef', 'driver'), 
   const staffId = (req.auth as any).staffId;
   const role = (req.auth as any).role;
 
+  if (parsed.data.status === 'cancelled') {
+    if (role !== 'admin') return res.status(403).json({ error: 'role_cannot_set_status' });
+    if (!parsed.data.reason?.trim()) return res.status(400).json({ error: 'reason_required' });
+  }
+
   if (role === 'driver') {
     const existing = await prisma.order.findUnique({ where: { id } });
     if (!existing || existing.driverId !== staffId) return res.status(404).json({ error: 'not_found' });
     if (DRIVER_ALLOWED_TRANSITIONS[existing.status] !== parsed.data.status) {
-      return res.status(403).json({ error: 'forbidden' });
+      return res.status(403).json({ error: 'role_cannot_set_status' });
     }
   }
 
@@ -213,32 +294,40 @@ adminOrdersRouter.patch('/:id/status', requireStaff('admin', 'chef', 'driver'), 
     where: { id },
     data: {
       status: parsed.data.status,
+      ...(parsed.data.status === 'cancelled' ? { cancelReason: parsed.data.reason } : {}),
       statusLogs: { create: { status: parsed.data.status, changedByStaffId: staffId } },
     },
-    include: { items: true },
+    include: ORDER_INCLUDE,
   });
 
   emitOrderEvent('order:updated', order);
-  res.json({ order });
+  res.json({ order: toAdminOrder(order, role) });
 });
+
+const confirmPaymentSchema = z.object({ method: z.enum(['cash', 'cliq', 'card']).optional() });
 
 adminOrdersRouter.patch('/:id/confirm-payment', requireStaff('admin', 'cashier'), async (req, res) => {
   const id = Number(req.params.id);
   const staffId = (req.auth as any).staffId;
+  const parsed = confirmPaymentSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
 
   const existing = await prisma.order.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: 'not_found' });
+  if (existing.paymentStatus === 'paid') return res.status(400).json({ error: 'already_paid' });
 
+  const method = parsed.data.method ?? existing.paymentMethod;
   const [order] = await prisma.$transaction([
     prisma.order.update({
       where: { id },
-      data: { paymentStatus: 'paid', confirmedByStaffId: staffId },
+      data: { paymentStatus: 'paid', paymentMethod: method, confirmedByStaffId: staffId },
+      include: ORDER_INCLUDE,
     }),
     prisma.payment.create({
       data: {
         orderId: id,
         amount: existing.total,
-        method: existing.paymentMethod,
+        method,
         status: 'paid',
         proofUrl: existing.paymentProofUrl,
         confirmedByStaffId: staffId,
@@ -248,7 +337,7 @@ adminOrdersRouter.patch('/:id/confirm-payment', requireStaff('admin', 'cashier')
   ]);
 
   emitOrderEvent('order:updated', order);
-  res.json({ order });
+  res.json({ order: toAdminOrder(order, (req.auth as any).role) });
 });
 
 const waiterSchema = z.object({ waiterId: z.number().nullable() });
@@ -305,46 +394,42 @@ adminOrdersRouter.patch('/:id/location', requireStaff('driver'), async (req, res
 });
 
 const counterSaleSchema = z.object({
-  phone: z.string().min(6),
-  name: z.string().optional(),
+  // A walk-in sale doesn't need a registered customer — just a name for the receipt, if given.
+  customerName: z.string().optional(),
+  paymentMethod: z.enum(['cash', 'cliq', 'card']).default('cash'),
+  paymentStatus: z.enum(['paid', 'unpaid']).default('paid'),
   items: z.array(orderItemSchema).min(1),
 });
 
 adminOrdersRouter.post('/counter-sale', requireStaff('admin', 'cashier'), async (req, res) => {
   const parsed = counterSaleSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'invalid_input', details: parsed.error.flatten() });
+  if (!parsed.data.items.length) return res.status(400).json({ error: 'empty_order' });
   const staffId = (req.auth as any).staffId;
-
-  const userSelect = { id: true, name: true, phone: true, createdAt: true } as const;
-  let user = await prisma.user.findUnique({ where: { phone: parsed.data.phone }, select: userSelect });
-  if (!user) {
-    if (!parsed.data.name) return res.status(400).json({ error: 'name_required_for_new_customer' });
-    user = await prisma.user.create({ data: { phone: parsed.data.phone, name: parsed.data.name }, select: userSelect });
-  }
 
   let payload;
   try {
     payload = await buildOrderPayload(parsed.data.items);
   } catch (e: any) {
-    return res.status(400).json({ error: e.message });
+    return res.status(400).json({ error: e.message, item: e.item });
   }
 
   const order = await prisma.order.create({
     data: {
-      userId: user.id,
       orderType: 'counter',
       status: 'completed',
-      paymentMethod: 'cash',
-      paymentStatus: 'paid',
-      confirmedByStaffId: staffId,
+      customerName: parsed.data.customerName,
+      paymentMethod: parsed.data.paymentMethod,
+      paymentStatus: parsed.data.paymentStatus === 'paid' ? 'paid' : 'unpaid',
+      confirmedByStaffId: parsed.data.paymentStatus === 'paid' ? staffId : undefined,
       subtotal: payload.subtotal,
       discountTotal: 0,
       total: payload.subtotal,
       items: { create: payload.lines },
       statusLogs: { create: { status: 'completed', changedByStaffId: staffId } },
     },
-    include: { items: true },
+    include: ORDER_INCLUDE,
   });
 
-  res.json({ order, user });
+  res.json({ order: toAdminOrder(order, (req.auth as any).role) });
 });

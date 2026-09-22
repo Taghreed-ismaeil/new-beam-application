@@ -15,3 +15,7 @@ export function emitOrderEvent(event: 'order:new' | 'order:updated', payload: un
 export function emitReservationEvent(event: 'reservation:new' | 'reservation:updated', payload: unknown) {
   io?.emit(event, payload);
 }
+
+export function emitTableEvent(event: 'table:updated', payload: unknown) {
+  io?.emit(event, payload);
+}
