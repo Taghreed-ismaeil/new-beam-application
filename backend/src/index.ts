@@ -20,6 +20,7 @@ import { reservationsRouter, adminReservationsRouter } from './routes/reservatio
 import { adminInventoryRouter } from './routes/inventory';
 import { adminSuppliersRouter } from './routes/suppliers';
 import { adminExpensesRouter } from './routes/expenses';
+import { adminUploadsRouter } from './routes/uploads';
 
 const app = express();
 app.use(cors());
@@ -59,6 +60,7 @@ app.use('/api/admin/reservations', adminReservationsRouter);
 app.use('/api/admin/inventory', adminInventoryRouter);
 app.use('/api/admin/suppliers', adminSuppliersRouter);
 app.use('/api/admin/expenses', adminExpensesRouter);
+app.use('/api/admin/uploads', adminUploadsRouter);
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
