@@ -264,14 +264,14 @@ const styles = StyleSheet.create({
   option: {
     flex: 1,
     borderWidth: 2,
-    borderColor: "#ff8c00",
+    borderColor: "#FC4A14",
     borderRadius: 14,
     padding: 12,
     alignItems: "center",
     backgroundColor: "#fff",
   },
-  optionActive: { backgroundColor: "#ff8c00" },
-  optionText: { color: "#ff8c00", fontWeight: "700" },
+  optionActive: { backgroundColor: "#FC4A14" },
+  optionText: { color: "#FC4A14", fontWeight: "700" },
   optionTextActive: { color: "#fff" },
   input: {
     borderWidth: 1,
@@ -284,12 +284,12 @@ const styles = StyleSheet.create({
   scanTableBtn: {
     backgroundColor: "#fff5e8",
     borderWidth: 2,
-    borderColor: "#ff8c00",
+    borderColor: "#FC4A14",
     borderRadius: 12,
     padding: 12,
     alignItems: "center",
   },
-  scanTableBtnText: { fontWeight: "700", color: "#ff8c00" },
+  scanTableBtnText: { fontWeight: "700", color: "#FC4A14" },
   tableConfirmed: { color: "#2f9e5b", fontWeight: "700", textAlign: "center" },
   locationConfirmed: {
     backgroundColor: "#f2fbf6",
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   error: { color: "#c0392b", marginTop: 12 },
   total: { fontWeight: "900", fontSize: 18, marginTop: 24 },
   submitBtn: {
-    backgroundColor: "#ff8c00",
+    backgroundColor: "#FC4A14",
     borderRadius: 40,
     padding: 15,
     alignItems: "center",

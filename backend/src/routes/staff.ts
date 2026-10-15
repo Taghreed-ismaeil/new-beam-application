@@ -65,3 +65,45 @@ adminStaffRouter.patch('/:id', async (req, res) => {
   });
   res.json({ staff: toPublicStaff(staff) });
 });
+
+// Staff → Activity: successful admin-panel changes, newest first (written by middleware/audit.ts).
+adminStaffRouter.get('/audit-log', async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+  const rows = await prisma.staffAuditLog.findMany({
+    include: { staff: { select: { name: true } } },
+    orderBy: { at: 'desc' },
+    take: limit,
+  });
+  res.json({
+    entries: rows.map((r) => ({
+      id: r.id,
+      staffName: r.staff?.name ?? '—',
+      action: r.action,
+      entity: r.entity,
+      entityId: r.entityId,
+      at: r.at,
+    })),
+  });
+});
+
+// Staff → Login log: every sign-in attempt, including failed ones.
+adminStaffRouter.get('/login-log', async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+  const rows = await prisma.staffLoginLog.findMany({
+    include: { staff: { select: { name: true } } },
+    orderBy: { at: 'desc' },
+    take: limit,
+  });
+  res.json({
+    entries: rows.map((r) => ({
+      id: r.id,
+      ok: r.ok,
+      reason: r.reason,
+      staffName: r.staff?.name ?? null,
+      phone: r.phone,
+      ip: r.ip,
+      userAgent: r.userAgent,
+      at: r.at,
+    })),
+  });
+});

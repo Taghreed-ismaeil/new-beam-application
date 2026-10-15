@@ -1,6 +1,9 @@
+import { Ionicons } from "@expo/vector-icons";
+
 import BackButton from "@/components/BackButton";
 import { useCart } from "@/context/CartContext";
 import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -8,9 +11,16 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 
-const ORANGE = "#ED5529";
-const TEAL = "#008E82";
+import { apiRequestCached, imageUrl } from "@/lib/api-client";
+import { useAppLang } from "@/lib/app-lang";
+import { allMenuItems } from "@/lib/menu-sections";
+
+const FALLBACK_IMAGE = require("../assets/img/menu-5.jpg");
+
+const ORANGE = "#FC4A14";
+const TEAL = "#005751";
 const LIGHT_ORANGE = "#FFF0EA";
 const LIGHT_TEAL = "#E8F5F2";
 const DARK = "#17201F";
@@ -18,7 +28,23 @@ const MUTED = "#68706E";
 const WHITE = "#FFFFFF";
 
 export default function CartScreen() {
-  const { lines, setQuantity, total } = useCart();
+  const { lines, setQuantity, remove, total } = useCart();
+  const { t, pick, dir } = useAppLang();
+
+  // Items added before the cart stored images: look their image up in the menu
+  const [menuImages, setMenuImages] = useState({});
+
+  useEffect(() => {
+    apiRequestCached("/api/menu", (data) => {
+      const map = {};
+
+      allMenuItems(data.categories).forEach((i) => {
+        if (i.imageUrl) map[i.id] = i.imageUrl;
+      });
+
+      setMenuImages(map);
+    });
+  }, []);
 
   return (
     <View style={styles.screen}>
@@ -45,15 +71,7 @@ export default function CartScreen() {
           <View style={styles.titleSection}>
             <Text style={styles.eyebrow}></Text>
 
-            <Text style={styles.title}>Your Cart</Text>
-
-            <Text style={styles.subtitle}>
-              Review your delicious picks before checkout.
-            </Text>
-          </View>
-
-          <View style={styles.cartCircle}>
-            <Text style={styles.cartIcon}>🛒</Text>
+            <Text style={[styles.title, dir.text]}>{t("cartTitle")}</Text>
           </View>
         </View>
       </View>
@@ -72,30 +90,50 @@ export default function CartScreen() {
               <Text style={styles.emptyIcon}>🛒</Text>
             </View>
 
-            <Text style={styles.emptyTitle}>Your cart is empty</Text>
+            <Text style={styles.emptyTitle}>{t("cartEmpty")}</Text>
 
             <Text style={styles.emptyText}>
-              Add something delicious from the menu and it will appear here.
+              {t("cartEmptyText")}
             </Text>
           </View>
         ) : (
           lines.map((l) => (
-            <View key={l.menuItemId} style={styles.row}>
+            <View key={l.menuItemId} style={[styles.row, dir.row]}>
+              <Image
+                source={(() => {
+                  const path = l.imageUrl || menuImages[l.menuItemId];
+
+                  return path ? { uri: imageUrl(path) } : FALLBACK_IMAGE;
+                })()}
+                cachePolicy="memory-disk"
+                transition={120}
+                style={styles.thumb}
+              />
+
               <View style={styles.itemInfo}>
-                <Text style={styles.name} numberOfLines={1}>
-                  {l.name}
+                <Text style={[styles.name, dir.text]} numberOfLines={1}>
+                  {pick({ name: l.nameAr || l.name, nameEn: l.nameEn || l.name })}
                 </Text>
 
-                <Text style={styles.price}>{l.price.toFixed(2)} JD</Text>
+                {!!l.notes && (
+                  <Text style={[styles.lineNote, dir.text]} numberOfLines={2}>
+                    {l.notes}
+                  </Text>
+                )}
+
+                <Text style={[styles.price, dir.text]}>
+                  {l.price.toFixed(2)} {t("jd")}
+                </Text>
               </View>
 
-              <View style={styles.stepper}>
+              <View style={[styles.stepper, dir.row]}>
                 <TouchableOpacity
                   onPress={() => setQuantity(l.menuItemId, l.quantity - 1)}
                   style={styles.stepBtn}
                   activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 2 }}
                 >
-                  <Text style={styles.stepBtnText}>−</Text>
+                  <Ionicons name="remove" size={16} color={ORANGE} />
                 </TouchableOpacity>
 
                 <Text style={styles.qty}>{l.quantity}</Text>
@@ -104,10 +142,21 @@ export default function CartScreen() {
                   onPress={() => setQuantity(l.menuItemId, l.quantity + 1)}
                   style={[styles.stepBtn, styles.plusBtn]}
                   activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 2, right: 4 }}
                 >
-                  <Text style={styles.plusText}>+</Text>
+                  <Ionicons name="add" size={16} color={WHITE} />
                 </TouchableOpacity>
               </View>
+
+              {/* Delete the whole line in one tap */}
+              <TouchableOpacity
+                onPress={() => remove(l.menuItemId)}
+                style={styles.deleteBtn}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              >
+                <Ionicons name="trash-outline" size={18} color={ORANGE} />
+              </TouchableOpacity>
             </View>
           ))
         )}
@@ -117,11 +166,14 @@ export default function CartScreen() {
     FOOTER
 ====================================================== */}
 
+      {lines.length > 0 && (
       <View style={styles.footer}>
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Total</Text>
+        <View style={[styles.totalRow, dir.row]}>
+          <Text style={styles.totalLabel}>{t("cartTotal")}</Text>
 
-          <Text style={styles.total}>{total.toFixed(2)} JD</Text>
+          <Text style={styles.total}>
+            {total.toFixed(2)} {t("jd")}
+          </Text>
         </View>
 
         <TouchableOpacity
@@ -134,9 +186,11 @@ export default function CartScreen() {
           }
           activeOpacity={0.8}
         >
-          <Text style={styles.confirmBtnText}>Confirm</Text>
+          <Text style={styles.confirmBtnText}>{t("cartConfirm")}</Text>
         </TouchableOpacity>
       </View>
+      )}
+
     </View>
   );
 }
@@ -223,41 +277,6 @@ const styles = StyleSheet.create({
     marginTop: 25,
   },
 
-  subtitle: {
-    marginTop: 6,
-    color: MUTED,
-    fontSize: 13,
-    lineHeight: 19,
-    maxWidth: 280,
-  },
-
-  cartCircle: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-
-    backgroundColor: WHITE,
-
-    borderWidth: 2,
-    borderColor: ORANGE,
-
-    alignItems: "center",
-    justifyContent: "center",
-
-    shadowColor: ORANGE,
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-
-    elevation: 4,
-  },
-
-  cartIcon: {
-    fontSize: 27,
-  },
 
   /* =====================================================
      CONTENT
@@ -327,6 +346,7 @@ const styles = StyleSheet.create({
 
     padding: 15,
     marginBottom: 13,
+    gap: 10,
 
     borderWidth: 1,
     borderColor: "#F0E6E1",
@@ -344,16 +364,32 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
 
+  thumb: {
+    width: 62,
+    height: 62,
+    borderRadius: 14,
+    resizeMode: "cover",
+    backgroundColor: "#F4F1ED",
+  },
+
   itemInfo: {
     flex: 1,
     minWidth: 0,
-    paddingRight: 12,
   },
 
   name: {
     fontSize: 16,
     fontWeight: "900",
     color: DARK,
+  },
+
+  // The customer's kitchen note from the item details screen
+  lineNote: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: "600",
+    fontStyle: "italic",
+    color: "#68706E",
   },
 
   price: {
@@ -367,55 +403,47 @@ const styles = StyleSheet.create({
      STEPPER
   ====================================================== */
 
+  deleteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: LIGHT_ORANGE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Soft grey pill: white minus (orange icon), teal plus (white icon)
   stepper: {
     flexDirection: "row",
     alignItems: "center",
-
-    backgroundColor: LIGHT_ORANGE,
-
-    borderRadius: 20,
-
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-
-    borderWidth: 1,
-    borderColor: "#F8D7CB",
+    backgroundColor: "#F4F1ED",
+    borderRadius: 12,
+    padding: 3,
   },
 
   stepBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-
+    width: 28,
+    height: 28,
+    borderRadius: 9,
     backgroundColor: WHITE,
-
-    borderWidth: 1,
-    borderColor: ORANGE,
-
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    elevation: 1,
   },
 
   plusBtn: {
-    backgroundColor: ORANGE,
-  },
-
-  stepBtnText: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: ORANGE,
-    lineHeight: 20,
-  },
-
-  plusText: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: WHITE,
-    lineHeight: 20,
+    backgroundColor: TEAL,
   },
 
   qty: {
-    minWidth: 30,
+    minWidth: 26,
     textAlign: "center",
     fontSize: 14,
     fontWeight: "900",

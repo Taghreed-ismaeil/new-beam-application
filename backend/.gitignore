@@ -4,3 +4,5 @@ dist
 public/uploads
 public/images
 public/qrcodes
+public/local-storage
+.env.local

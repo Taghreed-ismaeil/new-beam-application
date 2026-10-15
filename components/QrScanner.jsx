@@ -1,3 +1,4 @@
+import { useAppLang } from "@/lib/app-lang";
 import { useEffect, useRef, useState } from "react";
 import {
   Platform,
@@ -20,6 +21,7 @@ export default function QrScanner({ onDecode }) {
 }
 
 function NativeCameraScanner({ onDecode }) {
+  const { t } = useAppLang();
   let cameraModule;
   let loadError = "";
   try {
@@ -31,7 +33,7 @@ function NativeCameraScanner({ onDecode }) {
   if (loadError) {
     return (
       <View style={styles.box}>
-        <Text style={styles.hint}>Couldn't load the camera</Text>
+        <Text style={styles.hint}>{t("qrCantLoadCamera")}</Text>
         <Text style={styles.error}>{loadError}</Text>
       </View>
     );
@@ -43,6 +45,7 @@ function NativeCameraScanner({ onDecode }) {
 // Opens the phone's own system camera app (always reliable, no custom preview to break),
 // then decodes the still photo with expo-camera's scanFromURLAsync.
 function PhotoScanner({ cameraModule, onDecode }) {
+  const { t } = useAppLang();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const launchedRef = useRef(false);
@@ -57,8 +60,8 @@ function PhotoScanner({ cameraModule, onDecode }) {
       if (!perm.granted) {
         setError(
           perm.canAskAgain
-            ? "Camera access was denied"
-            : "Camera access was denied — enable it in device Settings → Expo Go",
+            ? t("qrDenied")
+            : t("qrDeniedSettings"),
         );
         return;
       }
@@ -88,7 +91,7 @@ function PhotoScanner({ cameraModule, onDecode }) {
       if (matches?.[0]?.data) {
         onDecode(matches[0].data);
       } else {
-        setError("Couldn't find a QR code in that photo, try again");
+        setError(t("qrNotFoundPhoto"));
       }
     } catch (e) {
       console.error(`[QrScanner:${stage}]`, e);
@@ -112,12 +115,12 @@ function PhotoScanner({ cameraModule, onDecode }) {
   return (
     <View style={styles.box}>
       {busy ? (
-        <Text style={styles.hint}>Opening camera...</Text>
+        <Text style={styles.hint}>{t("qrOpening")}</Text>
       ) : (
         <>
-          <Text style={styles.hint}>📷 Ready to scan a QR code</Text>
+          <Text style={styles.hint}>{t("qrReady")}</Text>
           <TouchableOpacity style={styles.btn} onPress={takeAndScan}>
-            <Text style={styles.btnText}>Open camera</Text>
+            <Text style={styles.btnText}>{t("qrOpenCamera")}</Text>
           </TouchableOpacity>
         </>
       )}
@@ -127,6 +130,7 @@ function PhotoScanner({ cameraModule, onDecode }) {
 }
 
 function WebUploadScanner({ onDecode }) {
+  const { t } = useAppLang();
   const [error, setError] = useState("");
   const inputRef = useRef(null);
 
@@ -149,7 +153,7 @@ function WebUploadScanner({ onDecode }) {
         setError("");
         onDecode(code.data);
       } else {
-        setError("Couldn't find a QR code in that image, try a clearer one");
+        setError(t("qrNotFoundImage"));
       }
     };
     image.src = url;
@@ -157,9 +161,7 @@ function WebUploadScanner({ onDecode }) {
 
   return (
     <View style={styles.box}>
-      <Text style={styles.hint}>
-        📷 Live camera isn't available on web — upload a QR photo
-      </Text>
+      <Text style={styles.hint}>{t("qrWebHint")}</Text>
       <input
         ref={inputRef}
         type="file"
@@ -185,7 +187,7 @@ const styles = StyleSheet.create({
   error: { color: "#ff8080", marginTop: 8, textAlign: "center" },
   btn: {
     marginTop: 12,
-    backgroundColor: "#ff8c00",
+    backgroundColor: "#FC4A14",
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,

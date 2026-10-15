@@ -4,20 +4,25 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from "react-native";
 
-import BackButton from "@/components/BackButton";
+import LeafletMap from "@/components/LeafletMap";
 import { useAuth } from "@/context/AuthContext";
 import { apiRequest } from "@/lib/api-client";
+import { useAppLang } from "@/lib/app-lang";
+import { enterUp } from "@/lib/motion";
+import Animated from "react-native-reanimated";
 
-const ORANGE = "#ED5529";
-const TEAL = "#008E82";
+const ORANGE = "#FC4A14";
+const TEAL = "#005751";
 const DARK = "#17201F";
 const MUTED = "#68706E";
 const LIGHT_TEAL = "#E8F5F2";
@@ -26,120 +31,109 @@ const WHITE = "#FFFFFF";
 
 const BOTTOM_NAV_SPACE = 110;
 
-const STATUS_LABEL = {
-  pending: "Order received",
-  accepted: "Accepted",
-  preparing: "Preparing",
-  ready: "Ready",
-  out_for_delivery: "On the way",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
+// Approximate pin for Al Abdali (Abdali Boulevard) — replace with the
+// restaurant's exact coordinates when available.
+const RESTAURANT_COORDS = { lat: 31.9622, lng: 35.9106 };
 
-const STATUS_COLORS = {
-  pending: {
-    bg: LIGHT_ORANGE,
-    text: ORANGE,
-  },
-  accepted: {
-    bg: LIGHT_TEAL,
-    text: TEAL,
-  },
-  preparing: {
-    bg: LIGHT_ORANGE,
-    text: ORANGE,
-  },
-  ready: {
-    bg: LIGHT_TEAL,
-    text: TEAL,
-  },
-  out_for_delivery: {
-    bg: "#F1EDFF",
-    text: "#7057C9",
-  },
-  completed: {
-    bg: LIGHT_TEAL,
-    text: TEAL,
-  },
-  cancelled: {
-    bg: "#FCECEC",
-    text: "#C0392B",
-  },
-};
+// Opens the Maps app (or Google Maps in the browser) on the restaurant.
+// Swap for the exact pin link once the restaurant's Google Maps listing is ready.
+const RESTAURANT_MAPS_URL =
+  "https://www.google.com/maps/search/?api=1&query=" +
+  encodeURIComponent("Beam Shawerma, Al Abdali, Amman, Jordan");
+
+// Share text lives in lib/app-strings.ts (accountShareMessage) — add the
+// App Store / Play Store link there once the app is published.
 
 export default function AccountScreen() {
   const { width } = useWindowDimensions();
   const { user, logout } = useAuth();
+  const { t, lang, setLang, dir } = useAppLang();
 
   const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [readyRewards, setReadyRewards] = useState(0);
   const [loggingOut, setLoggingOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const isSmall = width < 360;
 
   useEffect(() => {
+    // Guests have no orders or rewards to fetch.
+    if (!user) {
+      setOrders([]);
+      setReadyRewards(0);
+      return;
+    }
+
     apiRequest("/api/orders/mine")
       .then((d) => {
         setOrders(d.orders ?? []);
       })
       .catch(() => {
         setOrders([]);
-      })
-      .finally(() => {
-        setLoading(false);
       });
-  }, []);
 
+    apiRequest("/api/loyalty/vouchers")
+      .then((d) => {
+        setReadyRewards((d.vouchers ?? []).filter((v) => !v.redeemedAt).length);
+      })
+      .catch(() => {});
+  }, [user]);
+
+  // Guests can browse freely now, so logging out just turns this screen back
+  // into its guest view instead of forcing the login page.
   async function onLogout() {
     if (loggingOut) return;
 
     try {
       setLoggingOut(true);
       await logout();
-      router.replace("/login");
     } catch (error) {
       console.log("Logout error:", error);
+    } finally {
       setLoggingOut(false);
     }
   }
 
-  function onDeleteAccount() {
-    Alert.alert(
-      "Delete account?",
-      "This permanently deletes your account and loyalty rewards. This can't be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              await apiRequest("/api/auth/account", { method: "DELETE" });
-              await logout();
-              router.replace("/login");
-            } catch {
-              setDeleting(false);
-              Alert.alert(
-                "Something went wrong",
-                "Couldn't delete your account, try again",
-              );
-            }
-          },
-        },
-      ],
-    );
+  function openLocation() {
+    Linking.openURL(RESTAURANT_MAPS_URL).catch(() => {
+      Alert.alert(t("accountMapsError"), t("accountMapsErrorText"));
+    });
   }
 
-  const userName = user?.name || "Guest";
-  const userPhone = user?.phone || "No phone number";
+  async function shareApp() {
+    try {
+      await Share.share({ message: t("accountShareMessage") });
+    } catch {
+      // share sheet dismissed / unavailable — nothing to do
+    }
+  }
 
-  const completedOrders = orders.filter((o) => o.status === "completed").length;
+  function goToLogin() {
+    router.push({ pathname: "/login", params: { returnTo: "back" } });
+  }
 
-  const activeOrders = orders.filter(
-    (o) => o.status !== "completed" && o.status !== "cancelled",
-  ).length;
+  function onDeleteAccount() {
+    Alert.alert(t("accountDeleteTitle"), t("accountDeleteText"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("accountDeleteConfirm"),
+        style: "destructive",
+        onPress: async () => {
+          setDeleting(true);
+          try {
+            await apiRequest("/api/auth/account", { method: "DELETE" });
+            await logout();
+            setDeleting(false);
+          } catch {
+            setDeleting(false);
+            Alert.alert(t("somethingWrong"), t("accountDeleteError"));
+          }
+        },
+      },
+    ]);
+  }
+
+  const userName = user?.name || t("accountGuest");
 
   const initials = useMemo(() => {
     const parts = userName.trim().split(" ").filter(Boolean);
@@ -157,8 +151,6 @@ export default function AccountScreen() {
 
   return (
     <View style={styles.container}>
-      <BackButton />
-
       <ScrollView
         style={styles.screen}
         showsVerticalScrollIndicator={false}
@@ -202,122 +194,123 @@ export default function AccountScreen() {
             },
           ]}
         >
+          {/*
           <MaterialCommunityIcons name="silverware" size={145} color={ORANGE} />
-        </View>
-
-        {/* Bottom - BIG soft teal spoon */}
-        <View
-          pointerEvents="none"
-          style={[
-            styles.decorBottom,
-            {
-              right: width * 0.05,
-              top: 650,
-              transform: [{ rotate: "-10deg" }],
-            },
-          ]}
-        >
-          <MaterialCommunityIcons
-            name="silverware-spoon"
-            size={120}
-            color={ORANGE}
-          />
+          */}
         </View>
 
         {/* ================= TOP LABEL ================= */}
-
-        <View style={styles.topBar}>
+        {/*
+        <Animated.View entering={enterDown(0)} style={styles.topBar}>
           <View />
-
+          
           <View style={styles.accountPill}>
             <Ionicons name="person-outline" size={13} color={ORANGE} />
 
-            <Text style={styles.accountPillText}>MY ACCOUNT</Text>
+            <Text style={[styles.accountPillText, dir.noSpacing]}>
+              {t("accountPill")}
+            </Text>
           </View>
-        </View>
-
+         
+        </Animated.View>
+ */}
         {/* ================= PROFILE ================= */}
 
-        <View style={styles.profileHeader}>
+        <Animated.View entering={enterUp(1)} style={styles.profileHeader}>
           <View style={styles.avatarOuter}>
             <View style={styles.avatar}>
-              <Text
-                style={[
-                  styles.avatarText,
-                  {
-                    fontSize: isSmall ? 25 : 29,
-                  },
-                ]}
-              >
-                {initials}
-              </Text>
+              {user ? (
+                <Text
+                  style={[
+                    styles.avatarText,
+                    {
+                      fontSize: isSmall ? 25 : 29,
+                    },
+                  ]}
+                >
+                  {initials}
+                </Text>
+              ) : (
+                <Ionicons name="person" size={32} color={WHITE} />
+              )}
             </View>
           </View>
 
-          <Text
-            style={[
-              styles.name,
-              {
-                fontSize: isSmall ? 24 : 28,
-              },
-            ]}
-            numberOfLines={1}
-          >
-            {userName}
-          </Text>
-
-          <View style={styles.phoneRow}>
-            <Ionicons name="call-outline" size={13} color={MUTED} />
-
-            <Text style={styles.phone} numberOfLines={1}>
-              {userPhone}
+          {user ? (
+            <Text
+              style={[
+                styles.name,
+                {
+                  fontSize: isSmall ? 24 : 28,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {userName}
             </Text>
-          </View>
+          ) : (
+            <Pressable
+              onPress={goToLogin}
+              style={({ pressed }) => [
+                styles.loginBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="log-in-outline" size={18} color={WHITE} />
+              <Text style={styles.loginBtnText}>{t("accountLogin")}</Text>
+            </Pressable>
+          )}
 
+          <View style={styles.phoneRow} />
+          {/*
           <Text style={styles.profileCaption}>
             Good food is always a good idea.
           </Text>
-        </View>
+          */}
+        </Animated.View>
 
         {/* ================= STATS ================= */}
 
-        <View style={styles.statsStrip}>
+        <Animated.View entering={enterUp(2)} style={styles.statsStrip}>
           <View style={styles.stat}>
             <Text style={styles.statNumber}>{orders.length}</Text>
 
-            <Text style={styles.statLabel}>TOTAL ORDERS</Text>
+            <Text style={[styles.statLabel, dir.noSpacing]}>
+              {t("accountTotalOrders")}
+            </Text>
           </View>
 
           <View style={styles.statDivider} />
 
-          <View style={styles.stat}>
-            <Text style={styles.statNumber}>{activeOrders}</Text>
+          <Pressable
+            onPress={() =>
+              user ? router.push("/loyalty/vouchers") : goToLogin()
+            }
+            style={({ pressed }) => [styles.stat, pressed && styles.pressed]}
+          >
+            <View style={styles.statNumberRow}>
+              <Text style={styles.statNumber}>{readyRewards}</Text>
+            </View>
 
-            <Text style={styles.statLabel}>ACTIVE</Text>
-          </View>
-
-          <View style={styles.statDivider} />
-
-          <View style={styles.stat}>
-            <Text style={styles.statNumber}>{completedOrders}</Text>
-
-            <Text style={styles.statLabel}>COMPLETED</Text>
-          </View>
-        </View>
+            <Text style={[styles.statLabel, dir.noSpacing]}>
+              {t("accountRewardsReady")}
+            </Text>
+          </Pressable>
+        </Animated.View>
 
         {/* ================= ACTIONS ================= */}
 
-        <View style={styles.sectionBlock}>
-          <Text style={styles.sectionEyebrow}>EXPLORE</Text>
+        <Animated.View entering={enterUp(3)} style={styles.sectionBlock}>
+          <Text style={[styles.sectionTitle, dir.text]}>
+            {t("accountWhatNeed")}
+          </Text>
+        </Animated.View>
 
-          <Text style={styles.sectionTitle}>What do you need?</Text>
-        </View>
-
-        <View style={styles.menuList}>
+        <Animated.View entering={enterUp(4)} style={styles.menuList}>
           {/* Reservations */}
 
           <Pressable
-            onPress={() => router.push("/reservations")}
+            onPress={() => (user ? router.push("/reservations") : goToLogin())}
             style={({ pressed }) => [
               styles.menuItem,
               pressed && styles.pressed,
@@ -332,10 +325,12 @@ export default function AccountScreen() {
             </View>
 
             <View style={styles.menuText}>
-              <Text style={styles.menuTitle}>My Reservations</Text>
+              <Text style={[styles.menuTitle, dir.text]}>
+                {t("accountReservations")}
+              </Text>
 
-              <Text style={styles.menuSubtitle}>
-                Manage your tables and bookings
+              <Text style={[styles.menuSubtitle, dir.text]}>
+                {t("accountReservationsSub")}
               </Text>
             </View>
 
@@ -360,180 +355,219 @@ export default function AccountScreen() {
             </View>
 
             <View style={styles.menuText}>
-              <Text style={styles.menuTitle}>Contact Us</Text>
+              <Text style={[styles.menuTitle, dir.text]}>
+                {t("accountContact")}
+              </Text>
 
-              <Text style={styles.menuSubtitle}>
-                We’re always happy to hear from you
+              <Text style={[styles.menuSubtitle, dir.text]}>
+                {t("accountContactSub")}
               </Text>
             </View>
 
             <Ionicons name="chevron-forward" size={20} color={TEAL} />
           </Pressable>
-        </View>
 
-        {/* ================= ORDERS ================= */}
+          {/* Location — map preview card */}
 
-        <View style={styles.ordersHeader}>
-          <View>
-            <Text style={styles.sectionEyebrow}>YOUR ACTIVITY</Text>
-
-            <Text style={styles.ordersTitle}>My Orders</Text>
-          </View>
-
-          {orders.length > 0 && (
-            <View style={styles.orderCountPill}>
-              <Text style={styles.orderCountText}>{orders.length}</Text>
+          <View style={styles.locationCard}>
+            <View style={styles.mapBox}>
+              <LeafletMap
+                center={RESTAURANT_COORDS}
+                zoom={16}
+                markers={[
+                  {
+                    id: "beem",
+                    ...RESTAURANT_COORDS,
+                    color: ORANGE,
+                    label: t("brandName"),
+                  },
+                ]}
+                style={StyleSheet.absoluteFill}
+              />
+              {/* covers the map so a tap opens Maps and the page still scrolls
+                  (the WebView would otherwise swallow the touches) */}
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={openLocation}
+              />
             </View>
-          )}
-        </View>
-
-        {loading ? (
-          <View style={styles.loadingState}>
-            <ActivityIndicator size="small" color={ORANGE} />
-
-            <Text style={styles.loadingText}>Loading your orders...</Text>
-          </View>
-        ) : orders.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="bag-handle-outline" size={28} color={ORANGE} />
-            </View>
-
-            <Text style={styles.emptyTitle}>Nothing here yet</Text>
-
-            <Text style={styles.emptyText}>
-              Your orders will show up here after your first delicious visit.
-            </Text>
 
             <Pressable
-              onPress={() => router.push("/")}
+              onPress={openLocation}
               style={({ pressed }) => [
-                styles.exploreButton,
+                styles.locationRow,
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.exploreButtonText}>Explore Menu</Text>
+              <View style={[styles.menuIcon, styles.orangeMenuIcon]}>
+                <Ionicons
+                  name="location-outline"
+                  size={21}
+                  color={LIGHT_ORANGE}
+                />
+              </View>
 
-              <Ionicons name="arrow-forward" size={16} color={WHITE} />
+              <View style={styles.menuText}>
+                <Text style={[styles.menuTitle, dir.text]}>
+                  {t("accountLocation")}
+                </Text>
+
+                <Text style={[styles.menuSubtitle, dir.text]}>
+                  {t("accountLocationSub")}
+                </Text>
+              </View>
+
+              <Ionicons name="chevron-forward" size={20} color={ORANGE} />
             </Pressable>
           </View>
-        ) : (
-          <View>
-            {orders.map((o, index) => {
-              const statusStyle =
-                STATUS_COLORS[o.status] ?? STATUS_COLORS.pending;
 
-              const statusLabel = STATUS_LABEL[o.status] ?? o.status;
+          {/* Share */}
 
-              const accent = index % 2 === 0 ? ORANGE : TEAL;
+          <Pressable
+            onPress={shareApp}
+            style={({ pressed }) => [
+              styles.menuItem,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={[styles.menuIcon, styles.tealMenuIcon]}>
+              <Ionicons
+                name="share-social-outline"
+                size={21}
+                color={LIGHT_TEAL}
+              />
+            </View>
+
+            <View style={styles.menuText}>
+              <Text style={[styles.menuTitle, dir.text]}>
+                {t("accountShare")}
+              </Text>
+
+              <Text style={[styles.menuSubtitle, dir.text]}>
+                {t("accountShareSub")}
+              </Text>
+            </View>
+
+            <Ionicons name="chevron-forward" size={20} color={TEAL} />
+          </Pressable>
+
+          {/* My Orders → its own page */}
+
+          <Pressable
+            onPress={() => (user ? router.push("/orders") : goToLogin())}
+            style={({ pressed }) => [
+              styles.menuItem,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={[styles.menuIcon, styles.orangeMenuIcon]}>
+              <Ionicons name="receipt-outline" size={21} color={LIGHT_ORANGE} />
+            </View>
+
+            <View style={styles.menuText}>
+              <Text style={[styles.menuTitle, dir.text]}>
+                {t("accountOrders")}
+              </Text>
+
+              <Text style={[styles.menuSubtitle, dir.text]}>
+                {t("accountOrdersSub")}
+              </Text>
+            </View>
+
+            <Ionicons name="chevron-forward" size={20} color={ORANGE} />
+          </Pressable>
+        </Animated.View>
+
+        {/* ================= LOGOUT / DELETE (signed-in only) ================= */}
+
+        {user && (
+          <>
+            <Pressable
+              onPress={onLogout}
+              disabled={loggingOut}
+              style={({ pressed }) => [
+                styles.logoutButton,
+                pressed && styles.pressed,
+                loggingOut && styles.logoutDisabled,
+              ]}
+            >
+              {loggingOut ? (
+                <ActivityIndicator size="small" color={ORANGE} />
+              ) : (
+                <>
+                  <Ionicons name="log-out-outline" size={18} color={ORANGE} />
+
+                  <Text style={styles.logoutText}>{t("accountLogout")}</Text>
+                </>
+              )}
+            </Pressable>
+            {/* =========  DELETE =============== */}
+
+            <Pressable
+              onPress={onDeleteAccount}
+              disabled={deleting}
+              style={({ pressed }) => [
+                styles.deleteBtn,
+                pressed && styles.pressed,
+                deleting && styles.logoutDisabled,
+              ]}
+            >
+              <Ionicons name="trash-outline" size={18} color={TEAL} />
+
+              <Text style={styles.deleteBtnText}>
+                {deleting ? t("accountDeleting") : t("accountDelete")}
+              </Text>
+            </Pressable>
+          </>
+        )}
+        {/* ================= LANGUAGE ================= */}
+
+        <Animated.View entering={enterUp(5)} style={styles.langBlock}>
+          <View style={styles.langTitleRow}>
+            <Ionicons name="language-outline" size={18} color={TEAL} />
+
+            <Text style={styles.langTitle}>{t("accountLanguage")}</Text>
+          </View>
+
+          <View style={styles.langSwitch}>
+            {[
+              { code: "en", label: "English" },
+              { code: "ar", label: "العربية" },
+            ].map((option) => {
+              const selected = lang === option.code;
 
               return (
                 <Pressable
-                  key={o.id}
-                  onPress={() => router.push(`/order-tracking/${o.id}`)}
+                  key={option.code}
+                  onPress={() => setLang(option.code)}
                   style={({ pressed }) => [
-                    styles.orderItem,
+                    styles.langOption,
+                    selected && styles.langOptionSelected,
                     pressed && styles.pressed,
                   ]}
                 >
-                  <View
+                  <Text
                     style={[
-                      styles.orderAccent,
-                      {
-                        backgroundColor: accent,
-                      },
+                      styles.langOptionText,
+                      selected && styles.langOptionTextSelected,
                     ]}
-                  />
-
-                  <View style={styles.orderIcon}>
-                    <Ionicons name="receipt-outline" size={19} color={accent} />
-                  </View>
-
-                  <View style={styles.orderInfo}>
-                    <Text style={styles.orderNumber}>Order #{o.id}</Text>
-
-                    <Text style={styles.orderPrice}>
-                      {Number(o.total).toFixed(2)} JD
-                    </Text>
-                  </View>
-
-                  <View style={styles.orderRight}>
-                    <View
-                      style={[
-                        styles.statusPill,
-                        {
-                          backgroundColor: statusStyle.bg,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.statusText,
-                          {
-                            color: statusStyle.text,
-                          },
-                        ]}
-                      >
-                        {statusLabel}
-                      </Text>
-                    </View>
-
-                    <Ionicons
-                      name="chevron-forward"
-                      size={17}
-                      color="#A1A5A3"
-                    />
-                  </View>
+                  >
+                    {option.label}
+                  </Text>
                 </Pressable>
               );
             })}
           </View>
-        )}
+        </Animated.View>
 
-        {/* ================= LOGOUT ================= */}
-
-        <Pressable
-          onPress={onLogout}
-          disabled={loggingOut}
-          style={({ pressed }) => [
-            styles.logoutButton,
-            pressed && styles.pressed,
-            loggingOut && styles.logoutDisabled,
-          ]}
-        >
-          {loggingOut ? (
-            <ActivityIndicator size="small" color="ORANGE" />
-          ) : (
-            <>
-              <Ionicons name="log-out-outline" size={18} color={ORANGE} />
-
-              <Text style={styles.logoutText}>Log out</Text>
-            </>
-          )}
-        </Pressable>
-        {/* =========  DELETE =============== */}
-
-        <Pressable
-          onPress={onDeleteAccount}
-          disabled={deleting}
-          style={({ pressed }) => [
-            styles.deleteBtn,
-            pressed && styles.pressed,
-            deleting && styles.logoutDisabled,
-          ]}
-        >
-          <Ionicons name="trash-outline" size={18} color={TEAL} />
-
-          <Text style={styles.deleteBtnText}>
-            {deleting ? "Deleting..." : "Delete account"}
-          </Text>
-        </Pressable>
         {/* ================= FOOTER ================= */}
 
         <View style={styles.footer}>
           <View style={styles.footerLine} />
 
-          <Text style={styles.footerText}>MADE WITH LOVE & GOOD FOOD</Text>
+          <Text style={[styles.footerText, dir.noSpacing]}>
+            {t("accountFooter")}
+          </Text>
 
           <View style={styles.footerLine} />
         </View>
@@ -569,12 +603,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     opacity: 0.9,
     zIndex: 0,
-  },
-
-  decorBottom: {
-    position: "absolute",
-    opacity: 0.9,
-    zIndex: 3,
   },
 
   /* ================= TOP ================= */
@@ -638,6 +666,25 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
+  loginBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: ORANGE,
+    borderRadius: 16,
+    height: 48,
+    paddingHorizontal: 42,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+
+  loginBtnText: {
+    color: WHITE,
+    fontSize: 17,
+    fontWeight: "900",
+  },
+
   name: {
     color: DARK,
     fontWeight: "900",
@@ -684,8 +731,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  statNumberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+
   statNumber: {
-    color: DARK,
+    color: ORANGE,
     fontSize: 19,
     fontWeight: "900",
     marginBottom: 3,
@@ -754,6 +807,26 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
 
+  locationCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#ECEDEB",
+    backgroundColor: WHITE,
+    overflow: "hidden",
+  },
+
+  mapBox: {
+    height: 140,
+    backgroundColor: "#EEF1F0",
+  },
+
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+  },
+
   orangeMenuIcon: {
     backgroundColor: ORANGE,
   },
@@ -792,6 +865,12 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
 
+  ordersTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
   ordersTitle: {
     color: DARK,
     fontSize: 23,
@@ -799,9 +878,9 @@ const styles = StyleSheet.create({
   },
 
   orderCountPill: {
-    minWidth: 34,
-    height: 34,
-    borderRadius: 12,
+    minWidth: 28,
+    height: 28,
+    borderRadius: 10,
     backgroundColor: LIGHT_ORANGE,
     alignItems: "center",
     justifyContent: "center",
@@ -987,6 +1066,58 @@ const styles = StyleSheet.create({
   },
 
   /* ================= FOOTER ================= */
+
+  /* ================= LANGUAGE ================= */
+
+  langBlock: {
+    marginTop: 22,
+    zIndex: 2,
+  },
+
+  langTitleRow: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginBottom: 10,
+  },
+
+  langTitle: {
+    color: TEAL,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  // Teal two-button switch: selected = filled teal, other = teal outline
+  langSwitch: {
+    borderWidth: 1.5,
+    borderColor: TEAL,
+    borderRadius: 18,
+    padding: 4,
+    gap: 4,
+    backgroundColor: WHITE,
+  },
+
+  langOption: {
+    flex: 1,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  langOptionSelected: {
+    backgroundColor: TEAL,
+  },
+
+  langOptionText: {
+    color: TEAL,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  langOptionTextSelected: {
+    color: WHITE,
+  },
 
   footer: {
     flexDirection: "row",

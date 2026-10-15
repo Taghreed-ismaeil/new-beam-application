@@ -1,6 +1,10 @@
 import dotenv from 'dotenv';
 
-dotenv.config();
+// .env.local (gitignored) wins over .env — lets a dev point at a local DB/storage without
+// touching the real deployment settings. override is required: @prisma/client loads .env into
+// process.env as soon as it's imported, so without it the production values would already be set.
+dotenv.config({ path: '.env.local', override: true });
+dotenv.config({ path: '.env' });
 
 function required(name: string, fallback?: string): string {
   const value = process.env[name] ?? fallback;
@@ -20,6 +24,7 @@ export const env = {
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? '',
     accessToken: process.env.WHATSAPP_ACCESS_TOKEN ?? '',
   },
+  // R2_ACCOUNT_ID=local stores files on local disk instead of the real bucket (see lib/r2.ts).
   r2: {
     accountId: required('R2_ACCOUNT_ID'),
     accessKeyId: required('R2_ACCESS_KEY_ID'),

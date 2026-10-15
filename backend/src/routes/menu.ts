@@ -20,6 +20,8 @@ function toPublicMenuItem(item: any) {
     isAvailable: item.isAvailable,
     preparationTimeMinutes: item.preparationTimeMinutes,
     hasLoyalty: !!(item.qrToken || item.qrGroupToken),
+    rewardType: item.rewardType,
+    rewardValue: item.rewardValue,
   };
 }
 

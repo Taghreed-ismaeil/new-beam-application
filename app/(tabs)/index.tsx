@@ -1,9 +1,11 @@
 import { ScrollView, StyleSheet, View } from "react-native";
+import Animated from "react-native-reanimated";
 
 import AboutUs from "@/components/AboutUs/AboutUs";
 import Footer from "@/components/Footer/Footer";
 import Hero from "@/components/Hero/Hero";
 import MenuCard from "@/components/MenuCard/MenuCard";
+import { enterFade, enterUp } from "@/lib/motion";
 
 export default function HomeScreen() {
   return (
@@ -12,11 +14,17 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 70 }}
       >
-        <Hero />
+        <Animated.View entering={enterFade(0)}>
+          <Hero />
+        </Animated.View>
 
-        <MenuCard />
+        <Animated.View entering={enterUp(3)}>
+          <MenuCard />
+        </Animated.View>
 
-        <AboutUs />
+        <Animated.View entering={enterUp(5)}>
+          <AboutUs />
+        </Animated.View>
 
         <Footer />
       </ScrollView>

@@ -1,0 +1,37 @@
+[
+  {
+    "id": 4,
+    "name": "فاهيتا",
+    "nameEn": "Fajita",
+    "qrToken": null,
+    "qrGroupToken": "SANDWICH_GROUP_bc8beb19"
+  },
+  {
+    "id": 3,
+    "name": "برغر",
+    "nameEn": "Burger",
+    "qrToken": "MENU_97f98ebd",
+    "qrGroupToken": null
+  },
+  {
+    "id": 1,
+    "name": "زنجر",
+    "nameEn": "Pizza",
+    "qrToken": "MENU_e28232b4",
+    "qrGroupToken": null
+  },
+  {
+    "id": 2,
+    "name": "شاورما",
+    "nameEn": "Shawarma",
+    "qrToken": "MENU_61f48341",
+    "qrGroupToken": null
+  },
+  {
+    "id": 20,
+    "name": "ستيك",
+    "nameEn": "Steak Sandwich",
+    "qrToken": null,
+    "qrGroupToken": "SANDWICH_GROUP_bc8beb19"
+  }
+]

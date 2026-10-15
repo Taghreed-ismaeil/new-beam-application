@@ -89,6 +89,8 @@ authRouter.post('/login', async (req, res) => {
 
   const ok = await bcrypt.compare(parsed.data.password, user.passwordHash);
   if (!ok) return res.status(401).json({ error: 'invalid_credentials' });
+  // blocked by staff from the admin Customers screen
+  if (user.blockedAt) return res.status(403).json({ error: 'account_blocked' });
 
   const token = signToken({ kind: 'user', userId: user.id });
   res.json({ token, user: publicUser(user) });
@@ -165,11 +167,39 @@ staffAuthRouter.post('/login', async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: 'invalid_input' });
 
   const staff = await prisma.staff.findUnique({ where: { phone: parsed.data.phone } });
-  if (!staff) return res.status(401).json({ error: 'invalid_credentials' });
+  // every attempt lands in the Staff → Login log; logging must never block a sign-in
+  const logAttempt = (ok: boolean, reason: string | null) =>
+    prisma.staffLoginLog
+      .create({
+        data: {
+          staffId: staff?.id ?? null,
+          phone: parsed.data.phone,
+          ok,
+          reason,
+          ip: req.ip ?? null,
+          userAgent: req.get('user-agent')?.slice(0, 300) ?? null,
+        },
+      })
+      .catch((e) => console.error('login log failed', e));
+
+  if (!staff) {
+    await logAttempt(false, 'unknown_phone');
+    return res.status(401).json({ error: 'invalid_credentials' });
+  }
 
   const ok = await bcrypt.compare(parsed.data.password, staff.passwordHash);
-  if (!ok) return res.status(401).json({ error: 'invalid_credentials' });
+  if (!ok) {
+    await logAttempt(false, 'wrong_password');
+    return res.status(401).json({ error: 'invalid_credentials' });
+  }
 
+  // the roster's on/off switch — a disabled account must not be able to sign back in
+  if (!staff.active) {
+    await logAttempt(false, 'staff_disabled');
+    return res.status(403).json({ error: 'staff_disabled' });
+  }
+
+  await logAttempt(true, null);
   const token = signToken({ kind: 'staff', staffId: staff.id, role: staff.role });
   res.json({ token, staff: { id: staff.id, name: staff.name, phone: staff.phone, role: staff.role } });
 });

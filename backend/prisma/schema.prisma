@@ -109,6 +109,11 @@ model User {
   phone        String   @unique
   passwordHash String?
   createdAt    DateTime @default(now())
+  // Set the first (and only) time this user spins the Lucky Wheel — null means they haven't yet.
+  wheelSpunAt  DateTime?
+  // set by staff from the admin Customers screen; a blocked account can't sign in or order
+  blockedAt     DateTime?
+  blockedReason String?
 
   orders           Order[]
   loyaltyProgress  LoyaltyProgress[]
@@ -146,6 +151,9 @@ model Staff {
   createdReservations Reservation[]
   inventoryMovements InventoryMovement[]
   recordedExpenses  Expense[]
+  purchaseOrders    PurchaseOrder[]
+  loginLogs         StaffLoginLog[]
+  auditLogs         StaffAuditLog[]
 }
 
 model RestaurantTable {
@@ -222,7 +230,8 @@ model MenuItemIngredient {
   // with the same 409 the admin panel already shows for "in use" — force the recipe to be
   // updated first rather than silently going stale.
   ingredient   InventoryItem @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
-  quantity     Decimal       @db.Decimal(10, 2)
+  // in the ingredient's own stock unit (kg / L / pcs); the admin enters grams/ml and it's converted
+  quantity     Decimal       @db.Decimal(12, 3)
 
   @@unique([menuItemId, ingredientId])
 }
@@ -290,6 +299,7 @@ model Order {
   items       OrderItem[]
   statusLogs  OrderStatusLog[]
   payments    Payment[]
+  stockMovements  InventoryMovement[]
 }
 
 model OrderItem {
@@ -404,7 +414,8 @@ model Supplier {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  items InventoryItem[]
+  items          InventoryItem[]
+  purchaseOrders PurchaseOrder[]
 }
 
 model InventoryItem {
@@ -412,15 +423,16 @@ model InventoryItem {
   name           String
   nameEn         String?
   unit           String
-  quantityOnHand Decimal  @default(0) @db.Decimal(10, 2)
-  minQuantity    Decimal  @default(0) @db.Decimal(10, 2)
+  quantityOnHand Decimal  @default(0) @db.Decimal(12, 3)
+  minQuantity    Decimal  @default(0) @db.Decimal(12, 3)
   supplierId     Int?
   supplier       Supplier? @relation(fields: [supplierId], references: [id])
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  movements InventoryMovement[]
-  usedIn    MenuItemIngredient[]
+  movements     InventoryMovement[]
+  usedIn        MenuItemIngredient[]
+  purchaseLines PurchaseOrderItem[]
 }
 
 /// Audit log of every stock change — mirrors OrderStatusLog/ScanLog's append-only pattern.
@@ -428,8 +440,13 @@ model InventoryMovement {
   id        Int           @id @default(autoincrement())
   itemId    Int
   item      InventoryItem @relation(fields: [itemId], references: [id])
-  change    Decimal       @db.Decimal(10, 2)
+  change    Decimal       @db.Decimal(12, 3)
   reason    String?
+  // set for automatic deductions/refunds, so cancelling an order returns exactly what it took
+  orderId   Int?
+  order     Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
   staffId   Int?
   staff     Staff?        @relation(fields: [staffId], references: [id])
   createdAt DateTime      @default(now())
@@ -445,4 +462,65 @@ model Expense {
   recordedByStaffId Int?
   recordedByStaff   Staff?   @relation(fields: [recordedByStaffId], references: [id])
   createdAt         DateTime @default(now())
+}
+
+enum PurchaseOrderStatus {
+  pending
+  received
+  cancelled
+}
+
+/// What the restaurant has ordered from a supplier. Marking it received adds each line to stock
+/// (logged as an InventoryMovement with reason "purchase_order"), so stock is credited exactly once.
+model PurchaseOrder {
+  id               Int                 @id @default(autoincrement())
+  supplierId       Int
+  supplier         Supplier            @relation(fields: [supplierId], references: [id])
+  status           PurchaseOrderStatus @default(pending)
+  note             String?
+  createdByStaffId Int?
+  createdByStaff   Staff?              @relation(fields: [createdByStaffId], references: [id])
+  orderedAt        DateTime            @default(now())
+  receivedAt       DateTime?
+  cancelledAt      DateTime?
+
+  items PurchaseOrderItem[]
+}
+
+model PurchaseOrderItem {
+  id              Int           @id @default(autoincrement())
+  purchaseOrderId Int
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  ingredientId    Int
+  ingredient      InventoryItem @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  quantity        Decimal       @db.Decimal(12, 3)
+  unitCost        Decimal       @default(0) @db.Decimal(10, 2)
+}
+
+/// Every staff sign-in attempt, successful or not — the Staff → Login log tab.
+model StaffLoginLog {
+  id        Int      @id @default(autoincrement())
+  staffId   Int?
+  staff     Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  phone     String
+  ok        Boolean
+  reason    String?
+  ip        String?
+  userAgent String?
+  at        DateTime @default(now())
+
+  @@index([at])
+}
+
+/// Successful admin-panel changes (who created/updated/deleted what) — the Staff → Activity tab.
+model StaffAuditLog {
+  id       Int      @id @default(autoincrement())
+  staffId  Int?
+  staff    Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  action   String
+  entity   String
+  entityId Int?
+  at       DateTime @default(now())
+
+  @@index([at])
 }

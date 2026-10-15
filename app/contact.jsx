@@ -11,11 +11,15 @@ import {
   View,
 } from "react-native";
 
-import BackButton from "@/components/BackButton";
-import { apiRequest } from "@/lib/api-client";
+import Animated from "react-native-reanimated";
 
-const ORANGE = "#ED5529";
-const TEAL = "#008E82";
+import BackButton from "@/components/BackButton";
+import { enterDown, enterUp } from "@/lib/motion";
+import { apiRequest } from "@/lib/api-client";
+import { useAppLang } from "@/lib/app-lang";
+
+const ORANGE = "#FC4A14";
+const TEAL = "#005751";
 const DARK = "#17201F";
 const MUTED = "#68706E";
 
@@ -28,6 +32,7 @@ const BOTTOM_NAV_SPACE = 110;
 
 export default function ContactScreen() {
   const { width } = useWindowDimensions();
+  const { t, dir } = useAppLang();
 
   const [restaurant, setRestaurant] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +51,7 @@ export default function ContactScreen() {
   }, []);
 
   const phone = restaurant?.phone ?? "+962 7X XXX XXXX";
-  const address = restaurant?.address ?? "Amman, Jordan";
+  const address = restaurant?.address ?? t("contactAddressDefault");
   const email = restaurant?.email;
 
   const handlePhone = async () => {
@@ -111,8 +116,8 @@ export default function ContactScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Opened from the Profile page now (no longer a tab), so it needs a way back */}
       <BackButton />
-
       <ScrollView
         style={styles.screen}
         showsVerticalScrollIndicator={false}
@@ -142,7 +147,9 @@ export default function ContactScreen() {
         >
           <View style={styles.phoneOutline}>
             <View style={styles.phoneScreen}>
-              <Text style={styles.phoneText}>Let's talk.</Text>
+              <Text style={[styles.phoneText, dir.noSpacing]}>
+                {t("contactPhoneText")}
+              </Text>
             </View>
 
             <View style={styles.phoneSpeaker} />
@@ -188,11 +195,13 @@ export default function ContactScreen() {
         {/*                       HERO                        */}
         {/* ================================================= */}
 
-        <View style={styles.hero}>
+        <Animated.View entering={enterDown(0)} style={styles.hero}>
           <View style={styles.heroBadge}>
             <Ionicons name="chatbubble-ellipses" size={15} color={ORANGE} />
 
-            <Text style={styles.heroBadgeText}>GET IN TOUCH</Text>
+            <Text style={[styles.heroBadgeText, dir.noSpacing]}>
+              {t("contactBadge")}
+            </Text>
           </View>
           {/*
           <Text
@@ -208,13 +217,13 @@ export default function ContactScreen() {
           </Text>
 
           */}
-        </View>
+        </Animated.View>
 
         {/* ================================================= */}
         {/*                 CONTACT CARD                      */}
         {/* ================================================= */}
 
-        <View style={styles.contactCard}>
+        <Animated.View entering={enterUp(1)} style={styles.contactCard}>
           <View style={styles.cardHeader}>
             <View style={styles.cardHeaderIcon}>
               <Ionicons
@@ -225,11 +234,9 @@ export default function ContactScreen() {
             </View>
 
             <View style={styles.cardHeaderText}>
-              <Text style={styles.cardTitle}>We’re here for you</Text>
+              <Text style={styles.cardTitle}>{t("contactCardTitle")}</Text>
 
-              <Text style={styles.cardSubtitle}>
-                Reach us anytime through one of the options below.
-              </Text>
+              <Text style={styles.cardSubtitle}>{t("contactCardSub")}</Text>
             </View>
           </View>
 
@@ -247,7 +254,9 @@ export default function ContactScreen() {
             </View>
 
             <View style={styles.info}>
-              <Text style={styles.label}>PHONE</Text>
+              <Text style={[styles.label, dir.noSpacing]}>
+                {t("contactPhone")}
+              </Text>
 
               <Text
                 style={[
@@ -281,7 +290,9 @@ export default function ContactScreen() {
             </View>
 
             <View style={styles.info}>
-              <Text style={styles.label}>LOCATION</Text>
+              <Text style={[styles.label, dir.noSpacing]}>
+                {t("contactLocation")}
+              </Text>
 
               <Text
                 style={[
@@ -301,56 +312,21 @@ export default function ContactScreen() {
             </View>
           </Pressable>
 
-          {/* EMAIL */}
 
-          {!!email && (
-            <Pressable
-              onPress={handleEmail}
-              style={({ pressed }) => [
-                styles.contactRow,
-                styles.lastRow,
-                pressed && styles.pressed,
-              ]}
-            >
-              <View style={[styles.iconBox, styles.purpleSoft]}>
-                <Ionicons name="mail-outline" size={21} color="#7057C9" />
-              </View>
-
-              <View style={styles.info}>
-                <Text style={styles.label}>EMAIL</Text>
-
-                <Text
-                  style={[
-                    styles.value,
-                    {
-                      fontSize: isSmall ? 14 : 15,
-                    },
-                  ]}
-                  numberOfLines={2}
-                >
-                  {email}
-                </Text>
-              </View>
-
-              <View style={[styles.arrow, styles.purpleSoft]}>
-                <Ionicons name="arrow-forward" size={17} color="#7057C9" />
-              </View>
-            </Pressable>
-          )}
-        </View>
+        </Animated.View>
 
         {/* ================================================= */}
         {/*                   OPENING HOURS                   */}
         {/* ================================================= */}
 
-        <View style={styles.hoursCard}>
+        <Animated.View entering={enterUp(2)} style={styles.hoursCard}>
           <View style={styles.hoursHeader}>
             <View style={styles.hoursIcon}>
               <Ionicons name="time-outline" size={22} color={ORANGE} />
             </View>
 
             <View style={styles.hoursTitleWrap}>
-              <Text style={styles.hoursTitle}>Opening Hours</Text>
+              <Text style={styles.hoursTitle}>{t("contactHours")}</Text>
               {/*
               <Text style={styles.hoursSubtitle}>
                 Come hungry, leave happy.
@@ -361,43 +337,45 @@ export default function ContactScreen() {
             <View style={styles.openBadge}>
               <View style={styles.openDot} />
 
-              <Text style={styles.openText}>OPEN</Text>
+              <Text style={[styles.openText, dir.noSpacing]}>
+                {t("contactOpen")}
+              </Text>
             </View>
           </View>
 
           <View style={styles.hoursDivider} />
 
           <View style={styles.dayRow}>
-            <Text style={styles.day}>Monday – Thursday</Text>
+            <Text style={styles.day}>{t("contactMonThu")}</Text>
 
-            <Text style={styles.time}>11:00 AM – 11:00 PM</Text>
+            <Text style={styles.time}>{t("contactTime1")}</Text>
           </View>
 
           <View style={styles.dayRow}>
-            <Text style={styles.day}>Friday – Saturday</Text>
+            <Text style={styles.day}>{t("contactFriSat")}</Text>
 
-            <Text style={styles.time}>12:00 PM – 12:00 AM</Text>
+            <Text style={styles.time}>{t("contactTime2")}</Text>
           </View>
 
           <View style={[styles.dayRow, styles.lastDayRow]}>
-            <Text style={styles.day}>Sunday</Text>
+            <Text style={styles.day}>{t("contactSun")}</Text>
 
-            <Text style={styles.time}>12:00 PM – 10:00 PM</Text>
+            <Text style={styles.time}>{t("contactTime3")}</Text>
           </View>
-        </View>
+        </Animated.View>
 
         {/* ================================================= */}
         {/*                       SOCIAL                      */}
         {/* ================================================= */}
 
-        <View style={styles.socialSection}>
-          <Text style={styles.socialEyebrow}>FOLLOW ALONG</Text>
-
-          <Text style={styles.socialTitle}>Find us on social</Text>
-
-          <Text style={styles.socialSubtitle}>
-            Stay hungry. Stay connected.
+        <Animated.View entering={enterUp(3)} style={styles.socialSection}>
+          <Text style={[styles.socialEyebrow, dir.noSpacing]}>
+            {t("contactFollow")}
           </Text>
+
+          <Text style={styles.socialTitle}>{t("contactSocialTitle")}</Text>
+
+          <Text style={styles.socialSubtitle}>{t("contactSocialSub")}</Text>
 
           <View style={styles.socialRow}>
             <Pressable
@@ -430,19 +408,21 @@ export default function ContactScreen() {
               <Ionicons name="logo-tiktok" size={23} color={TEAL} />
             </Pressable>
           </View>
-        </View>
+        </Animated.View>
 
         {/* ================================================= */}
         {/*                      BOTTOM                       */}
         {/* ================================================= */}
 
-        <View style={styles.bottomTextContainer}>
+        <Animated.View entering={enterUp(4)} style={styles.bottomTextContainer}>
           <View style={styles.line} />
 
-          <Text style={styles.bottomText}>WE CAN’T WAIT TO HEAR FROM YOU</Text>
+          <Text style={[styles.bottomText, dir.noSpacing]}>
+            {t("contactBottom")}
+          </Text>
 
           <View style={styles.line} />
-        </View>
+        </Animated.View>
 
         {loading && (
           <View style={styles.loadingOverlay}>

@@ -58,7 +58,7 @@ export default function MyReservationsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#fff" },
   title: { fontSize: 22, fontWeight: "900", color: "#111", marginTop: 20 },
-  newBtn: { backgroundColor: "#ff8c00", borderRadius: 40, padding: 14, alignItems: "center", marginVertical: 16 },
+  newBtn: { backgroundColor: "#FC4A14", borderRadius: 40, padding: 14, alignItems: "center", marginVertical: 16 },
   newBtnText: { color: "#fff", fontWeight: "800" },
   muted: { color: "#999", textAlign: "center", marginTop: 40 },
   row: {

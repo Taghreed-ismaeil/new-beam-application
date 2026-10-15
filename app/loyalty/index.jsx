@@ -1,7 +1,13 @@
-import BackButton from "@/components/BackButton";
+import GiftsBackdrop from "@/components/GiftsBackdrop";
 import TileImage from "@/components/TileImage";
-import { apiRequest } from "@/lib/api-client";
+import { useAuth } from "@/context/AuthContext";
+import { apiRequestCached } from "@/lib/api-client";
+import { loyaltyProgressKey } from "@/lib/preload";
+import { useAppLang } from "@/lib/app-lang";
+import { enterDown, enterPop, enterUp } from "@/lib/motion";
 import { router, useFocusEffect } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import Animated from "react-native-reanimated";
 import { useCallback, useState } from "react";
 import {
   ScrollView,
@@ -11,8 +17,8 @@ import {
   View,
 } from "react-native";
 
-const ORANGE = "#ED5529";
-const TEAL = "#008E82";
+const ORANGE = "#FC4A14";
+const TEAL = "#005751";
 const LIGHT_ORANGE = "#FFF0EA";
 const LIGHT_TEAL = "#E8F5F2";
 const CREAM = "#FFF9F4";
@@ -21,16 +27,40 @@ const MUTED = "#68706E";
 const WHITE = "#FFFFFF";
 
 export default function LoyaltyCollectionsScreen() {
+  const { user } = useAuth();
+  const { t, pick } = useAppLang();
   const [progress, setProgress] = useState([]);
 
   useFocusEffect(
     useCallback(() => {
-      apiRequest("/api/loyalty/progress").then((d) => setProgress(d.progress));
-    }, []),
+      if (!user) {
+        setProgress([]);
+        return;
+      }
+      // Cached progress paints instantly (warmed at launch); it is always
+      // re-fetched on focus because a scan elsewhere may have revealed pieces.
+      apiRequestCached(
+        "/api/loyalty/progress",
+        (d) => setProgress(d.progress ?? []),
+        () => {},
+        { cacheKey: loyaltyProgressKey(user.id), revalidate: true },
+      );
+    }, [user]),
   );
+
+  // Scanning and rewards are tied to an account — guests sign in first and
+  // come straight back here.
+  function openWithAccount(path) {
+    if (user) router.push(path);
+    else router.push({ pathname: "/login", params: { returnTo: "back" } });
+  }
 
   return (
     <View style={styles.screen}>
+      <GiftsBackdrop />
+      {/* light clock/battery icons over the teal header */}
+      <StatusBar style="light" />
+
       {/* =====================================================
           BACKGROUND DECOR
       ====================================================== */}
@@ -48,21 +78,16 @@ export default function LoyaltyCollectionsScreen() {
       ====================================================== */}
 
       <View style={styles.header}>
-        <BackButton />
 
         <View style={styles.headerContent}>
           <View style={styles.titleSection}>
-            <Text style={styles.eyebrow}> </Text>
+            <Animated.Text entering={enterDown(0)} style={styles.headerTitle}>
+              {t("loyTitle")}
+            </Animated.Text>
 
-            <Text style={styles.headerTitle}>Collect & Win</Text>
-
-            <Text style={styles.headerSubtitle}>
-              Collect your stamps and unlock delicious rewards.
-            </Text>
-          </View>
-
-          <View style={styles.trophyCircle}>
-            <Text style={styles.trophy}>🏆</Text>
+            <Animated.Text entering={enterDown(1)} style={styles.headerSubtitle}>
+              {t("loySubtitle")}
+            </Animated.Text>
           </View>
         </View>
 
@@ -70,29 +95,23 @@ export default function LoyaltyCollectionsScreen() {
             HEADER BUTTONS
         ====================================================== */}
 
-        <View style={styles.headerBtns}>
+        <Animated.View entering={enterUp(2)} style={styles.headerBtns}>
           <TouchableOpacity
             style={styles.headerBtn}
-            onPress={() => router.push("/loyalty/vouchers")}
+            onPress={() => openWithAccount("/loyalty/vouchers")}
             activeOpacity={0.8}
           >
-            <Text style={styles.headerBtnIcon}>🎁</Text>
-
-            <Text style={styles.headerBtnText}>My Rewards</Text>
+            <Text style={styles.headerBtnText}>{t("loyMyRewards")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.headerBtn, styles.headerBtnPrimary]}
-            onPress={() => router.push("/loyalty/scan")}
+            style={styles.headerBtn}
+            onPress={() => openWithAccount("/loyalty/scan")}
             activeOpacity={0.8}
           >
-            <Text style={styles.headerBtnIcon}>📷</Text>
-
-            <Text style={[styles.headerBtnText, styles.headerBtnTextPrimary]}>
-              Scan QR
-            </Text>
+            <Text style={styles.headerBtnText}>{t("loyScanQr")}</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       </View>
 
       {/* =====================================================
@@ -103,8 +122,8 @@ export default function LoyaltyCollectionsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.grid}
       >
-        {progress.map((item) => (
-          <View key={item.id} style={styles.card}>
+        {progress.map((item, index) => (
+          <Animated.View key={item.id} entering={enterPop(index + 3)} style={styles.card}>
             {/* Tile */}
             <View style={styles.tileWrapper}>
               <TileImage
@@ -126,38 +145,9 @@ export default function LoyaltyCollectionsScreen() {
 
             {/* Name */}
             <Text style={styles.cardName} numberOfLines={1}>
-              {item.nameEn || item.name}
+              {pick(item)}
             </Text>
-
-            {/* Progress */}
-            <View
-              style={[
-                styles.statusBadge,
-                item.completed
-                  ? styles.statusCompleted
-                  : item.revealedCount > 0
-                    ? styles.statusCollecting
-                    : styles.statusEmpty,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.cardProgress,
-                  item.completed
-                    ? styles.textCompleted
-                    : item.revealedCount > 0
-                      ? styles.textCollecting
-                      : styles.textEmpty,
-                ]}
-              >
-                {item.completed
-                  ? "Completed 🎉"
-                  : item.revealedCount > 0
-                    ? "Collecting..."
-                    : "Scan its QR to start"}
-              </Text>
-            </View>
-          </View>
+          </Animated.View>
         ))}
       </ScrollView>
     </View>
@@ -213,65 +203,39 @@ const styles = StyleSheet.create({
 
   header: {
     paddingHorizontal: 20,
-    paddingTop: 25,
-    paddingBottom: 18,
-    backgroundColor: WHITE,
+    // clears the status bar / notch
+    paddingTop: 50,
+    paddingBottom: 22,
+    backgroundColor: TEAL,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
     zIndex: 2,
   },
   headerContent: {
-    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 8,
   },
 
   titleSection: {
-    flex: 1,
-    paddingRight: 15,
-  },
-
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 2,
-    color: TEAL,
-    marginBottom: 4,
-    marginTop: 8,
-    //paddingBottom: 30,
+    width: "100%",
+    alignItems: "center",
   },
 
   headerTitle: {
-    fontSize: 30,
+    height: 38,
+    lineHeight: 38,
+    fontSize: 24,
     fontWeight: "900",
-    color: DARK,
+    color: WHITE,
+    textAlign: "center",
   },
 
   headerSubtitle: {
-    marginTop: 6,
-    color: MUTED,
+    marginTop: 8,
+    color: LIGHT_TEAL,
     fontSize: 13,
     lineHeight: 19,
     maxWidth: 280,
-  },
-
-  trophyCircle: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: WHITE,
-    borderWidth: 2,
-    borderColor: ORANGE,
-    alignItems: "center",
-    justifyContent: "center",
-
-    shadowColor: ORANGE,
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-
-  trophy: {
-    fontSize: 28,
+    textAlign: "center",
   },
 
   /* =====================================================
@@ -301,22 +265,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
 
-  headerBtnPrimary: {
-    backgroundColor: ORANGE,
-  },
-
-  headerBtnIcon: {
-    fontSize: 15,
-  },
-
   headerBtnText: {
     fontSize: 13,
     fontWeight: "900",
     color: ORANGE,
-  },
-
-  headerBtnTextPrimary: {
-    color: WHITE,
   },
 
   /* =====================================================
@@ -431,47 +383,4 @@ const styles = StyleSheet.create({
      STATUS
   ====================================================== */
 
-  statusBadge: {
-    marginTop: 7,
-
-    minHeight: 25,
-
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-
-    borderRadius: 20,
-
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  statusCompleted: {
-    backgroundColor: LIGHT_TEAL,
-  },
-
-  statusCollecting: {
-    backgroundColor: LIGHT_ORANGE,
-  },
-
-  statusEmpty: {
-    backgroundColor: "#F3F3F3",
-  },
-
-  cardProgress: {
-    fontSize: 10,
-    fontWeight: "800",
-    textAlign: "center",
-  },
-
-  textCompleted: {
-    color: TEAL,
-  },
-
-  textCollecting: {
-    color: ORANGE,
-  },
-
-  textEmpty: {
-    color: MUTED,
-  },
 });

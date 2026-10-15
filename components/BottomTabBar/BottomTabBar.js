@@ -1,45 +1,135 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, usePathname } from "expo-router";
+import { router, usePathname, useSegments } from "expo-router";
+import { useEffect } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+} from "react-native-reanimated";
 
+import { useAppLang } from "@/lib/app-lang";
+import { prepareTabTransition } from "@/lib/tab-transition";
+
+// `route` is the root Stack route name each tab opens (used for its slide animation).
 const TABS = [
-  { key: "home", label: "Home", icon: "home", path: "/" },
-  { key: "menu", label: "Menu", icon: "restaurant", path: "/menu" },
-  { key: "contact", label: "Contact", icon: "call", path: "/contact" },
-  { key: "gifts", label: "Gifts", icon: "gift", path: "/loyalty" },
-  { key: "profile", label: "Profile", icon: "person", path: "/account" },
+  { key: "home", label: "tabHome", icon: "home", path: "/", route: "(tabs)" },
+  { key: "menu", label: "tabMenu", icon: "restaurant", path: "/menu", route: "menu" },
+  // Contact moved into the Profile page; its tab slot is the Media tab now.
+  { key: "media", label: "tabMedia", icon: "images", path: "/media", route: "media/index" },
+  { key: "gifts", label: "tabGifts", icon: "gift", path: "/loyalty", route: "loyalty/index" },
+  { key: "profile", label: "tabProfile", icon: "person", path: "/account", route: "account" },
 ];
 
-const HIDDEN_ON = ["/login"];
+// The item details screen has its own add-to-cart bar at the bottom.
+const HIDDEN_ON = ["/login", "/item", "/media/share"];
+
+function isTabActive(tab, pathname) {
+  return tab.path === "/" ? pathname === "/" : pathname.startsWith(tab.path);
+}
+
+function tabIndexFor(pathname) {
+  return TABS.findIndex((tab) => isTabActive(tab, pathname));
+}
+
+// Root route names the screen on top might have — a page path maps to them in a few shapes
+// ("/menu" is "menu", "/loyalty" is "loyalty/index", "/menu-food/12" is "menu-food/[categoryId]").
+function currentRouteNames(pathname, segments) {
+  if (pathname === "/") return ["(tabs)"];
+  const fromSegments = segments.join("/");
+  const fromPath = pathname.replace(/^\//, "");
+  return [fromSegments, `${fromSegments}/index`, fromPath, `${fromPath}/index`];
+}
+
+// Tabs shouldn't pile up in the history (Menu → Contact → Gifts → back → back…).
+// Home stays at the bottom of the stack and at most one tab sits on top of it:
+// dismissTo pops back to the tab if it's already in the history, otherwise it
+// replaces the current screen with it.
+function goToTab(path, pathname, segments) {
+  // Slide toward the tab being opened (see lib/tab-transition.js).
+  const from = tabIndexFor(pathname);
+  const to = TABS.findIndex((tab) => tab.path === path);
+  if (from !== -1 && to !== -1) {
+    prepareTabTransition(
+      TABS[to].route,
+      currentRouteNames(pathname, segments),
+      Math.sign(to - from),
+    );
+  }
+
+  if (path === "/") {
+    router.dismissTo("/");
+  } else if (pathname === "/") {
+    router.push(path);
+  } else {
+    router.dismissTo(path);
+  }
+}
 
 export default function BottomTabBar() {
   const pathname = usePathname();
+  const segments = useSegments();
+  // Tabs keep the same order in Arabic — only the labels change.
+  const { t } = useAppLang();
 
-  if (HIDDEN_ON.includes(pathname)) return null;
+  // The admin panel is its own full-screen experience with its own
+  // navigation (see app/admin/_layout.tsx) — the customer tab bar has no
+  // business floating on top of it.
+  if (HIDDEN_ON.some((p) => pathname === p || pathname.startsWith(`${p}/`)) || pathname.startsWith("/admin"))
+    return null;
 
   return (
     <View style={styles.bar}>
       {TABS.map((tab) => {
-        const active =
-          tab.path === "/" ? pathname === "/" : pathname.startsWith(tab.path);
+        const active = isTabActive(tab, pathname);
         return (
           <Pressable
             key={tab.key}
             style={styles.tab}
-            onPress={() => router.push(tab.path)}
+            onPress={() => goToTab(tab.path, pathname, segments)}
           >
-            <Ionicons
-              name={active ? tab.icon : `${tab.icon}-outline`}
-              size={22}
-              color={active ? "#ED5529" : "#008E82"}
-            />
+            <TabIcon name={tab.icon} active={active} />
             <Text style={[styles.label, active && styles.labelActive]}>
-              {tab.label}
+              {t(tab.label)}
             </Text>
           </Pressable>
         );
       })}
     </View>
+  );
+}
+
+/** Tab icon that gives a small springy bounce when its tab becomes active. */
+function TabIcon({ name, active }) {
+  const scale = useSharedValue(1);
+  const lift = useSharedValue(0);
+
+  useEffect(() => {
+    if (active) {
+      scale.value = withSequence(
+        withSpring(1.28, { damping: 9, stiffness: 320 }),
+        withSpring(1.08, { damping: 12, stiffness: 220 }),
+      );
+      lift.value = withSpring(-3, { damping: 12, stiffness: 220 });
+    } else {
+      scale.value = withSpring(1, { damping: 14, stiffness: 220 });
+      lift.value = withSpring(0, { damping: 14, stiffness: 220 });
+    }
+  }, [active]);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: lift.value }, { scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View style={style}>
+      <Ionicons
+        name={active ? name : `${name}-outline`}
+        size={22}
+        color={active ? "#FC4A14" : "#005751"}
+      />
+    </Animated.View>
   );
 }
 
@@ -73,7 +163,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   labelActive: {
-    color: "#ff8c00",
+    color: "#FC4A14",
     fontWeight: "800",
   },
 });

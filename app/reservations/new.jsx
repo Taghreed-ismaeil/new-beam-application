@@ -74,6 +74,6 @@ const styles = StyleSheet.create({
     padding: 12,
     color: "#111",
   },
-  submitBtn: { backgroundColor: "#ff8c00", borderRadius: 40, padding: 16, alignItems: "center", marginTop: 28 },
+  submitBtn: { backgroundColor: "#FC4A14", borderRadius: 40, padding: 16, alignItems: "center", marginTop: 28 },
   submitBtnText: { color: "#fff", fontWeight: "800", fontSize: 15 },
 });

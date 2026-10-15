@@ -1,8 +1,19 @@
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image as ExpoImage } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import { getFooterFadeHeight } from "@/components/Footer/Footer";
+import { useAppLang } from "@/lib/app-lang";
+import {
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from "react-native";
 
-const FLAME_FRAMES = [
+export const FLAME_FRAMES = [
   require("../../assets/flame-frames/f01.png"),
   require("../../assets/flame-frames/f02.png"),
   require("../../assets/flame-frames/f03.png"),
@@ -41,17 +52,22 @@ const FRAME_INTERVAL_MS = 90;
 
 const FLAME_ASPECT = 280 / 168;
 const FLAME_OVERLAP = 0.3;
+const FLAME_TOP_FADE = 0.35; // how much of the flame's top fades into white
 
 function FlameLoop({ style }) {
   const [frameIndex, setFrameIndex] = useState(0);
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      setFrameIndex((i) => (i + 1) % FLAME_FRAMES.length);
-    }, FRAME_INTERVAL_MS);
+  // Paused while Home isn't the focused screen, so it doesn't keep
+  // re-rendering underneath the other pages.
+  useFocusEffect(
+    useCallback(() => {
+      const id = setInterval(() => {
+        setFrameIndex((i) => (i + 1) % FLAME_FRAMES.length);
+      }, FRAME_INTERVAL_MS);
 
-    return () => clearInterval(id);
-  }, []);
+      return () => clearInterval(id);
+    }, []),
+  );
 
   return (
     <Image
@@ -65,70 +81,34 @@ function FlameLoop({ style }) {
 export default function AboutUs() {
   const [buttonSize, setButtonSize] = useState(null);
 
+  const { width } = useWindowDimensions();
+  const { t, dir } = useAppLang();
+
+  // The footer's green fade reaches this far up over our bottom. Leaving
+  // that much empty white space (+ a small gap) means the fade only ever
+  // lands on plain white — never on the About Beam button or the chef.
+  const bottomSpace = getFooterFadeHeight(width) + 20;
+
   const flameWidth = buttonSize ? buttonSize.width : 0;
   const flameHeight = flameWidth / FLAME_ASPECT;
 
+  // How far the flame pokes up above the button's top edge. The button wrap
+  // reserves at least this much room so the flame never covers the text
+  // (a fixed 45 wasn't enough when the description wraps onto many lines).
+  const flameReach = buttonSize
+    ? flameHeight - buttonSize.height * FLAME_OVERLAP + 10
+    : 0;
+  const buttonTopSpace = Math.max(45, flameReach + 8);
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: bottomSpace }]}>
       {/* =====================================================
-          TITLE
+          ROW:  CHEF (left)  |  TITLE + TEXT + BUTTON (right)
       ===================================================== */}
 
-      <Text style={styles.heading}>We are Beam Restaurant</Text>
-
-      {/* =====================================================
-          DESCRIPTION
-      ===================================================== */}
-
-      <Text style={styles.description}>
-        Craving delicious meals without the hassle of cooking or leaving your
-        home? Beam brings your favorite food with fast and easy delivery.
-      </Text>
-
-      {/* =====================================================
-          BUTTON + CHEF
-      ===================================================== */}
-
-      <View style={styles.bottomRow}>
+      <View style={styles.row}>
         {/* ===================================================
-            BUTTON
-        =================================================== */}
-
-        <View style={styles.buttonWrap}>
-          {buttonSize && (
-            <FlameLoop
-              style={[
-                styles.flame,
-                {
-                  width: flameWidth,
-                  height: flameHeight,
-
-                  left: 0,
-
-                  top: -flameHeight + buttonSize.height * FLAME_OVERLAP - 10,
-                },
-              ]}
-            />
-          )}
-
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => router.push("/about")}
-            onLayout={(e) => {
-              const { width, height } = e.nativeEvent.layout;
-
-              setButtonSize({
-                width,
-                height,
-              });
-            }}
-          >
-            <Text style={styles.buttonText}>About Beam</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ===================================================
-            CHEF
+            CHEF — ع الشمال
         =================================================== */}
 
         <View style={styles.chefWrapper}>
@@ -143,11 +123,85 @@ export default function AboutUs() {
               CHEF IMAGE
           ------------------------------------------------ */}
 
-          <Image
+          <ExpoImage
             source={require("../../assets/img/chef_beam_about-remove.jpg")}
             style={styles.chefImage}
-            resizeMode="contain"
+            contentFit="contain"
           />
+        </View>
+
+        {/* ===================================================
+            TEXT COLUMN — ع يمين الشيف، تحت بعض
+        =================================================== */}
+
+        <View style={styles.textColumn}>
+          {/* TITLE + DESCRIPTION — grouped so they stay together at the top */}
+          <View>
+            <Text style={[styles.heading, dir.text, dir.isRTL && styles.headingAr]}>
+              {t("aboutCardTitle")}{" "}
+              <Text style={styles.headingTeal}>{t("aboutCardTitleTeal")}</Text>
+              {dir.isRTL ? ` ${t("aboutCardTitleAfter")}` : null}
+            </Text>
+
+            {/* DESCRIPTION */}
+            <Text style={[styles.description, dir.text, dir.isRTL && styles.descriptionAr]}>
+              {t("aboutCardText")}
+            </Text>
+          </View>
+
+          {/* BUTTON — تحت الكلام */}
+          <View style={[styles.buttonWrap, { marginTop: buttonTopSpace }]}>
+            {buttonSize && (
+              <FlameLoop
+                style={[
+                  styles.flame,
+                  {
+                    width: flameWidth,
+                    height: flameHeight,
+
+                    left: 0,
+
+                    top: -flameHeight + buttonSize.height * FLAME_OVERLAP - 10,
+                  },
+                ]}
+              />
+            )}
+
+            {/* The flame frames themselves are cut flat at the top (the tips
+                touch the image's top edge), so a bigger box can't show more.
+                This white fade melts that flat cut into the white background
+                so the flame tips look like they burn out naturally. */}
+            {buttonSize && (
+              <LinearGradient
+                colors={["#fff", "rgba(255,255,255,0)"]}
+                pointerEvents="none"
+                style={[
+                  styles.flameTopFade,
+                  {
+                    width: flameWidth,
+                    height: flameHeight * FLAME_TOP_FADE,
+                    left: 0,
+                    top: -flameHeight + buttonSize.height * FLAME_OVERLAP - 10,
+                  },
+                ]}
+              />
+            )}
+
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => router.push("/about")}
+              onLayout={(e) => {
+                const { width, height } = e.nativeEvent.layout;
+
+                setButtonSize({
+                  width,
+                  height,
+                });
+              }}
+            >
+              <Text style={styles.buttonText}>{t("aboutCardButton")}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </View>
@@ -164,7 +218,60 @@ const styles = StyleSheet.create({
 
     backgroundColor: "#fff",
 
+    // Tucks 1px under the section above so a sub-pixel gap can't show as a line.
+    marginTop: -1,
+
     padding: 20,
+
+    paddingTop: 50, // مسافة من فوق — كانت 30
+
+    // paddingBottom is set inline from the footer fade height (see above).
+  },
+
+  // =====================================================
+  // ROW — chef on the left, text column on the right
+  // =====================================================
+
+  row: {
+    width: "100%",
+
+    // row-reverse: الشيف ع اليمين والكلام ع الشمال
+    flexDirection: "row-reverse",
+
+    // flex-end: the text column (and the button + flame at its bottom) sits
+    // on the same bottom line as the chef image.
+    alignItems: "flex-end",
+
+    overflow: "visible",
+  },
+
+  // =====================================================
+  // TEXT COLUMN
+  // =====================================================
+
+  textColumn: {
+    flex: 1,
+
+    minWidth: 0,
+
+    // Gap between the text and the chef (the chef image sticks out ~10px
+    // past its wrapper on this side).
+    marginRight: 24,
+
+    // Stretch to the chef's full height: title at the top, button at the bottom.
+    alignSelf: "stretch",
+
+    justifyContent: "space-between",
+
+    // The chef image (408×612, "contain" in 175×270) starts ~11px above the
+    // wrapper — that's the top of the hat. -11 lines the title up with it.
+    marginTop: -11,
+
+    // The chef image/border hang 5px below their wrapper (bottom: -5),
+    // so -5 here puts the button's bottom exactly on the image's bottom.
+    marginBottom: -5,
+
+    alignItems: "flex-start",
   },
 
   // =====================================================
@@ -172,15 +279,32 @@ const styles = StyleSheet.create({
   // =====================================================
 
   heading: {
-    fontSize: 24,
+    fontSize: 22,
+
+    lineHeight: 26,
 
     fontWeight: "900",
 
-    color: "#ED5529",
+    color: "#FC4A14",
 
-    textAlign: "center",
+    textAlign: "left",
 
-    marginBottom: 15,
+    marginBottom: 10,
+  },
+
+  // Arabic glyphs read smaller than Latin at the same size.
+  headingAr: {
+    fontSize: 25,
+    lineHeight: 32,
+  },
+
+  descriptionAr: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
+
+  headingTeal: {
+    color: "#00827A", // teal
   },
 
   // =====================================================
@@ -188,33 +312,13 @@ const styles = StyleSheet.create({
   // =====================================================
 
   description: {
-    fontSize: 15,
+    fontSize: 14,
 
     color: "#000",
 
-    lineHeight: 20,
+    lineHeight: 19,
 
-    textAlign: "center",
-
-    marginBottom: 25,
-  },
-
-  // =====================================================
-  // BOTTOM ROW
-  // =====================================================
-
-  bottomRow: {
-    width: "100%",
-
-    flexDirection: "row",
-
-    alignItems: "center",
-
-    justifyContent: "space-between",
-
-    marginTop: 40,
-
-    overflow: "visible",
+    textAlign: "left",
   },
 
   // =====================================================
@@ -228,7 +332,10 @@ const styles = StyleSheet.create({
 
     overflow: "visible",
 
-    flexShrink: 0,
+    // Room above the button for the flame (marginTop) is set inline from the
+    // flame's real height — the column's space-between adds any extra on top.
+
+    marginLeft: 20, // بيجيب الزر (والنار معه) لليمين شوي
   },
 
   // =====================================================
@@ -239,8 +346,13 @@ const styles = StyleSheet.create({
     position: "absolute",
 
     zIndex: 1,
+  },
 
-    marginLeft: 15,
+  // Sits over the flame's top edge (above the flame, below the button).
+  flameTopFade: {
+    position: "absolute",
+
+    zIndex: 1,
   },
 
   // =====================================================
@@ -248,7 +360,8 @@ const styles = StyleSheet.create({
   // =====================================================
 
   button: {
-    backgroundColor: "transparent",
+    // Solid white fill — nothing from behind (flame or fade) shows through.
+    backgroundColor: "#fff",
 
     paddingVertical: 8,
 
@@ -258,15 +371,19 @@ const styles = StyleSheet.create({
 
     borderWidth: 4,
 
-    borderColor: "#ED5529",
+    borderColor: "#FC4A14",
+
+    // Same size in Arabic and English — "عن بيم" is much shorter than
+    // "About Beam", and the flame is sized from the button width.
+    minWidth: 106,
+
+    alignItems: "center",
 
     zIndex: 2,
-
-    marginLeft: 14,
   },
 
   buttonText: {
-    color: "#ED5529",
+    color: "#FC4A14",
 
     fontSize: 13,
 
@@ -281,10 +398,6 @@ const styles = StyleSheet.create({
     width: 155,
 
     height: 250,
-
-    marginRight: 5,
-
-    marginBottom: 45,
 
     position: "relative",
 
@@ -322,7 +435,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 4,
 
-    borderColor: "#ED5529",
+    borderColor: "#FC4A14",
 
     borderRadius: 0,
 

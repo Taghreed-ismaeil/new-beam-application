@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
+import { deductStockForOrder, restoreStockForOrder } from '../lib/stock';
 import { requireUser, requireStaff } from '../middleware/auth';
 import { upload, uploadedFileUrl } from '../lib/upload';
 import { emitOrderEvent } from '../lib/socket';
@@ -80,7 +81,9 @@ ordersRouter.post('/', async (req, res) => {
   }
 
   const userId = (req.auth as any).userId;
-  const order = await prisma.order.create({
+  // the order and its stock deduction commit together — an order never exists without it
+  const order = await prisma.$transaction(async (tx) => {
+    const created = await tx.order.create({
     data: {
       userId,
       orderType: data.orderType,
@@ -98,6 +101,9 @@ ordersRouter.post('/', async (req, res) => {
       statusLogs: { create: { status: 'pending' } },
     },
     include: { items: true },
+    });
+    await deductStockForOrder(tx, created.id);
+    return created;
   });
 
   emitOrderEvent('order:new', order);
@@ -290,14 +296,18 @@ adminOrdersRouter.patch('/:id/status', requireStaff('admin', 'chef', 'driver'), 
     }
   }
 
-  const order = await prisma.order.update({
-    where: { id },
-    data: {
-      status: parsed.data.status,
-      ...(parsed.data.status === 'cancelled' ? { cancelReason: parsed.data.reason } : {}),
-      statusLogs: { create: { status: parsed.data.status, changedByStaffId: staffId } },
-    },
-    include: ORDER_INCLUDE,
+  const order = await prisma.$transaction(async (tx) => {
+    const updated = await tx.order.update({
+      where: { id },
+      data: {
+        status: parsed.data.status,
+        ...(parsed.data.status === 'cancelled' ? { cancelReason: parsed.data.reason } : {}),
+        statusLogs: { create: { status: parsed.data.status, changedByStaffId: staffId } },
+      },
+      include: ORDER_INCLUDE,
+    });
+    if (parsed.data.status === 'cancelled') await restoreStockForOrder(tx, id, staffId);
+    return updated;
   });
 
   emitOrderEvent('order:updated', order);
@@ -414,7 +424,8 @@ adminOrdersRouter.post('/counter-sale', requireStaff('admin', 'cashier'), async 
     return res.status(400).json({ error: e.message, item: e.item });
   }
 
-  const order = await prisma.order.create({
+  const order = await prisma.$transaction(async (tx) => {
+    const created = await tx.order.create({
     data: {
       orderType: 'counter',
       status: 'completed',
@@ -429,6 +440,9 @@ adminOrdersRouter.post('/counter-sale', requireStaff('admin', 'cashier'), async 
       statusLogs: { create: { status: 'completed', changedByStaffId: staffId } },
     },
     include: ORDER_INCLUDE,
+    });
+    await deductStockForOrder(tx, created.id, staffId);
+    return created;
   });
 
   res.json({ order: toAdminOrder(order, (req.auth as any).role) });

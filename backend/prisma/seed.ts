@@ -232,6 +232,15 @@ async function main() {
     await prisma.restaurantTable.create({ data: { tableNumber: '1', qrToken: tableToken } });
   }
 
+  // Categories and menu items above are inserted with explicit ids, which doesn't advance Postgres'
+  // id sequences — without this, the next item/category created from the admin panel collides with
+  // id 1 and fails with a unique-constraint error.
+  for (const table of ['MenuCategory', 'MenuItem']) {
+    await prisma.$executeRawUnsafe(
+      `SELECT setval(pg_get_serial_sequence('"${table}"', 'id'), COALESCE((SELECT MAX(id) FROM "${table}"), 1))`,
+    );
+  }
+
   console.log('Seed complete.', items.length, 'menu items across', categories.length, 'categories.');
 }
 

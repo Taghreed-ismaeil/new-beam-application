@@ -1,9 +1,11 @@
 import BackButton from "@/components/BackButton";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { useEffect } from "react";
+import { useCallback } from "react";
+import { useAppLang } from "@/lib/app-lang";
+import { enterPop, enterUp } from "@/lib/motion";
+import Animated from "react-native-reanimated";
 import {
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,9 +13,10 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 
-const ORANGE = "#ED5529";
-const TEAL = "#008E82";
+const ORANGE = "#FC4A14";
+const TEAL = "#005751";
 const CREAM = "#FFF9F4";
 const DARK = "#17201F";
 const MUTED = "#68706E";
@@ -34,6 +37,10 @@ const galleryPhotos = [
 
 export default function AboutScreen() {
   const { width } = useWindowDimensions();
+  const { t, dir } = useAppLang();
+
+  // Arabic uses the same layout, just with bigger text (see AR_TEXT below).
+  const styles = dir.isRTL ? arStyles : enStyles;
 
   /*
    * The page is designed around a maximum mobile width.
@@ -62,9 +69,14 @@ export default function AboutScreen() {
     p.play();
   });
 
-  useEffect(() => {
-    player.play();
-  }, [player]);
+  // Only decode the looping video while this screen is on top — left playing
+  // underneath other screens it steals CPU/GPU and makes animations stutter.
+  useFocusEffect(
+    useCallback(() => {
+      player.play();
+      return () => player.pause();
+    }, [player]),
+  );
 
   return (
     <View style={styles.container}>
@@ -93,94 +105,76 @@ export default function AboutScreen() {
           <Image
             source={coverPhoto}
             style={styles.coverImage}
-            resizeMode="cover"
+            contentFit="cover"
           />
 
           <View style={styles.coverOverlay} />
 
-          <View style={styles.coverContent}>
-            <Text style={styles.coverTitle}>
-              More Than Just{"\n"}
-              <Text style={styles.coverTitleAccent}>FOOD.</Text>
+          <Animated.View entering={enterUp(1)} style={styles.coverContent}>
+            <Text style={[styles.coverTitle, dir.noSpacing]}>
+              {t("aboutCoverTitle")}{"\n"}
+              <Text style={styles.coverTitleAccent}>{t("aboutCoverAccent")}</Text>
             </Text>
 
-            <Text style={styles.coverSubtitle}>
-              Fresh ingredients. Real fire.{"\n"}
-              Made with a whole lot of love.
-            </Text>
+            <Text style={styles.coverSubtitle}>{t("aboutCoverSub")}</Text>
 
             <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>SINCE DAY ONE</Text>
+              <Text style={[styles.heroBadgeText, dir.noSpacing]}>{t("aboutSinceDayOne")}</Text>
             </View>
-          </View>
+          </Animated.View>
         </View>
 
         {/* ================= INTRO ================= */}
 
-        <View style={styles.introSection}>
-          <Text style={styles.smallLabel}>WELCOME TO BEAM</Text>
+        <Animated.View entering={enterUp(2)} style={styles.introSection}>
+          <Text style={[styles.smallLabel, dir.noSpacing]}>{t("aboutWelcome")}</Text>
 
-          <Text style={styles.mainHeading}>
-            Good food should{"\n"}
-            <Text style={styles.orangeText}>feel this good.</Text>
+          <Text style={[styles.mainHeading, dir.noSpacing]}>
+            {t("aboutMainHeading")}{"\n"}
+            <Text style={styles.orangeText}>{t("aboutMainAccent")}</Text>
           </Text>
 
-          <Text style={styles.introText}>
-            At Beam, we believe great food doesn't need to be complicated. It
-            just needs to be fresh, honest, and made with care.
-          </Text>
-        </View>
+          <Text style={styles.introText}>{t("aboutIntro")}</Text>
+        </Animated.View>
 
         {/* ================= STORY CARD ================= */}
 
-        <View style={styles.storyCard}>
+        <Animated.View entering={enterUp(3)} style={styles.storyCard}>
           <View style={styles.storyTop}>
             <View style={styles.storyIcon}>
               <Text style={styles.storyIconText}>B</Text>
             </View>
 
             <View style={styles.storyTitleWrap}>
-              <Text style={styles.cardLabel}>OUR STORY</Text>
+              <Text style={[styles.cardLabel, dir.noSpacing]}>{t("aboutStoryLabel")}</Text>
 
-              <Text style={styles.cardTitle}>
-                Made the way{"\n"}
-                it should be.
-              </Text>
+              <Text style={styles.cardTitle}>{t("aboutStoryTitle")}</Text>
             </View>
           </View>
 
-          <Text style={styles.paragraph}>
-            Beam started with one simple idea: shawarma the way it's meant to be
-            — hand-carved to order, wrapped fresh, and never rushed.
-          </Text>
+          <Text style={styles.paragraph}>{t("aboutStory1")}</Text>
 
-          <Text style={styles.paragraph}>
-            Every skewer is stacked and slow-roasted in house. Every wrap is
-            built the moment you order it. No shortcuts, no sitting under heat
-            lamps.
-          </Text>
+          <Text style={styles.paragraph}>{t("aboutStory2")}</Text>
 
-          <Text style={styles.paragraphLast}>
-            Just fresh ingredients, real fire, and a whole lot of care.
-          </Text>
+          <Text style={styles.paragraphLast}>{t("aboutStory3")}</Text>
 
           <View style={styles.storyLine} />
-        </View>
+        </Animated.View>
 
         {/* ================= VALUES ================= */}
 
         <View style={styles.section}>
-          <Text style={styles.smallLabel}>WHAT WE BELIEVE</Text>
+          <Text style={[styles.smallLabel, dir.noSpacing]}>{t("aboutBelieveLabel")}</Text>
 
           <Text style={styles.sectionHeading}>
-            Simple things.
+            {t("aboutBelieveHeading")}
             {"\n"}
-            <Text style={styles.tealText}>Done right.</Text>
+            <Text style={styles.tealText}>{t("aboutBelieveAccent")}</Text>
           </Text>
 
           <View style={styles.valuesContainer}>
             {/* FAST DELIVERY */}
-            <View style={styles.valueCard}>
+            <Animated.View entering={enterUp(4)} style={styles.valueCard}>
               <View
                 style={[
                   styles.valueIcon,
@@ -193,16 +187,14 @@ export default function AboutScreen() {
               </View>
 
               <View style={styles.valueContent}>
-                <Text style={styles.valueTitle}>Fast Delivery</Text>
+                <Text style={styles.valueTitle}>{t("aboutFastTitle")}</Text>
 
-                <Text style={styles.valueText}>
-                  Freshly prepared and delivered to you in no time.
-                </Text>
+                <Text style={styles.valueText}>{t("aboutFastText")}</Text>
               </View>
-            </View>
+            </Animated.View>
 
             {/* FRESH ALWAYS */}
-            <View style={styles.valueCard}>
+            <Animated.View entering={enterUp(5)} style={styles.valueCard}>
               <View
                 style={[
                   styles.valueIcon,
@@ -215,16 +207,14 @@ export default function AboutScreen() {
               </View>
 
               <View style={styles.valueContent}>
-                <Text style={styles.valueTitle}>Fresh Always</Text>
+                <Text style={styles.valueTitle}>{t("aboutFreshTitle")}</Text>
 
-                <Text style={styles.valueText}>
-                  Fresh ingredients in every single bite.
-                </Text>
+                <Text style={styles.valueText}>{t("aboutFreshText")}</Text>
               </View>
-            </View>
+            </Animated.View>
 
             {/* TOP QUALITY */}
-            <View style={styles.valueCard}>
+            <Animated.View entering={enterUp(6)} style={styles.valueCard}>
               <View
                 style={[
                   styles.valueIcon,
@@ -237,36 +227,32 @@ export default function AboutScreen() {
               </View>
 
               <View style={styles.valueContent}>
-                <Text style={styles.valueTitle}>Top Quality</Text>
+                <Text style={styles.valueTitle}>{t("aboutQualityTitle")}</Text>
 
-                <Text style={styles.valueText}>
-                  Quality food made with care in every detail.
-                </Text>
+                <Text style={styles.valueText}>{t("aboutQualityText")}</Text>
               </View>
-            </View>
+            </Animated.View>
           </View>
         </View>
 
         {/* ================= GALLERY ================= */}
 
         <View style={styles.section}>
-          <Text style={styles.smallLabel}>BEHIND THE COUNTER</Text>
+          <Text style={[styles.smallLabel, dir.noSpacing]}>{t("aboutTeamLabel")}</Text>
 
           <Text style={styles.sectionHeading}>
-            Meet the people
+            {t("aboutTeamHeading")}
             {"\n"}
-            <Text style={styles.orangeText}>behind Beam.</Text>
+            <Text style={styles.orangeText}>{t("aboutTeamAccent")}</Text>
           </Text>
 
-          <Text style={styles.sectionDescription}>
-            From the first cut to the final wrap, our kitchen team puts care
-            into every order.
-          </Text>
+          <Text style={styles.sectionDescription}>{t("aboutTeamText")}</Text>
 
           <View style={styles.gallery}>
             {galleryPhotos.map((photo, index) => (
-              <View
+              <Animated.View
                 key={index}
+                entering={enterPop(index + 2)}
                 style={[
                   styles.galleryItem,
                   {
@@ -278,27 +264,27 @@ export default function AboutScreen() {
                 <Image
                   source={photo}
                   style={styles.galleryImage}
-                  resizeMode="cover"
+                  contentFit="cover"
                 />
 
                 <View style={styles.galleryNumber}>
                   <Text style={styles.galleryNumberText}>0{index + 1}</Text>
                 </View>
-              </View>
+              </Animated.View>
             ))}
           </View>
         </View>
 
         {/* ================= VIDEO ================= */}
 
-        <View style={styles.videoSection}>
+        <Animated.View entering={enterUp(5)} style={styles.videoSection}>
           <View style={styles.videoHeader}>
             <View style={styles.videoHeaderText}>
-              <Text style={styles.smallLabel}>TAKE A LOOK</Text>
+              <Text style={[styles.smallLabel, dir.noSpacing]}>{t("aboutLookLabel")}</Text>
 
               <Text style={styles.videoTitle}>
-                Behind every{"\n"}
-                <Text style={styles.orangeText}>delicious bite.</Text>
+                {t("aboutLookHeading")}{"\n"}
+                <Text style={styles.orangeText}>{t("aboutLookAccent")}</Text>
               </Text>
             </View>
             {/*
@@ -333,42 +319,37 @@ export default function AboutScreen() {
 */}
             </View>
           </View>
-        </View>
+        </Animated.View>
 
         {/* ================= CTA ================= */}
 
-        <View style={styles.ctaSection}>
+        <Animated.View entering={enterUp(6)} style={styles.ctaSection}>
           <View style={styles.ctaDecorOne} />
           <View style={styles.ctaDecorTwo} />
 
-          <Text style={styles.ctaSmall}>HUNGRY YET?</Text>
+          <Text style={[styles.ctaSmall, dir.noSpacing]}>{t("aboutCtaSmall")}</Text>
 
-          <Text style={styles.ctaTitle}>
-            Your next favorite{"\n"}
-            meal is waiting.
-          </Text>
+          <Text style={styles.ctaTitle}>{t("aboutCtaTitle")}</Text>
 
-          <Text style={styles.ctaDescription}>
-            Freshly made, packed with flavor, and ready whenever you are.
-          </Text>
+          <Text style={styles.ctaDescription}>{t("aboutCtaText")}</Text>
 
           <TouchableOpacity
             style={styles.cta}
             activeOpacity={0.85}
             onPress={() => router.push("/menu")}
           >
-            <Text style={styles.ctaText}>Explore Our Menu</Text>
+            <Text style={styles.ctaText}>{t("aboutCtaButton")}</Text>
 
             <Text style={styles.ctaArrow}>→</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* ================= FOOTER ================= */}
 
         {/*
         <View style={styles.footer}>
           <Text style={styles.footerLogo}>
-            BEEM
+            BEAM
           </Text>
 
           <Text style={styles.footerText}>
@@ -385,7 +366,7 @@ export default function AboutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = {
   /* ================= BASE ================= */
 
   container: {
@@ -897,4 +878,44 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: ORANGE,
   },
-});
+};
+
+/*
+ * Arabic glyphs read much smaller than Latin at the same font size, and the
+ * tiny labels ("ورا الكاونتر", "أهلاً فيك ببيم"…) were unreadable.
+ * Only text sizes change here — the layout stays exactly like English.
+ */
+const AR_TEXT = {
+  heroBadgeText: { fontSize: 13 },
+  coverTitle: { fontSize: 40, lineHeight: 52 },
+  coverSubtitle: { fontSize: 17, lineHeight: 27 },
+  smallLabel: { fontSize: 14 },
+  mainHeading: { fontSize: 31, lineHeight: 44 },
+  introText: { fontSize: 17, lineHeight: 28 },
+  cardLabel: { fontSize: 13 },
+  cardTitle: { fontSize: 23, lineHeight: 34 },
+  paragraph: { fontSize: 16, lineHeight: 27 },
+  paragraphLast: { fontSize: 16, lineHeight: 27 },
+  sectionHeading: { fontSize: 29, lineHeight: 42 },
+  sectionDescription: { fontSize: 16, lineHeight: 26 },
+  valueTitle: { fontSize: 17 },
+  valueText: { fontSize: 14, lineHeight: 23 },
+  galleryNumberText: { fontSize: 12 },
+  videoTitle: { fontSize: 27, lineHeight: 38 },
+  playText: { fontSize: 15 },
+  ctaSmall: { fontSize: 13 },
+  ctaTitle: { fontSize: 29, lineHeight: 42 },
+  ctaDescription: { fontSize: 15, lineHeight: 25 },
+  ctaText: { fontSize: 16 },
+};
+
+const enStyles = StyleSheet.create(baseStyles);
+
+const arStyles = StyleSheet.create(
+  Object.fromEntries(
+    Object.entries(baseStyles).map(([key, style]) => [
+      key,
+      { ...style, ...AR_TEXT[key] },
+    ])
+  )
+);

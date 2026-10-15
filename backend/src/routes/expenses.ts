@@ -125,3 +125,32 @@ adminExpensesRouter.delete('/:id', async (req, res) => {
     handleDeleteError(err, res, 'هالمصروف');
   }
 });
+
+// CSV download for the Expenses tab (same filters as GET /). Excel-friendly: UTF-8 BOM, CRLF.
+adminExpensesRouter.get('/export.csv', async (req, res) => {
+  const category = req.query.category as string | undefined;
+  const expenses = await prisma.expense.findMany({
+    where: category ? { category } : {},
+    include: { recordedByStaff: { select: { name: true } } },
+    orderBy: { expenseDate: 'desc' },
+  });
+
+  const cell = (v: unknown) => {
+    const s = v == null ? '' : String(v);
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const rows = [
+    ['date', 'category', 'amount', 'note', 'recorded_by'],
+    ...expenses.map((e) => [
+      e.expenseDate.toISOString().slice(0, 10),
+      e.category,
+      Number(e.amount).toFixed(2),
+      e.description ?? '',
+      e.recordedByStaff?.name ?? '',
+    ]),
+  ];
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="expenses${category ? `_${category}` : ''}.csv"`);
+  res.send(`﻿${rows.map((r) => r.map(cell).join(',')).join('\r\n')}`);
+});

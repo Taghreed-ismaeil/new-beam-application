@@ -1,11 +1,14 @@
 import { useAuth } from "@/context/AuthContext";
 import { apiRequest } from "@/lib/api-client";
+import { useAppLang } from "@/lib/app-lang";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
+  Keyboard,
+  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,29 +16,73 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 
-const ORANGE = "#ED5529";
-const TEAL = "#008E82";
+const ORANGE = "#FC4A14";
+const TEAL = "#005751";
 const LIGHT_ORANGE = "#FFF0EA";
 const LIGHT_TEAL = "#E8F5F2";
 const WHITE = "#fff";
 
-const BEAM_LOGO = require("../assets/img/beam-logo.jpg");
-// Logo file is 262x160 — the wrapper is sized off this exact ratio so its
-// border always lands flush on the logo's edges, no matter the screen size.
-const LOGO_ASPECT_RATIO = 262 / 160;
+const BEAM_LOGO = require("../assets/img/beam_logoo.jpg");
+// Logo file is 311x145 (it's actually a PNG despite the .jpg name). The image
+// box is sized off this exact ratio and the border wraps that box, so the
+// border always lands flush on the logo's edges on every screen size.
+const LOGO_ASPECT_RATIO = 311 / 145;
+const LOGO_BORDER = 3;
+
+// Android (edge-to-edge) doesn't resize the window for the keyboard, so the
+// scroll content gets the keyboard's height as extra bottom padding — that
+// keeps every field and button reachable by scrolling while it's open.
+// iOS handles this itself via automaticallyAdjustKeyboardInsets.
+function useAndroidKeyboardHeight() {
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const show = Keyboard.addListener("keyboardDidShow", (e) =>
+      setHeight(e.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener("keyboardDidHide", () => setHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  return height;
+}
+
+// Eye button at the end of a password field — shows/hides what was typed.
+function PasswordToggle({ visible, onToggle }) {
+  const { t } = useAppLang();
+
+  return (
+    <TouchableOpacity
+      onPress={onToggle}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      accessibilityRole="button"
+      accessibilityLabel={visible ? t("loginHidePassword") : t("loginShowPassword")}
+    >
+      <Ionicons name={visible ? "eye-off-outline" : "eye-outline"} size={22} color={ORANGE} />
+    </TouchableOpacity>
+  );
+}
 
 export default function Login() {
   const { login } = useAuth();
   const { width, height } = useWindowDimensions();
+  const { t, dir } = useAppLang();
 
-  const isSmall = width < 500;
+  const isSmall = width < 380;
   const isShort = height < 700;
+  const keyboardHeight = useAndroidKeyboardHeight();
 
-  // Scales smoothly with screen width (instead of a small/large cutoff) so it
-  // looks right on any phone, clamped so it's never too tiny or too huge.
-  //const logoWidth = Math.min(Math.max(width * 0.5, 130), 200);
-  //const logoHeight = logoWidth / LOGO_ASPECT_RATIO;
+  const logoWidth = Math.min(width * (isShort ? 0.42 : 0.55), 240);
+  const logoHeight = logoWidth / LOGO_ASPECT_RATIO;
+
+  const phoneRef = useRef(null);
+  const passwordRef = useRef(null);
 
   const [isRegister, setIsRegister] = useState(false);
   const [step, setStep] = useState("form"); // "form" | "otp" | "forgot-phone" | "forgot-reset"
@@ -44,17 +91,18 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   async function submitForm() {
     if (!phone.trim() || !password) {
-      setError("Please enter your phone number and password");
+      setError(t("loginErrPhonePassword"));
       return;
     }
 
     if (isRegister && !name.trim()) {
-      setError("Please enter your name");
+      setError(t("loginErrName"));
       return;
     }
 
@@ -88,15 +136,15 @@ export default function Login() {
     } catch (e) {
       if (isRegister && e?.data?.error === "phone_already_registered") {
         setIsRegister(false);
-        setError("This number already has an account — please log in instead");
+        setError(t("loginErrAlreadyRegistered"));
       } else if (!isRegister && e?.data?.error === "account_deleted") {
-        setError("This account no longer exists");
+        setError(t("loginErrDeleted"));
       } else if (!isRegister && e?.data?.error === "no_account_for_phone") {
-        setError("No account with this number — switch to Register");
+        setError(t("loginErrNoAccount"));
       } else if (!isRegister && e?.status === 401) {
-        setError("Wrong phone number or password");
+        setError(t("loginErrWrong"));
       } else {
-        setError("Something went wrong, try again");
+        setError(t("loginErrGeneric"));
       }
     } finally {
       setBusy(false);
@@ -127,11 +175,11 @@ export default function Login() {
         // Login instead of silently signing them into the existing one.
         setIsRegister(false);
         setStep("form");
-        setError("This number already has an account — please log in instead");
+        setError(t("loginErrAlreadyRegistered"));
       } else if (e?.data?.error === "name_required_for_new_user") {
-        setError("No account with this number yet — switch to Register");
+        setError(t("loginErrNoAccountYet"));
       } else {
-        setError("Wrong or expired code, try again");
+        setError(t("loginErrCode"));
       }
     } finally {
       setBusy(false);
@@ -140,7 +188,7 @@ export default function Login() {
 
   async function requestPasswordReset() {
     if (!phone.trim()) {
-      setError("Please enter your phone number");
+      setError(t("loginErrPhone"));
       return;
     }
 
@@ -155,7 +203,7 @@ export default function Login() {
 
       setStep("forgot-reset");
     } catch {
-      setError("Something went wrong, try again");
+      setError(t("loginErrGeneric"));
     } finally {
       setBusy(false);
     }
@@ -163,9 +211,7 @@ export default function Login() {
 
   async function confirmPasswordReset() {
     if (code.length !== 6 || newPassword.length < 6) {
-      setError(
-        "Enter the 6-digit code and a password of at least 6 characters",
-      );
+      setError(t("loginErrReset"));
       return;
     }
 
@@ -181,9 +227,9 @@ export default function Login() {
       await login(res.token, res.user);
     } catch (e) {
       if (e?.data?.error === "no_account_for_phone") {
-        setError("No account with this number — switch to Register");
+        setError(t("loginErrNoAccount"));
       } else {
-        setError("Wrong or expired code, try again");
+        setError(t("loginErrCode"));
       }
     } finally {
       setBusy(false);
@@ -199,6 +245,20 @@ export default function Login() {
 
   return (
     <View style={styles.container}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: 30 + keyboardHeight },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        automaticallyAdjustKeyboardInsets
+        showsVerticalScrollIndicator={false}
+      >
+      {/* keyboardShouldPersistTaps="handled" already closes the keyboard when
+          tapping empty space — no wrapper Pressable, it swallowed taps on native */}
+      <View style={styles.inner}>
       {/* =====================================================
           LOGO
       ====================================================== */}
@@ -207,19 +267,16 @@ export default function Login() {
         style={[
           styles.logoWrapper,
           {
-            width: isSmall ? 110 : 200,
-            height: isSmall ? 71 : 100,
-            marginBottom: isSmall ? 18 : 15,
+            width: logoWidth + LOGO_BORDER * 2,
+            height: logoHeight + LOGO_BORDER * 2,
+            marginBottom: isShort ? 16 : 24,
           },
         ]}
       >
         <Image
           source={BEAM_LOGO}
-          resizeMode="contain"
-          style={{
-            width: isSmall ? 145 : 175,
-            height: isSmall ? 65 : 90,
-          }}
+          contentFit="cover"
+          style={{ width: logoWidth, height: logoHeight }}
         />
       </View>
 
@@ -227,28 +284,31 @@ export default function Login() {
           LOGIN CARD
       ====================================================== */}
 
-      <View style={styles.card}>
-        <Text style={styles.title}>
+      <View style={[styles.card, { padding: isSmall ? 22 : 32 }]}>
+        <Text style={[styles.title, { marginBottom: isShort ? 22 : 36 }]}>
           {step === "otp"
-            ? "Verify"
+            ? t("loginVerify")
             : step === "forgot-phone" || step === "forgot-reset"
-              ? "Reset Password"
+              ? t("loginResetPassword")
               : isRegister
-                ? "Register"
-                : "Login"}
+                ? t("loginRegister")
+                : t("accountLogin")}
         </Text>
 
         {step === "form" && (
           <>
             {/* Name */}
             {isRegister && (
-              <View style={styles.inputBox}>
+              <View style={[styles.inputBox, dir.row]}>
                 <TextInput
-                  placeholder="Username"
+                  placeholder={t("loginUsername")}
                   placeholderTextColor="#aaa"
-                  style={styles.input}
+                  style={[styles.input, dir.text]}
                   value={name}
                   onChangeText={setName}
+                  returnKeyType="next"
+                  submitBehavior="submit"
+                  onSubmitEditing={() => phoneRef.current?.focus()}
                 />
 
                 <Ionicons name="person-outline" size={22} color={ORANGE} />
@@ -256,31 +316,38 @@ export default function Login() {
             )}
 
             {/* Phone */}
-            <View style={styles.inputBox}>
+            <View style={[styles.inputBox, dir.row]}>
               <TextInput
-                placeholder="Phone Number"
+                ref={phoneRef}
+                placeholder={t("loginPhone")}
                 placeholderTextColor="#aaa"
-                style={styles.input}
+                style={[styles.input, dir.text]}
                 keyboardType="phone-pad"
                 value={phone}
                 onChangeText={setPhone}
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => passwordRef.current?.focus()}
               />
 
               <Ionicons name="call-outline" size={22} color={ORANGE} />
             </View>
 
             {/* Password */}
-            <View style={styles.inputBox}>
+            <View style={[styles.inputBox, dir.row]}>
               <TextInput
-                placeholder="Password"
+                ref={passwordRef}
+                placeholder={t("loginPassword")}
                 placeholderTextColor="#aaa"
-                style={styles.input}
-                secureTextEntry
+                style={[styles.input, dir.text]}
+                secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
+                returnKeyType="done"
+                onSubmitEditing={submitForm}
               />
 
-              <Ionicons name="lock-closed-outline" size={22} color={ORANGE} />
+              <PasswordToggle visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
             </View>
 
             {!!error && <Text style={styles.error}>{error}</Text>}
@@ -295,7 +362,7 @@ export default function Login() {
                 <ActivityIndicator color={ORANGE} />
               ) : (
                 <Text style={styles.buttonText}>
-                  {isRegister ? "Register" : "Login"}
+                  {isRegister ? t("loginRegister") : t("accountLogin")}
                 </Text>
               )}
             </TouchableOpacity>
@@ -308,7 +375,7 @@ export default function Login() {
                   setError("");
                 }}
               >
-                <Text style={styles.switchText}>Forgot password?</Text>
+                <Text style={styles.switchText}>{t("loginForgot")}</Text>
               </TouchableOpacity>
             )}
 
@@ -320,9 +387,7 @@ export default function Login() {
               }}
             >
               <Text style={styles.switchText}>
-                {isRegister
-                  ? "Already have an account? Sign In"
-                  : "Don't have an account? Sign Up"}
+                {isRegister ? t("loginHaveAccount") : t("loginNoAccount")}
               </Text>
             </TouchableOpacity>
           </>
@@ -334,11 +399,11 @@ export default function Login() {
 
         {step === "forgot-phone" && (
           <>
-            <View style={styles.inputBox}>
+            <View style={[styles.inputBox, dir.row]}>
               <TextInput
-                placeholder="Phone Number"
+                placeholder={t("loginPhone")}
                 placeholderTextColor="#aaa"
-                style={styles.input}
+                style={[styles.input, dir.text]}
                 keyboardType="phone-pad"
                 value={phone}
                 onChangeText={setPhone}
@@ -357,12 +422,12 @@ export default function Login() {
               {busy ? (
                 <ActivityIndicator color={ORANGE} />
               ) : (
-                <Text style={styles.buttonText}>Send Code</Text>
+                <Text style={styles.buttonText}>{t("loginSendCode")}</Text>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity onPress={backToForm}>
-              <Text style={styles.switchText}>Back to login</Text>
+              <Text style={styles.switchText}>{t("loginBackToLogin")}</Text>
             </TouchableOpacity>
           </>
         )}
@@ -373,11 +438,11 @@ export default function Login() {
 
         {step === "forgot-reset" && (
           <>
-            <View style={styles.inputBox}>
+            <View style={[styles.inputBox, dir.row]}>
               <TextInput
-                placeholder="6-digit code"
+                placeholder={t("loginCode")}
                 placeholderTextColor="#aaa"
-                style={styles.input}
+                style={[styles.input, dir.text]}
                 keyboardType="number-pad"
                 maxLength={6}
                 value={code}
@@ -387,17 +452,17 @@ export default function Login() {
               <Ionicons name="key-outline" size={22} color={ORANGE} />
             </View>
 
-            <View style={styles.inputBox}>
+            <View style={[styles.inputBox, dir.row]}>
               <TextInput
-                placeholder="New Password"
+                placeholder={t("loginNewPassword")}
                 placeholderTextColor="#aaa"
-                style={styles.input}
-                secureTextEntry
+                style={[styles.input, dir.text]}
+                secureTextEntry={!showPassword}
                 value={newPassword}
                 onChangeText={setNewPassword}
               />
 
-              <Ionicons name="lock-closed-outline" size={22} color={ORANGE} />
+              <PasswordToggle visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
             </View>
 
             {!!error && <Text style={styles.error}>{error}</Text>}
@@ -410,12 +475,12 @@ export default function Login() {
               {busy ? (
                 <ActivityIndicator color={ORANGE} />
               ) : (
-                <Text style={styles.buttonText}>Reset Password</Text>
+                <Text style={styles.buttonText}>{t("loginResetPassword")}</Text>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity onPress={backToForm}>
-              <Text style={styles.switchText}>Back to login</Text>
+              <Text style={styles.switchText}>{t("loginBackToLogin")}</Text>
             </TouchableOpacity>
           </>
         )}
@@ -426,11 +491,11 @@ export default function Login() {
 
         {step === "otp" && (
           <>
-            <View style={styles.inputBox}>
+            <View style={[styles.inputBox, dir.row]}>
               <TextInput
-                placeholder="6-digit code"
+                placeholder={t("loginCode")}
                 placeholderTextColor="#aaa"
-                style={styles.input}
+                style={[styles.input, dir.text]}
                 keyboardType="number-pad"
                 maxLength={6}
                 value={code}
@@ -450,12 +515,12 @@ export default function Login() {
               {busy ? (
                 <ActivityIndicator color={ORANGE} />
               ) : (
-                <Text style={styles.buttonText}>Verify</Text>
+                <Text style={styles.buttonText}>{t("loginVerify")}</Text>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => setStep("form")}>
-              <Text style={styles.switchText}>Change phone number</Text>
+              <Text style={styles.switchText}>{t("loginChangePhone")}</Text>
             </TouchableOpacity>
           </>
         )}
@@ -465,9 +530,13 @@ export default function Login() {
           BOTTOM DECORATIONS
       ====================================================== */}
 
-      <TouchableOpacity onPress={() => router.back()}>
-        <Text style={styles.back}>← Back</Text>
-      </TouchableOpacity>
+      {router.canGoBack() && (
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.back}>{t("loginBack")}</Text>
+        </TouchableOpacity>
+      )}
+      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -476,10 +545,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: WHITE,
+  },
+
+  scroll: {
+    flex: 1,
+  },
+
+  // flexGrow keeps everything centered when it fits, and lets it scroll when it
+  // doesn't (small phones, or with the keyboard open)
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingTop: 50,
+  },
+
+  inner: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 20,
-    overflow: "hidden",
   },
 
   /* =====================================================
@@ -499,9 +582,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
 
-    borderWidth: 3,
+    borderWidth: LOGO_BORDER,
     borderColor: ORANGE,
     backgroundColor: WHITE,
+    overflow: "hidden",
 
     padding: 0,
 
@@ -524,7 +608,6 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 400,
-    padding: 35,
     borderWidth: 2,
     borderColor: ORANGE,
     backgroundColor: WHITE,
@@ -540,7 +623,6 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: "900",
     textAlign: "center",
-    marginBottom: 40,
   },
 
   /* =====================================================

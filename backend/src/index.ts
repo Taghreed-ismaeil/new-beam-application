@@ -7,6 +7,7 @@ import cors from 'cors';
 import 'express-async-errors';
 import { env } from './config/env';
 import { initSocket } from './lib/socket';
+import { LOCAL_STORAGE_DIR, useLocalStorage } from './lib/r2';
 
 import { authRouter, staffAuthRouter } from './routes/auth';
 import { restaurantRouter, adminRestaurantRouter } from './routes/restaurant';
@@ -22,6 +23,11 @@ import { adminSuppliersRouter } from './routes/suppliers';
 import { adminExpensesRouter } from './routes/expenses';
 import { adminUploadsRouter } from './routes/uploads';
 import { adminSettingsRouter } from './routes/settings';
+import { adminReportsRouter } from './routes/reports';
+import { adminPurchaseOrdersRouter } from './routes/purchaseOrders';
+import { adminCustomersRouter } from './routes/customers';
+import { adminDashboardRouter } from './routes/dashboard';
+import { auditAdminChanges } from './middleware/audit';
 
 const app = express();
 app.use(cors());
@@ -30,7 +36,19 @@ app.use(express.json());
 // Images, QR codes, and uploads now live on Cloudflare R2 (see src/lib/r2.ts) instead of local
 // disk, so they survive redeploys on hosted backends — no local static file mounts needed.
 
+// Local-storage mode (R2_ACCOUNT_ID=local): serve files written this session, and send
+// everything else (images that already exist in the real bucket) to R2 read-only.
+if (useLocalStorage) {
+  app.use(express.static(LOCAL_STORAGE_DIR));
+  app.get(/^\/(uploads|images|qrcodes|menu-cards)\//, (req, res) => {
+    res.redirect(`${env.r2.publicUrl}${req.path}`);
+  });
+}
+
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// must run before the admin routers so it sees every change they make
+app.use('/api/admin', auditAdminChanges);
 
 app.use('/api/auth', authRouter);
 app.use('/api/staff/auth', staffAuthRouter);
@@ -63,6 +81,10 @@ app.use('/api/admin/suppliers', adminSuppliersRouter);
 app.use('/api/admin/expenses', adminExpensesRouter);
 app.use('/api/admin/uploads', adminUploadsRouter);
 app.use('/api/admin/settings', adminSettingsRouter);
+app.use('/api/admin/reports', adminReportsRouter);
+app.use('/api/admin/purchase-orders', adminPurchaseOrdersRouter);
+app.use('/api/admin/customers', adminCustomersRouter);
+app.use('/api/admin/dashboard', adminDashboardRouter);
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

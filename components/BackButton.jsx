@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { StyleSheet, TouchableOpacity } from "react-native";
 
+// Same spot and arrow in Arabic and English — only text changes with the language.
 export default function BackButton({ color = "#111", style = undefined }) {
   return (
     <TouchableOpacity

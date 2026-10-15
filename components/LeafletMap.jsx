@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { createElement, useEffect, useMemo, useRef } from "react";
+import { Platform, StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
 
 // Free map: Leaflet + OpenStreetMap tiles rendered inside a WebView, no API
@@ -19,7 +19,18 @@ function buildHtml(center, zoom, interactive) {
 <div id="map"></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-  var map = L.map('map', { zoomControl: true }).setView([${center.lat}, ${center.lng}], ${zoom});
+  // On web the page runs in an iframe instead of a WebView — route its
+  // messages to the parent window the same way.
+  if (!window.ReactNativeWebView) {
+    window.ReactNativeWebView = {
+      postMessage: function (data) { window.parent.postMessage({ __leaflet: true, data: data }, '*'); }
+    };
+  }
+</script>
+<script>
+  // zoom buttons only on maps the user actually works with (e.g. picking a
+  // delivery spot) — a read-only preview stays clean
+  var map = L.map('map', { zoomControl: ${interactive} }).setView([${center.lat}, ${center.lng}], ${zoom});
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap'
@@ -88,10 +99,33 @@ export default function LeafletMap({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const html = useMemo(() => buildHtml(center, zoom, interactive), []);
 
+  const iframeRef = useRef(null);
+
   function pushMarkers() {
     const js = `setMarkers(${JSON.stringify(markers)}); ${fitToMarkers ? "fitToMarkers();" : ""} true;`;
+    if (Platform.OS === "web") {
+      // srcDoc iframes share our origin, so we can call into the page directly
+      try {
+        iframeRef.current?.contentWindow?.eval(js);
+      } catch {
+        // iframe not ready yet — the 'ready' message will push again
+      }
+      return;
+    }
     webviewRef.current?.injectJavaScript(js);
   }
+
+  // Web: listen for messages coming out of this map's iframe.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    function onWindowMessage(e) {
+      if (e.source !== iframeRef.current?.contentWindow || !e.data?.__leaflet) return;
+      handleMessage({ nativeEvent: { data: e.data.data } });
+    }
+    window.addEventListener("message", onWindowMessage);
+    return () => window.removeEventListener("message", onWindowMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (readyRef.current) pushMarkers();
@@ -113,16 +147,17 @@ export default function LeafletMap({
     }
   }
 
-  // react-native-webview only supports iOS/Android/macOS/Windows — Expo Web
-  // has no WebView backend at all, so this is the app's real behavior there,
-  // not a bug to fix, just something to show cleanly instead of the raw
-  // "does not support this platform" error.
+  // react-native-webview has no web backend, so on Expo Web the same Leaflet
+  // page is rendered in a plain iframe instead.
   if (Platform.OS === "web") {
     return (
-      <View style={[styles.webFallback, style]}>
-        <Text style={styles.webFallbackText}>
-          Map view is available in the Beem app on your phone
-        </Text>
+      <View style={[styles.webBox, style]}>
+        {createElement("iframe", {
+          ref: iframeRef,
+          srcDoc: html,
+          title: "map",
+          style: { border: 0, width: "100%", height: "100%", display: "block" },
+        })}
       </View>
     );
   }
@@ -141,11 +176,7 @@ export default function LeafletMap({
 }
 
 const styles = StyleSheet.create({
-  webFallback: {
-    backgroundColor: "#f2f2f2",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
+  webBox: {
+    overflow: "hidden",
   },
-  webFallbackText: { color: "#999", textAlign: "center", fontSize: 13 },
 });

@@ -1,31 +1,45 @@
 import { apiRequest } from "@/lib/api-client";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { Image } from "expo-image";
 
-const LOGO = require("@/assets/img/remove-beam.jpg");
+const FADE_STEPS = 24;
+
+const FADE_LOCATIONS = Array.from(
+  { length: FADE_STEPS + 1 },
+  (_, i) => i / FADE_STEPS,
+);
+
+const FADE_COLORS = FADE_LOCATIONS.map((t) => {
+  const eased = (1 - Math.cos(Math.PI * t)) / 2; // ease-in-out (sine)
+  return `rgba(0,130,122,${eased.toFixed(3)})`;
+});
+
+export function getFooterFadeHeight(width) {
+  return Math.max(80, Math.min(width * 0.24, 110));
+}
+
+import { useAppLang } from "@/lib/app-lang";
+
+const LOGO = require("@/assets/img/remove_beam_logoo.jpg");
 
 export default function Footer() {
   const [restaurant, setRestaurant] = useState(null);
 
   const { width } = useWindowDimensions();
+  const { t, dir } = useAppLang();
 
-  // =====================================================
-  // RESPONSIVE
-  // =====================================================
-
-  const waveHeight = Math.max(25, Math.min(width * 0.08, 45));
+  const fadeHeight = getFooterFadeHeight(width);
 
   const iconSize = Math.max(18, Math.min(width * 0.05, 24));
 
@@ -37,22 +51,10 @@ export default function Footer() {
 
   const translateX = useRef(new Animated.Value(0)).current;
 
-  /*
-   * حجم اللوجو
-   * نخليه responsive
-   */
   const logoWidth = Math.min(width * 0.65, 280);
 
-  /*
-   * المسافة بين اللوجوهات
-   *
-   * خففنا السالب حتى ما يصير overlap قوي
-   */
   const logoGap = -100;
 
-  /*
-   * المسافة التي تتحركها المجموعة
-   */
   const moveDistance = logoWidth + logoGap;
 
   useEffect(() => {
@@ -83,10 +85,6 @@ export default function Footer() {
     };
   }, [moveDistance, translateX]);
 
-  // =====================================================
-  // RESTAURANT
-  // =====================================================
-
   useEffect(() => {
     apiRequest("/api/restaurant")
       .then((data) => {
@@ -95,15 +93,11 @@ export default function Footer() {
       .catch(() => {});
   }, []);
 
-  // =====================================================
-  // LOGO COMPONENT
-  // =====================================================
-
   const BeemLogo = () => {
     return (
       <Image
         source={LOGO}
-        resizeMode="contain"
+        contentFit="contain"
         style={[
           styles.logoImage,
           {
@@ -117,40 +111,12 @@ export default function Footer() {
 
   return (
     <View style={styles.footerWrapper}>
-      {/* =====================================================
-          WAVE
-      ===================================================== */}
-
-      <View
-        style={[
-          styles.waveArea,
-          {
-            height: waveHeight,
-          },
-        ]}
-      >
-        <Svg
-          width="100%"
-          height={waveHeight}
-          viewBox="0 0 1440 120"
-          preserveAspectRatio="none"
-          style={styles.wave}
-        >
-          <Path
-            fill="#40A49A"
-            d="
-              M0,35
-              C180,95 320,10 520,45
-              C760,90 980,0 1180,40
-              C1310,65 1380,55 1440,35
-              L1440,120
-              L0,120
-              Z
-            "
-          />
-        </Svg>
-      </View>
-
+      <LinearGradient
+        colors={FADE_COLORS}
+        locations={FADE_LOCATIONS}
+        style={[styles.fadeUp, { height: fadeHeight, top: -fadeHeight + 1 }]}
+        pointerEvents="none"
+      />
       {/* =====================================================
           FOOTER
       ===================================================== */}
@@ -194,50 +160,12 @@ export default function Footer() {
         </View>
 
         {/* =====================================================
-            LINKS
-        ===================================================== */}
-
-        <View style={styles.linksRow}>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.push("/menu")}
-          >
-            <Text
-              style={[
-                styles.link,
-                {
-                  fontSize: textSize,
-                },
-              ]}
-            >
-              Menu
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => router.push("/cart")}
-          >
-            <Text
-              style={[
-                styles.link,
-                {
-                  fontSize: textSize,
-                },
-              ]}
-            >
-              Order
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* =====================================================
             CONTACT
         ===================================================== */}
 
-        <View style={styles.contactRow}>
-          <View style={styles.contactItem}>
-            <Ionicons name="call-outline" size={iconSize} color="#ED5529" />
+        <View style={[styles.contactRow, dir.row]}>
+          <View style={[styles.contactItem, dir.row]}>
+            <Ionicons name="call-outline" size={iconSize} color="#FC4A14" />
 
             <Text
               style={[
@@ -252,8 +180,8 @@ export default function Footer() {
             </Text>
           </View>
 
-          <View style={styles.contactItem}>
-            <Ionicons name="location-outline" size={iconSize} color="#ED5529" />
+          <View style={[styles.contactItem, dir.row]}>
+            <Ionicons name="location-outline" size={iconSize} color="#FC4A14" />
 
             <Text
               style={[
@@ -264,7 +192,7 @@ export default function Footer() {
               ]}
               numberOfLines={1}
             >
-              {restaurant?.address ?? "Amman, Jordan"}
+              {restaurant?.address ?? t("footerAddress")}
             </Text>
           </View>
         </View>
@@ -273,8 +201,8 @@ export default function Footer() {
             INSTAGRAM
         ===================================================== */}
 
-        <TouchableOpacity activeOpacity={0.7} style={styles.social}>
-          <Ionicons name="logo-instagram" size={iconSize} color="#ED5529" />
+        <TouchableOpacity activeOpacity={0.7} style={[styles.social, dir.row]}>
+          <Ionicons name="logo-instagram" size={iconSize} color="#FC4A14" />
 
           <Text
             style={[
@@ -284,7 +212,7 @@ export default function Footer() {
               },
             ]}
           >
-            Instagram
+            {t("footerInstagram")}
           </Text>
         </TouchableOpacity>
 
@@ -306,7 +234,7 @@ export default function Footer() {
             },
           ]}
         >
-          Created by Virelix Solution
+          {t("footerCreated")}
         </Text>
       </View>
     </View>
@@ -314,48 +242,28 @@ export default function Footer() {
 }
 
 const styles = StyleSheet.create({
-  // =====================================================
-  // FOOTER WRAPPER
-  // =====================================================
+  fadeUp: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+  },
 
   footerWrapper: {
     width: "100%",
     flex: 1,
 
-    backgroundColor: "#40A49A",
+    backgroundColor: "#00827A",
     margin: 0,
     padding: 0,
+
+    // Lets the fade hang up over AboutUs and draw on top of it.
+    overflow: "visible",
+    zIndex: 5,
+    elevation: 5,
 
     minHeight: 120,
 
     alignSelf: "stretch",
-  },
-
-  // =====================================================
-  // WAVE
-  // =====================================================
-
-  waveArea: {
-    width: "100%",
-    backgroundColor: "#fff",
-
-    justifyContent: "flex-end",
-
-    margin: 0,
-    padding: 0,
-
-    overflow: "hidden",
-  },
-
-  wave: {
-    width: "100%",
-    margin: 0,
-    padding: 0,
-
-    /*
-     * يخلي الـ SVG يلزق بالـ footer
-     */
-    marginBottom: -1,
   },
 
   // =====================================================
@@ -364,7 +272,7 @@ const styles = StyleSheet.create({
 
   container: {
     width: "100%",
-    backgroundColor: "#40A49A",
+    backgroundColor: "#00827A",
     alignItems: "center",
     margin: 0,
     paddingTop: 0,
@@ -414,24 +322,6 @@ const styles = StyleSheet.create({
     height: 68,
 
     flexShrink: 0,
-  },
-
-  // =====================================================
-  // LINKS
-  // =====================================================
-
-  linksRow: {
-    flexDirection: "row",
-
-    gap: 28,
-
-    marginBottom: 12,
-  },
-
-  link: {
-    color: "#ED5529",
-
-    fontWeight: "800",
   },
 
   // =====================================================

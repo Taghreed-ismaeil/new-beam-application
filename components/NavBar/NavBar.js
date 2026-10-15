@@ -8,7 +8,6 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Path } from "react-native-svg";
 
 export default function NavBar() {
   const { width } = useWindowDimensions();
@@ -40,13 +39,13 @@ export default function NavBar() {
         <View style={styles.right}>
           <Pressable
             style={styles.iconBtn}
-            onPress={() => router.push("/search")}
+            onPress={() => router.push("/menu")}
           >
             {({ pressed }) => (
               <Ionicons
                 name="search-outline"
                 size={iconSize}
-                color={pressed ? "#ff8c00" : "#ED5529"}
+                color={pressed ? "#C94320" : "#FC4A14"}
               />
             )}
           </Pressable>
@@ -59,7 +58,7 @@ export default function NavBar() {
               <Ionicons
                 name="bag-outline"
                 size={iconSize}
-                color={pressed ? "#ff8c00" : "#ED5529"}
+                color={pressed ? "#C94320" : "#FC4A14"}
               />
             )}
           </Pressable>
@@ -67,6 +66,7 @@ export default function NavBar() {
       </ImageBackground>
 
       {/* Wave */}
+      {/*
       <Svg
         width="100%"
         height={waveHeight}
@@ -75,7 +75,7 @@ export default function NavBar() {
         style={styles.waveTop}
       >
         <Path
-          fill="#008E82"
+          fill="#005751"
           d="
             M0,80
             C180,20 320,110 520,70
@@ -87,6 +87,7 @@ export default function NavBar() {
           "
         />
       </Svg>
+      */}
     </View>
   );
 }
@@ -97,7 +98,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
-    backgroundColor: "#008E82",
+    backgroundColor: "#005751",
   },
 
   image: {

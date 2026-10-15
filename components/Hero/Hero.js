@@ -1,31 +1,50 @@
+import WaveText from "@/components/WaveText/WaveText";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { router, useFocusEffect } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { useEffect } from "react";
+import { useCallback } from "react";
 import {
-  ImageBackground,
   Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { Image } from "expo-image";
+
+import { useAppLang } from "@/lib/app-lang";
 
 const heroVideo = require("../../assets/video/hero-video.mp4");
 
+// Real PNG (the old "remove_beam_logoo.jpg" was a PNG with a .jpg name).
+const LOGO = require("../../assets/img/remove_beam_logoo.jpg");
+
+// The logo image is 311×145 px. "SHAWERMA & MORE" runs from the S at
+// x = 23 px to the end of the E at x = 273 px. The Explore Menu + cart row
+// spans exactly that stretch: button starts at the S, cart ends at the E.
+const LOGO_IMG_W = 311;
+const LOGO_IMG_H = 145;
+const LOGO_S_X = 23;
+const LOGO_E_X = 273;
+
 export default function Hero() {
   const { width, height } = useWindowDimensions();
+  const { t, dir } = useAppLang();
 
   const heroHeight = Math.max(350, Math.min(height * 0.55, 500));
 
-  const titleSize = Math.max(28, Math.min(width * 0.09, 40));
-  const subtitleSize = Math.max(12, Math.min(width * 0.034, 15));
   const buttonFont = Math.max(13, Math.min(width * 0.035, 16));
 
-  const waveHeight = Math.max(45, Math.min(width * 0.16, 70));
-
   const iconSize = Math.max(20, Math.min(width * 0.055, 28));
+
+  // The logo box is centered; "contain" scales the image to fit the box and
+  // centers it inside — from that we know where the S and the E land on screen.
+  const logoBoxW = width * 0.5;
+  const logoBoxH = 100;
+  const logoScale = Math.min(logoBoxW / LOGO_IMG_W, logoBoxH / LOGO_IMG_H);
+  const logoSLeft = (width - LOGO_IMG_W * logoScale) / 2 + LOGO_S_X * logoScale;
+  const logoTextWidth = (LOGO_E_X - LOGO_S_X) * logoScale;
 
   const player = useVideoPlayer(heroVideo, (p) => {
     p.loop = true;
@@ -33,20 +52,18 @@ export default function Hero() {
     p.play();
   });
 
-  useEffect(() => {
-    player.play();
-  }, [player]);
+  // Only decode the looping video while this screen is on top — left playing
+  // underneath other screens it steals CPU/GPU and makes animations stutter.
+  useFocusEffect(
+    useCallback(() => {
+      player.play();
+      return () => player.pause();
+    }, [player]),
+  );
 
   return (
     <View style={styles.container}>
-      <View
-        style={[
-          styles.bg,
-          {
-            height: heroHeight,
-          },
-        ]}
-      >
+      <View style={[styles.bg, { height: heroHeight }]}>
         {/* VIDEO */}
         <VideoView
           player={player}
@@ -56,176 +73,72 @@ export default function Hero() {
           pointerEvents="none"
         />
 
-        <View style={styles.overlay} />
+        <View style={styles.overlay} pointerEvents="none" />
 
-        {/* NAVBAR فوق الفيديو */}
-        <View
-          style={[
-            styles.navbar,
-            {
-              paddingHorizontal: width * 0.05,
-            },
+        {/* FADE — الفيديو بيتلاشى من تحت ويندمج مع لون MenuCard */}
+        <LinearGradient
+          colors={[
+            "rgba(0,130,122,0)",
+            "rgba(0,130,122,0.08)",
+            "rgba(0,130,122,0.25)",
+            "rgba(0,130,122,0.5)",
+            "rgba(0,130,122,0.78)",
+            "#00827A",
           ]}
-        >
-          {/* Logo */}
-          <ImageBackground
-            source={require("../../assets/img/remove-beam.jpg")}
-            style={[
-              styles.logo,
-              {
-                width: width * 0.48, // كبرناها
-                height: 80,
-                marginLeft: -width * 0.15, // سحبناها لليسار شوي
-              },
-            ]}
-            imageStyle={styles.logoImage}
-            resizeMode="contain"
-          />
+          locations={[0, 0.2, 0.4, 0.6, 0.8, 1]}
+          style={[styles.bottomFade, { height: heroHeight * 0.4 }]}
+          pointerEvents="none"
+        />
 
-          {/* Icons */}
-          <View style={styles.icons}>
-            <Pressable
-              onPress={() => router.push("/search")}
-              style={styles.iconBtn}
-            >
-              {({ pressed }) => (
-                <Ionicons
-                  name="search-outline"
-                  size={iconSize}
-                  color={pressed ? "#ff8c00" : "#ED5529"}
-                />
-              )}
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.push("/cart")}
-              style={styles.iconBtn}
-            >
-              {({ pressed }) => (
-                <Ionicons
-                  name="bag-outline"
-                  size={iconSize}
-                  color={pressed ? "#ff8c00" : "#ED5529"}
-                />
-              )}
-            </Pressable>
-          </View>
+        {/* SEE TODAY'S BEST DEAL — ع آخر الفيديو، فوق التلاشي */}
+        <View style={styles.dealHeading} pointerEvents="none">
+          <WaveText text={t("homeBestDeal")} />
         </View>
 
-        {/* TOP SVG */}
-
-        <Svg
-          width="100%"
-          height={waveHeight}
-          viewBox="0 0 1440 120"
-          preserveAspectRatio="none"
-          style={styles.waveTop}
-        >
-          <Path
-            fill="#40A49A"
-            d="
-      M0,80
-      C180,20 320,110 520,70
-      C760,20 980,120 1180,70
-      C1310,45 1380,55 1440,80
-      L1440,0
-      L0,0
-      Z
-    "
-          />
-        </Svg>
-
-        {/* CONTENT */}
+        {/* LOGO + Explore Menu + Cart
+            Same setup as the heading above (a small absolute block with a
+            zIndex, anchored by `top`) — that's the one that shows on iOS. */}
         <View
-          style={[
-            styles.content,
-            {
-              paddingHorizontal: width * 0.05,
-              paddingVertical: heroHeight * 0.05,
-            },
-          ]}
+          style={[styles.brandBlock, { top: heroHeight * 0.32 }]}
+          pointerEvents="box-none"
         >
-          <Text
-            style={[
-              styles.title,
-              {
-                fontSize: titleSize,
-                lineHeight: titleSize * 1.15,
-                marginTop: heroHeight * 0.4,
-              },
-            ]}
-          >
-            Order Food{"\n"}
-            From Beam
-          </Text>
+          <Image
+            source={LOGO}
+            style={{ width: logoBoxW, height: logoBoxH }}
+            contentFit="contain"
+          />
 
+          {/* طرف الزر ببلش مع حرف S، وطرف السلة بيخلص مع حرف E */}
           <View
             style={[
-              styles.bottomRow,
-              {
-                marginBottom: heroHeight * 0.14,
-              },
+              styles.actionsRow,
+              { marginLeft: logoSLeft, width: logoTextWidth },
+              dir.row,
+              // "تصفّح المنيو" is shorter, so space-between left the cart
+              // stranded at the far edge — keep it next to the button.
+              dir.isRTL && styles.actionsRowAr,
             ]}
           >
-            <View style={styles.leftText}>
-              <Text
-                style={[
-                  styles.subtitle,
-                  {
-                    fontSize: subtitleSize,
-                    marginBottom: heroHeight * 0.035,
-                  },
-                ]}
-              >
-                FIND YOUR FAVORITE DISH
+            <Pressable
+              style={styles.button}
+              onPress={() => router.push("/menu")}
+            >
+              <Text style={[styles.buttonText, { fontSize: buttonFont }]}>
+                {t("homeExploreMenu")}
               </Text>
+            </Pressable>
 
-              <Pressable
-                style={[
-                  styles.button,
-                  {
-                    paddingVertical: 8,
-                    paddingHorizontal: 18,
-                  },
-                ]}
-                onPress={() => router.push("/menu")}
-              >
-                <Text
-                  style={[
-                    styles.buttonText,
-                    {
-                      fontSize: buttonFont,
-                    },
-                  ]}
-                >
-                  Explore Menu
-                </Text>
-              </Pressable>
-            </View>
+            <Pressable onPress={() => router.push("/cart")} hitSlop={6}>
+              {({ pressed }) => (
+                <Ionicons
+                  name="bag"
+                  size={iconSize}
+                  color={pressed ? "#C94320" : "#FC4A14"}
+                />
+              )}
+            </Pressable>
           </View>
         </View>
-
-        {/* BOTTOM SVG */}
-        <Svg
-          width="100%"
-          height={waveHeight}
-          viewBox="0 0 1000 100"
-          preserveAspectRatio="none"
-          style={styles.waveBottom}
-        >
-          <Path
-            fill="#40A49A"
-            d="
-      M0,35
-      C180,95 320,10 520,45
-      C760,90 980,0 1180,40
-      C1310,65 1380,55 1440,35
-      L1440,120
-      L0,120
-      Z
-    "
-          />
-        </Svg>
       </View>
     </View>
   );
@@ -238,9 +151,11 @@ const styles = StyleSheet.create({
 
   bg: {
     width: "100%",
-    justifyContent: "space-between",
     overflow: "hidden",
     position: "relative",
+    // Same teal as MenuCard below — so if there's ever a sub-pixel gap at the
+    // seam, it blends in instead of showing as a contrasting line.
+    backgroundColor: "#00827A",
   },
 
   video: {
@@ -254,85 +169,60 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.15)",
   },
 
-  navbar: {
+  // Ends on #00827A (brand teal) — the exact color MenuCard's gradient starts
+  // with, so there's no seam. Many eased stops keep it free of visible bands.
+  bottomFade: {
     position: "absolute",
-    top: 25,
     left: 0,
     right: 0,
-    flexDirection: "row",
-    justifyContent: "space-between",
+    bottom: 0,
+  },
+
+  // Centered ~38pt above the bottom of the video, on top of the teal fade.
+  dealHeading: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 22,
     alignItems: "center",
-    zIndex: 20,
+    zIndex: 21,
+    elevation: 21,
   },
 
-  logo: {
-    height: 55,
+  brandBlock: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 22,
+    elevation: 22,
   },
 
-  logoImage: {
-    width: "100%",
-    height: "100%",
-  },
-
-  icons: {
+  actionsRow: {
+    alignSelf: "flex-start", // so marginLeft (the S position) is measured from the screen edge
     flexDirection: "row",
     alignItems: "center",
-    gap: 15,
+    justifyContent: "space-between", // button at the S, cart at the E
+    marginTop: 6,
   },
 
-  iconBtn: {
-    padding: 6,
-  },
-
-  content: {
-    flex: 1,
-    justifyContent: "space-between",
-  },
-
-  title: {
-    color: "#fff",
-    fontWeight: "900",
-  },
-
-  bottomRow: {
-    alignItems: "flex-start",
-  },
-
-  leftText: {
-    alignItems: "flex-start",
-  },
-
-  subtitle: {
-    color: "#fff",
-    fontWeight: "800",
+  actionsRowAr: {
+    justifyContent: "center",
+    gap: 16,
   },
 
   button: {
     backgroundColor: "transparent",
     borderRadius: 24,
     borderWidth: 2,
-    borderColor: "#ED5529",
+    borderColor: "#FC4A14",
+    paddingVertical: 8,
+    paddingHorizontal: 12, // button + cart must fit between S and E
   },
 
   buttonText: {
     color: "#fff",
     fontWeight: "700",
     textAlign: "center",
-  },
-
-  waveTop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    zIndex: 10,
-    elevation: 10,
-  },
-
-  waveBottom: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    zIndex: 10,
-    elevation: 10,
   },
 });

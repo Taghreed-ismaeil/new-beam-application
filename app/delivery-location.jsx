@@ -1,4 +1,5 @@
 import BackButton from "@/components/BackButton";
+import { useAppLang } from "@/lib/app-lang";
 import LeafletMap from "@/components/LeafletMap";
 import { setPendingDeliveryLocation } from "@/lib/pendingLocation";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +20,7 @@ import {
 const AMMAN = { lat: 31.9539, lng: 35.9106 };
 
 export default function DeliveryLocationScreen() {
+  const { t, dir } = useAppLang();
   const params = useLocalSearchParams();
   const initialLat = params.lat ? Number(params.lat) : null;
   const initialLng = params.lng ? Number(params.lng) : null;
@@ -101,7 +103,7 @@ export default function DeliveryLocationScreen() {
                   id: "picked",
                   lat: picked.lat,
                   lng: picked.lng,
-                  color: "#ED5529",
+                  color: "#FC4A14",
                 },
               ]
             : []
@@ -116,32 +118,32 @@ export default function DeliveryLocationScreen() {
         disabled={locating}
       >
         {locating ? (
-          <ActivityIndicator color="#ED5529" />
+          <ActivityIndicator color="#FC4A14" />
         ) : (
-          <Ionicons name="locate" size={22} color="#ED5529" />
+          <Ionicons name="locate" size={22} color="#FC4A14" />
         )}
       </TouchableOpacity>
 
       <View style={styles.sheet}>
         <Text style={styles.hint}>
           {picked
-            ? "Tap the map to adjust the pin"
-            : "Tap the map to set your delivery location"}
+            ? t("locationAdjust")
+            : t("locationSet")}
         </Text>
         <TextInput
-          style={styles.input}
-          placeholder="Delivery address details (building, floor...)"
+          style={[styles.input, dir.text]}
+          placeholder={t("locationPlaceholder")}
           value={address}
           onChangeText={setAddress}
           multiline
         />
-        {geocoding && <Text style={styles.geocoding}>Looking up address…</Text>}
+        {geocoding && <Text style={styles.geocoding}>{t("locationLooking")}</Text>}
         <TouchableOpacity
           style={[styles.confirmBtn, !picked && styles.confirmBtnDisabled]}
           onPress={confirm}
           disabled={!picked}
         >
-          <Text style={styles.confirmBtnText}>Confirm location</Text>
+          <Text style={styles.confirmBtnText}>{t("locationConfirm")}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -189,7 +191,7 @@ const styles = StyleSheet.create({
   },
   geocoding: { color: "#999", fontSize: 12, marginTop: 6 },
   confirmBtn: {
-    backgroundColor: "#ED5529",
+    backgroundColor: "#FC4A14",
     borderRadius: 40,
     padding: 15,
     alignItems: "center",

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Beem",
+    "name": "Beam",
     "slug": "beem-res",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -31,29 +31,38 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#EEEDF0",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#EEEDF0"
           }
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Beem needs camera access to scan loyalty QR codes."
+          "cameraPermission": "Beam needs camera access to scan loyalty QR codes."
         }
       ],
       "expo-video",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Beam needs access to your photos so you can share them on the Media tab.",
+          "cameraPermission": "Beam needs camera access so you can take a photo to share on the Media tab."
+        }
+      ],
+      [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Beem needs your location to set your delivery address and, for drivers, to share your live position with the customer during delivery."
+          "locationAlwaysAndWhenInUsePermission": "Beam needs your location to set your delivery address and, for drivers, to share your live position with the customer during delivery."
         }
       ],
       "expo-font",
       "expo-image",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-audio",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true

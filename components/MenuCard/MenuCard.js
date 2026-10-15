@@ -1,21 +1,27 @@
-import { apiRequestCached, imageUrl } from "@/lib/api-client";
-import { router } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { apiRequestCached, imageUrl, isUsableImagePath } from "@/lib/api-client";
+import { allMenuItems } from "@/lib/menu-sections";
+import { useAppLang } from "@/lib/app-lang";
+import { LinearGradient } from "expo-linear-gradient";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Dimensions,
-  Image,
   PanResponder,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 
 const FALLBACK_IMAGE = require("../../assets/img/menu-1.jpg");
 
-const CIRCLE_SIZE = 100;
+const CIRCLE_SIZE = 96;
 
-const RADIUS_X = Math.min(Dimensions.get("window").width, 480) / 2 - 36;
+const OFFERS_POLL_MS = 15000;
+
+const RADIUS_X = Math.min(Dimensions.get("window").width, 480) * 0.4;
 
 /* =====================================================
    FOOD CAROUSEL
@@ -24,38 +30,22 @@ const RADIUS_X = Math.min(Dimensions.get("window").width, 480) / 2 - 36;
 const AUTO_SPIN_SPEED = 0.225;
 const DRAG_SENSITIVITY = 90;
 const MOMENTUM_DECAY = 0.94;
-const MAX_TILT_DEG = 38;
 
-/* =====================================================
-   HEADING
-===================================================== */
-
-const HEADING_TEXT = "SEE TODAY'S BEST DEAL";
-const HEADING_COPIES = 3;
-
-/*
-  3 sentences distributed around the same
-  circular path as the food carousel.
-*/
-const HEADING_CIRCLE_STEP = (Math.PI * 2) / HEADING_COPIES;
-
-/*
-  How much the COMPLETE sentence rotates
-  backward when it moves to the sides.
-*/
-const HEADING_TILT = 38;
+const GRADIENT_COLORS = ["#00827A", "#0A8A82", "#1E968E", "#35A29B"];
+const GRADIENT_LOCATIONS = [0, 0.35, 0.7, 1];
 
 /* =====================================================
    MENU
 ===================================================== */
 
 export default function Menu() {
+  const { t, pick, dir } = useAppLang();
   const [deals, setDeals] = useState([]);
   const [rotation, setRotation] = useState(0);
 
   /* =====================================================
      FOOD ROTATION REFS
-  ===================================================== */
+  ====================================================== */
 
   const rotationRef = useRef(0);
   const velocityRef = useRef(0);
@@ -66,68 +56,119 @@ export default function Menu() {
 
   /* =====================================================
      FETCH DEALS
-  ===================================================== */
+  ====================================================== */
+
+  // Live offers from the admin Offers page drive the ring: every item an offer
+  // covers gets a slot, newest offer first. With no live offers it falls back
+  // to the loyalty items so the section is never empty.
+  const [menuItems, setMenuItems] = useState(null);
+  const [offers, setOffers] = useState([]);
 
   useEffect(() => {
     apiRequestCached("/api/menu", (data) => {
-      const allItems = data.categories.flatMap((category) =>
-        category.items.map((item) => ({
-          ...item,
-          categoryId: category.id,
-        })),
-      );
-
-      const featured = allItems.filter((item) => item.hasLoyalty);
-
-      setDeals(featured.slice(0, 8));
+      setMenuItems(allMenuItems(data.categories));
     });
   }, []);
+
+  // Re-read offers whenever Home comes into focus and every OFFERS_POLL_MS while
+  // it stays open, so adding, editing, switching off or deleting an offer in the
+  // admin panel shows up on its own — even on another phone.
+  useFocusEffect(
+    useCallback(() => {
+      const refresh = () =>
+        apiRequestCached("/api/offers", (data) => setOffers(data.offers ?? []), () => {}, {
+          revalidate: true,
+        });
+      refresh();
+      const timer = setInterval(refresh, OFFERS_POLL_MS);
+      return () => clearInterval(timer);
+    }, []),
+  );
+
+  useEffect(() => {
+    if (!menuItems) return;
+    const byId = new Map(menuItems.map((item) => [item.id, item]));
+    const seen = new Set();
+    const fromOffers = [];
+    for (const offer of [...offers].sort((a, b) => b.id - a.id)) {
+      for (const id of offer.menuItemIds ?? []) {
+        const item = byId.get(id);
+        if (!item || seen.has(id) || item.isAvailable === false) continue;
+        seen.add(id);
+        fromOffers.push({ ...item, offer });
+      }
+    }
+    // No live offers → loyalty items → otherwise a spread of the menu (one per
+    // section, photos first) so the ring is never empty.
+    const loyalty = menuItems.filter((item) => item.hasLoyalty);
+    const sectionSeen = new Set();
+    const spread = [...menuItems]
+      .sort((a, b) => Number(!!b.imageUrl) - Number(!!a.imageUrl))
+      .filter((item) => {
+        const key = item.sectionName ?? item.categoryId;
+        if (sectionSeen.has(key)) return false;
+        sectionSeen.add(key);
+        return true;
+      });
+    setDeals(
+      fromOffers.length
+        ? fromOffers.slice(0, 10)
+        : (loyalty.length ? loyalty : spread).slice(0, 8),
+    );
+  }, [menuItems, offers]);
 
   const n = deals.length || 1;
 
   /* =====================================================
      FOOD AUTO ROTATION
-  ===================================================== */
+  ====================================================== */
 
-  useEffect(() => {
-    function tick(time) {
-      if (lastTimeRef.current == null) {
-        lastTimeRef.current = time;
-      }
+  // Runs only while Home is the focused screen: this loop re-renders the
+  // carousel every frame, and left running under other screens it starved the
+  // UI thread and made other animations (e.g. the lucky wheel) stutter.
+  useFocusEffect(
+    useCallback(() => {
+      lastTimeRef.current = null;
 
-      const dt = Math.min((time - lastTimeRef.current) / 1000, 0.05);
-
-      lastTimeRef.current = time;
-
-      if (!draggingRef.current) {
-        if (Math.abs(velocityRef.current) > 0.002) {
-          rotationRef.current += velocityRef.current * dt;
-
-          velocityRef.current *= Math.pow(MOMENTUM_DECAY, dt * 60);
-        } else {
-          velocityRef.current = 0;
-
-          rotationRef.current += AUTO_SPIN_SPEED * dt;
+      function tick(time) {
+        if (lastTimeRef.current == null) {
+          lastTimeRef.current = time;
         }
 
-        setRotation(rotationRef.current);
+        const dt = Math.min((time - lastTimeRef.current) / 1000, 0.05);
+
+        lastTimeRef.current = time;
+
+        if (!draggingRef.current) {
+          if (Math.abs(velocityRef.current) > 0.002) {
+            rotationRef.current += velocityRef.current * dt;
+
+            velocityRef.current *= Math.pow(MOMENTUM_DECAY, dt * 60);
+          } else {
+            velocityRef.current = 0;
+
+            rotationRef.current += AUTO_SPIN_SPEED * dt;
+          }
+
+          setRotation(rotationRef.current);
+        }
+
+        rafRef.current = requestAnimationFrame(tick);
       }
 
       rafRef.current = requestAnimationFrame(tick);
-    }
 
-    rafRef.current = requestAnimationFrame(tick);
-
-    return () => {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-      }
-    };
-  }, []);
+      return () => {
+        if (rafRef.current) {
+          cancelAnimationFrame(rafRef.current);
+        }
+      };
+    }, []),
+  );
 
   /* =====================================================
      FOOD DRAG
-  ===================================================== */
+  ====================================================== */
 
   const panResponder = useRef(
     PanResponder.create({
@@ -167,13 +208,35 @@ export default function Menu() {
 
   /* =====================================================
      ACTIVE FOOD
-  ===================================================== */
+  ====================================================== */
 
-  const frontIndex = deals.length ? ((Math.trunc(rotation) % n) + n) % n : 0;
+  // round, not trunc: an item sits dead-center when rotation equals its index,
+  // so trunc picked the circle half a step to the left of center.
+  const frontIndex = deals.length ? ((Math.round(rotation) % n) + n) % n : 0;
+  const activeItem = deals[frontIndex];
+
+  /* =====================================================
+     DEAL BOX — crossfades to whichever item is centered
+  ====================================================== */
+
+  const dealOpacity = useRef(new Animated.Value(1)).current;
+  const lastShownId = useRef(null);
+
+  useEffect(() => {
+    if (!activeItem || activeItem.id === lastShownId.current) return;
+    lastShownId.current = activeItem.id;
+
+    dealOpacity.setValue(0);
+    Animated.timing(dealOpacity, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [activeItem?.id]);
 
   /* =====================================================
      GO TO ACTIVE
-  ===================================================== */
+  ====================================================== */
 
   function goToActive() {
     const target = deals[frontIndex] ?? deals[0];
@@ -185,21 +248,21 @@ export default function Menu() {
 
   /* =====================================================
      RENDER
-  ===================================================== */
+  ====================================================== */
 
   return (
     <View style={styles.container}>
-      {/* =================================================
-          HEADING
-      ================================================= */}
+      {/* Background gradient as its own layer — the native gradient view clips
+          its children on iOS, which was hiding the lifted heading. */}
+      <LinearGradient
+        colors={GRADIENT_COLORS}
+        locations={GRADIENT_LOCATIONS}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
 
-      <View style={styles.headingArea}>
-        {Array.from({
-          length: HEADING_COPIES,
-        }).map((_, index) => (
-          <HeadingCopy key={index} index={index} rotation={rotation} />
-        ))}
-      </View>
+      {/* SEE TODAY'S BEST DEAL lives in the Hero now (bottom of the video),
+          so it's never hidden behind the video on iOS. */}
 
       {/* =================================================
           FOOD CAROUSEL
@@ -219,91 +282,47 @@ export default function Menu() {
 
         <Pressable style={styles.tapCatcher} onPress={goToActive} />
       </View>
-    </View>
-  );
-}
 
-/* =========================================================
-   HEADING COPY
-
-   IMPORTANT:
-   The complete sentence is ONE Text element.
-
-   The letters never move individually.
-   The complete sentence moves as one object.
-========================================================= */
-
-function HeadingCopy({ index, rotation }) {
-  /*
-    Position of this sentence around the circle.
-  */
-
-  const angle = index * HEADING_CIRCLE_STEP - rotation;
-
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-
-  /*
-    SAME horizontal movement as the food images.
-  */
-
-  const translateX = sin * RADIUS_X;
-
-  /*
-    Depth of the sentence.
-  */
-
-  const depth = (cos + 1) / 2;
-
-  /*
-    Keep the sentence readable.
-  */
-
-  const scale = 0.9 + depth * 0.1;
-
-  /*
-    Do not make it disappear.
-  */
-
-  const opacity = 0.8 + depth * 0.2;
-
-  /*
-    Rotate the COMPLETE sentence.
-
-    Left/right sides go backwards,
-    exactly like an object sitting on a cylinder.
-  */
-
-  const rotateY = -sin * HEADING_TILT;
-
-  return (
-    <View
-      pointerEvents="none"
-      style={[
-        styles.headingWord,
-        {
-          transform: [
-            {
-              translateX,
-            },
-            {
-              perspective: 1000,
-            },
-            {
-              rotateY: `${rotateY}deg`,
-            },
-            {
-              scale,
-            },
-          ],
-
-          opacity,
-
-          zIndex: Math.round(cos * 100),
-        },
-      ]}
-    >
-      <Text style={styles.headingText}>{HEADING_TEXT}</Text>
+      {!!activeItem && (
+        <Pressable onPress={goToActive} style={styles.dealPressable}>
+          <View style={[styles.dealBox, dir.row]}>
+            <Animated.View style={[styles.dealInfo, { opacity: dealOpacity }]}>
+              <Text style={[styles.dealName, dir.text]} numberOfLines={1}>
+                {pick(activeItem)}
+              </Text>
+              {activeItem.offer ? (
+                <View style={[styles.offerRow, dir.row]}>
+                  {/* Badge is its own Text so the LTR "-15%" never gets
+                      reordered by an Arabic offer title next to it. */}
+                  <Text style={styles.offerBadge}>
+                    {activeItem.offer.discountType === "percentage"
+                      ? `-${Number(activeItem.offer.discountValue)}%`
+                      : `-${Number(activeItem.offer.discountValue).toFixed(2)} ${t("jd")}`}
+                  </Text>
+                  <Text style={[styles.offerTitle, dir.text]} numberOfLines={1}>
+                    {activeItem.offer.title}
+                  </Text>
+                </View>
+              ) : activeItem.rewardValue ? (
+                <Text style={[styles.dealReward, dir.text]} numberOfLines={1}>
+                  {activeItem.rewardValue}
+                </Text>
+              ) : (
+                <Text style={[styles.dealHint, dir.text]} numberOfLines={2}>
+                  {t("homeDealHint")}
+                </Text>
+              )}
+            </Animated.View>
+            <View style={styles.dealPricePill}>
+              <Animated.Text
+                style={[styles.dealPriceText, { opacity: dealOpacity }]}
+              >
+                {Number(activeItem.price).toFixed(2)} {t("jd")}
+              </Animated.Text>
+            </View>
+          </View>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -320,13 +339,7 @@ function RingItem({ item, index, n, rotation, activeIndex }) {
 
   const depth = (cos + 1) / 2;
 
-  const side = (sin + 1) / 2;
-
-  const scale = 0.58 + depth * (1.3 - 0.58);
-
-  const opacity = 0.3 + depth * (1 - 0.3);
-
-  const rotateY = MAX_TILT_DEG - side * (MAX_TILT_DEG * 2);
+  const scale = 0.56 + depth * (1.15 - 0.56);
 
   const isActive = index === activeIndex;
 
@@ -334,23 +347,17 @@ function RingItem({ item, index, n, rotation, activeIndex }) {
     <View
       style={[
         styles.slot,
+
         {
           transform: [
             {
               translateX: sin * RADIUS_X,
             },
-            {
-              perspective: 1000,
-            },
+
             {
               scale,
             },
-            {
-              rotateY: `${rotateY}deg`,
-            },
           ],
-
-          opacity,
 
           zIndex: Math.round(cos * 100),
         },
@@ -360,12 +367,14 @@ function RingItem({ item, index, n, rotation, activeIndex }) {
       <View style={[styles.card, isActive && styles.cardActive]}>
         <Image
           source={
-            item.imageUrl
+            isUsableImagePath(item.imageUrl)
               ? {
                   uri: imageUrl(item.imageUrl),
                 }
               : FALLBACK_IMAGE
           }
+          cachePolicy="memory-disk"
+          transition={120}
           style={styles.image}
         />
       </View>
@@ -381,81 +390,23 @@ const styles = StyleSheet.create({
   /* ================= CONTAINER ================= */
 
   container: {
-    backgroundColor: "#fff",
-
-    paddingVertical: 20,
-
-    alignItems: "center",
-
-    overflow: "hidden",
-  },
-
-  /* ================= HEADING ================= */
-
-  headingArea: {
     width: "100%",
 
-    height: 100,
+    paddingTop: 4,
 
-    marginBottom: 5,
-
-    overflow: "hidden",
+    paddingBottom: 0,
 
     alignItems: "center",
-
-    justifyContent: "center",
-  },
-
-  /*
-    Container for the COMPLETE sentence.
-
-    Same width as the food rotation area.
-  */
-
-  headingWord: {
-    position: "absolute",
-
-    left: "50%",
-
-    top: "50%",
-
-    width: RADIUS_X * 2,
-
-    height: 55,
-
-    marginLeft: -RADIUS_X,
-
-    marginTop: -27.5,
-
-    alignItems: "center",
-
-    justifyContent: "center",
 
     overflow: "visible",
-  },
 
-  /*
-    ONE single Text.
+    // Tucks 1px under the Hero so a sub-pixel gap can never show as a line.
+    marginTop: -1,
 
-    No character-by-character animation.
-  */
+    // Draw above the Hero so the lifted heading isn't hidden behind the video.
+    zIndex: 10,
 
-  headingText: {
-    color: "#ED5529",
-
-    fontSize: 18,
-
-    fontWeight: "900",
-
-    textAlign: "center",
-
-    width: "100%",
-
-    includeFontPadding: false,
-
-    flexWrap: "nowrap",
-
-    whiteSpace: "nowrap",
+    elevation: 10,
   },
 
   /* ================= FOOD RING ================= */
@@ -469,7 +420,11 @@ const styles = StyleSheet.create({
 
     justifyContent: "center",
 
-    marginBottom: 20,
+    // Heading moved into the Hero — 14 keeps the ring exactly where -30 put
+    // it before (4 padding + 44 old heading box − 30 = 18 from the top).
+    marginTop: 14,
+
+    marginBottom: 40,
   },
 
   slot: {
@@ -491,34 +446,46 @@ const styles = StyleSheet.create({
 
     overflow: "hidden",
 
-    borderWidth: 3,
+    borderWidth: 4,
 
     borderColor: "#fff",
 
     backgroundColor: "#eee",
 
-    elevation: 4,
+    elevation: 6,
 
-    shadowColor: "#008E82",
+    shadowColor: "#0B1A18",
 
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.22,
 
-    shadowRadius: 6,
+    shadowRadius: 8,
 
     shadowOffset: {
       width: 0,
-      height: 3,
+
+      height: 4,
     },
   },
 
   cardActive: {
-    borderColor: "#ED5529",
+    // Light teal (tried: dark orange #FC4A14, light orange #FF9A6C)
+    borderColor: "#7FDBD3",
 
-    elevation: 10,
+    borderWidth: 5,
 
-    shadowOpacity: 0.3,
+    elevation: 14,
 
-    shadowRadius: 12,
+    shadowColor: "#7FDBD3",
+
+    shadowOpacity: 0.4,
+
+    shadowRadius: 14,
+
+    shadowOffset: {
+      width: 0,
+
+      height: 6,
+    },
   },
 
   tapCatcher: {
@@ -537,5 +504,92 @@ const styles = StyleSheet.create({
     width: "100%",
 
     height: "100%",
+  },
+
+  /* ================= DEAL BOX ================= */
+
+  // The Pressable is what the parent lays out — it has to stretch too,
+  // otherwise it shrinks to its content and the box can't reach the edges.
+  dealPressable: {
+    alignSelf: "stretch",
+    width: "100%",
+  },
+
+  dealBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    // Pure white with no border — same white as AboutUs right below it, so
+    // the box flows straight into the next section with no dividing line.
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    gap: 14,
+  },
+
+  dealInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  dealName: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#17201F",
+  },
+
+  dealReward: {
+    marginTop: 3,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#005751",
+  },
+
+  offerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+  },
+
+  offerBadge: {
+    backgroundColor: "#FC4A14",
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "900",
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    overflow: "hidden",
+    writingDirection: "ltr",
+  },
+
+  offerTitle: {
+    flexShrink: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#005751",
+  },
+
+  dealHint: {
+    marginTop: 3,
+    fontSize: 12,
+    color: "#999",
+  },
+
+  dealPricePill: {
+    backgroundColor: "#FC4A14",
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+
+  dealPriceText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 14,
   },
 });
