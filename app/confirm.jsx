@@ -67,6 +67,7 @@ export default function CheckoutScreen() {
   const [cliqAlias, setCliqAlias] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const { editing } = useCart();
 
   useEffect(() => {
     apiRequest("/api/restaurant")
@@ -91,8 +92,17 @@ export default function CheckoutScreen() {
       })
       .catch(() => {})
       .finally(() => {
+        if (editing) {
+          setOrderType(editing.orderType);
+          setPaymentMethod(editing.paymentMethod);
+          if (editing.deliveryLat != null) setDeliveryLat(editing.deliveryLat);
+          if (editing.deliveryLng != null) setDeliveryLng(editing.deliveryLng);
+          if (editing.address) setAddress(editing.address);
+          if (editing.tableId) setTable({ id: editing.tableId, tableNumber: editing.tableNumber });
+        }
         draftLoaded.current = true;
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -147,8 +157,9 @@ export default function CheckoutScreen() {
 
     setBusy(true);
     try {
-      const res = await apiRequest("/api/orders", {
-        method: "POST",
+      // editing an order from the WhatsApp receipt → update it instead of a new one
+      const res = await apiRequest(editing ? `/api/orders/${editing.orderId}` : "/api/orders", {
+        method: editing ? "PUT" : "POST",
         body: {
           orderType,
           paymentMethod,
@@ -167,8 +178,8 @@ export default function CheckoutScreen() {
       clear();
       // keep order type / payment / address for next time — only the table resets
       router.replace(`/order-tracking/${res.order.id}`);
-    } catch {
-      setError(t("confirmErrPlace"));
+    } catch (e) {
+      setError(e?.status === 409 ? t("confirmErrNotEditable") : t("confirmErrPlace"));
     } finally {
       setBusy(false);
     }

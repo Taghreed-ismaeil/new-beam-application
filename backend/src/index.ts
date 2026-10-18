@@ -15,6 +15,7 @@ import { menuRouter, adminMenuRouter } from './routes/menu';
 import { offersRouter, adminOffersRouter } from './routes/offers';
 import { tablesRouter, adminTablesRouter } from './routes/tables';
 import { ordersRouter, adminOrdersRouter } from './routes/orders';
+import { orderLinkRouter } from './routes/orderLink';
 import { loyaltyRouter, adminLoyaltyRouter } from './routes/loyalty';
 import { adminStaffRouter } from './routes/staff';
 import { reservationsRouter, adminReservationsRouter } from './routes/reservations';
@@ -46,6 +47,9 @@ if (useLocalStorage) {
 }
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// public "edit your order" link used by the WhatsApp receipt
+app.use(orderLinkRouter);
 
 // must run before the admin routers so it sees every change they make
 app.use('/api/admin', auditAdminChanges);

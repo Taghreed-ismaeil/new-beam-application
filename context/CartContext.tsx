@@ -5,6 +5,20 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 // killed in the background) — e.g. a guest who leaves mid-checkout to fetch
 // their sign-up code comes back to the same items.
 const STORAGE_KEY = 'beem_cart_lines';
+// Set while the cart holds an already-placed order being edited (opened from
+// the WhatsApp receipt's "edit" link) — confirming then updates that order.
+const EDIT_KEY = 'beem_cart_editing';
+
+export type EditingOrder = {
+  orderId: number;
+  orderType: string;
+  paymentMethod: string;
+  address?: string | null;
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
+  tableId?: number | null;
+  tableNumber?: string | null;
+};
 
 export type CartLine = {
   menuItemId: number;
@@ -38,12 +52,59 @@ type CartContextValue = {
   setQuantity: (menuItemId: number, quantity: number) => void;
   clear: () => void;
   total: number;
+  /** Non-null while editing an existing order. */
+  editing: EditingOrder | null;
+  /** Replaces the cart with an order's items and switches to editing it. */
+  startEditing: (order: any, images?: Record<number, string>) => void;
+  /** Leaves editing mode (the cart keeps its items). */
+  stopEditing: () => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [lines, setLines] = useState<CartLine[]>([]);
+  const [editing, setEditing] = useState<EditingOrder | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(EDIT_KEY)
+      .then((raw) => raw && setEditing(JSON.parse(raw)))
+      .catch(() => {});
+  }, []);
+
+  function saveEditing(next: EditingOrder | null) {
+    setEditing(next);
+    (next ? AsyncStorage.setItem(EDIT_KEY, JSON.stringify(next)) : AsyncStorage.removeItem(EDIT_KEY)).catch(() => {});
+  }
+
+  function startEditing(order: any, images: Record<number, string> = {}) {
+    setLines(
+      (order.items ?? []).map((i: any) => ({
+        menuItemId: i.menuItemId,
+        name: i.nameEnSnapshot || i.nameSnapshot,
+        nameAr: i.nameSnapshot,
+        nameEn: i.nameEnSnapshot,
+        price: Number(i.unitPriceSnapshot),
+        quantity: i.quantity,
+        notes: i.notes ?? null,
+        imageUrl: images[i.menuItemId] ?? null,
+      })),
+    );
+    saveEditing({
+      orderId: order.id,
+      orderType: order.orderType,
+      paymentMethod: order.paymentMethod,
+      address: order.deliveryAddress,
+      deliveryLat: order.deliveryLat,
+      deliveryLng: order.deliveryLng,
+      tableId: order.tableId,
+      tableNumber: order.table?.tableNumber ?? null,
+    });
+  }
+
+  function stopEditing() {
+    saveEditing(null);
+  }
   // Don't write until the saved cart has been read back, otherwise the initial
   // empty [] would overwrite it on launch.
   const hydrated = useRef(false);
@@ -116,12 +177,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   function clear() {
     setLines([]);
+    saveEditing(null);
   }
 
   const total = useMemo(() => lines.reduce((sum, l) => sum + l.price * l.quantity, 0), [lines]);
 
   return (
-    <CartContext.Provider value={{ lines, add, addMany, remove, setQuantity, clear, total }}>
+    <CartContext.Provider value={{ lines, add, addMany, remove, setQuantity, clear, total, editing, startEditing, stopEditing }}>
       {children}
     </CartContext.Provider>
   );
