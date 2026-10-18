@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { env } from '../config/env';
 import { prisma } from './prisma';
+import { toWhatsAppNumber } from './orderReceipt';
 
 // 15 min while developing with the console provider (there's a human relay step — asking for the
 // code, checking the log, replying — that eats minutes). Tighten back to ~5 once real WhatsApp
@@ -32,7 +33,7 @@ async function sendViaWhatsApp(phone: string, code: string) {
     },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
-      to: phone,
+      to: toWhatsAppNumber(phone) ?? phone,
       type: 'template',
       template: {
         name: WHATSAPP_TEMPLATE_NAME,

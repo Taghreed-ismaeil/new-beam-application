@@ -11,6 +11,8 @@ const EDIT_KEY = 'beem_cart_editing';
 
 export type EditingOrder = {
   orderId: number;
+  /** 'edit' replaces the order's items; 'add' only appends new ones (order already being prepared). */
+  mode?: 'edit' | 'add';
   orderType: string;
   paymentMethod: string;
   address?: string | null;
@@ -49,6 +51,8 @@ type CartContextValue = {
   /** Adds `quantity` at once (item details screen); a non-empty note replaces the line's note. */
   addMany: (item: CartAddItem, quantity: number, notes?: string) => void;
   remove: (menuItemId: number) => void;
+  /** Sets a line's quantity and notes in place (editing it from the item page). */
+  updateLine: (menuItemId: number, quantity: number, notes?: string) => void;
   setQuantity: (menuItemId: number, quantity: number) => void;
   clear: () => void;
   total: number;
@@ -56,6 +60,8 @@ type CartContextValue = {
   editing: EditingOrder | null;
   /** Replaces the cart with an order's items and switches to editing it. */
   startEditing: (order: any, images?: Record<number, string>) => void;
+  /** Empties the cart and starts adding new items to an order being prepared. */
+  startAdding: (order: any) => void;
   /** Leaves editing mode (the cart keeps its items). */
   stopEditing: () => void;
 };
@@ -92,6 +98,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     );
     saveEditing({
       orderId: order.id,
+      mode: 'edit',
       orderType: order.orderType,
       paymentMethod: order.paymentMethod,
       address: order.deliveryAddress,
@@ -100,6 +107,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       tableId: order.tableId,
       tableNumber: order.table?.tableNumber ?? null,
     });
+  }
+
+  function startAdding(order: any) {
+    setLines([]);
+    saveEditing({ orderId: order.id, mode: 'add', orderType: order.orderType, paymentMethod: order.paymentMethod });
   }
 
   function stopEditing() {
@@ -170,6 +182,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setLines((prev) => prev.filter((l) => l.menuItemId !== menuItemId));
   }
 
+  function updateLine(menuItemId: number, quantity: number, notes?: string) {
+    const note = notes?.trim() || null;
+    setLines((prev) =>
+      quantity <= 0
+        ? prev.filter((l) => l.menuItemId !== menuItemId)
+        : prev.map((l) => (l.menuItemId === menuItemId ? { ...l, quantity, notes: note } : l)),
+    );
+  }
+
   function setQuantity(menuItemId: number, quantity: number) {
     if (quantity <= 0) return remove(menuItemId);
     setLines((prev) => prev.map((l) => (l.menuItemId === menuItemId ? { ...l, quantity } : l)));
@@ -183,7 +204,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const total = useMemo(() => lines.reduce((sum, l) => sum + l.price * l.quantity, 0), [lines]);
 
   return (
-    <CartContext.Provider value={{ lines, add, addMany, remove, setQuantity, clear, total, editing, startEditing, stopEditing }}>
+    <CartContext.Provider value={{ lines, add, addMany, remove, updateLine, setQuantity, clear, total, editing, startEditing, startAdding, stopEditing }}>
       {children}
     </CartContext.Provider>
   );
