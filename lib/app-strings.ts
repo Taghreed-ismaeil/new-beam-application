@@ -346,6 +346,18 @@ export const STRINGS = {
   ],
   cartTotal: ["Total", "المجموع"],
   cartConfirm: ["Confirm", "تأكيد"],
+  // editing a placed order (opened from the WhatsApp receipt link)
+  cartEditing: ["Editing order #{id}", "عم تعدّل الطلب #{id}"],
+  cartEditCancel: ["Cancel", "إلغاء"],
+  cartEditLocked: [
+    "Order #{id} is already being prepared, so it can't be changed — call us if you need anything.",
+    "الطلب #{id} صار عم يتحضّر وما بنقدر نعدّله — تواصل معنا إذا بدك إشي.",
+  ],
+  cartEditMissing: ["We couldn't open that order.", "ما قدرنا نفتح هالطلب."],
+  confirmErrNotEditable: [
+    "This order is already being prepared and can't be changed anymore.",
+    "هالطلب صار عم يتحضّر وما بنقدر نعدّله هلأ.",
+  ],
 
   /* ================= CHECKOUT (confirm) ================= */
   confirmTitle: ["Checkout", "إتمام الطلب"],

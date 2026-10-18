@@ -5,6 +5,7 @@ import { deductStockForOrder, restoreStockForOrder } from '../lib/stock';
 import { requireUser, requireStaff } from '../middleware/auth';
 import { upload, uploadedFileUrl } from '../lib/upload';
 import { emitOrderEvent } from '../lib/socket';
+import { queueOrderReceipt } from '../lib/orderReceipt';
 
 const orderItemSchema = z.object({
   menuItemId: z.number(),
@@ -107,6 +108,65 @@ ordersRouter.post('/', async (req, res) => {
   });
 
   emitOrderEvent('order:new', order);
+  queueOrderReceipt(order.id, 'confirmed');
+  res.json({ order });
+});
+
+// Customer edits their own order (from the WhatsApp receipt's "edit" link → the
+// app's cart). Only while it's still pending — once the restaurant accepts it the
+// kitchen may have started. Same body as placing an order; items are replaced.
+ordersRouter.put('/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  const userId = (req.auth as any).userId;
+  const parsed = createOrderSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input', details: parsed.error.flatten() });
+  const data = parsed.data;
+
+  const existing = await prisma.order.findUnique({ where: { id } });
+  if (!existing || existing.userId !== userId) return res.status(404).json({ error: 'not_found' });
+  if (existing.status !== 'pending') return res.status(409).json({ error: 'not_editable', status: existing.status });
+
+  if (data.orderType === 'delivery' && !data.deliveryAddress) {
+    return res.status(400).json({ error: 'delivery_address_required' });
+  }
+  if (data.orderType === 'dine_in' && !data.tableId) {
+    return res.status(400).json({ error: 'table_required' });
+  }
+
+  let payload;
+  try {
+    payload = await buildOrderPayload(data.items);
+  } catch (e: any) {
+    return res.status(400).json({ error: e.message, item: e.item });
+  }
+
+  const order = await prisma.$transaction(async (tx) => {
+    // re-check inside the transaction so a staff "accept" can't slip in between
+    const fresh = await tx.order.findUnique({ where: { id }, select: { status: true } });
+    if (fresh?.status !== 'pending') return null;
+    await tx.orderItem.deleteMany({ where: { orderId: id } });
+    return tx.order.update({
+      where: { id },
+      data: {
+        orderType: data.orderType,
+        tableId: data.tableId ?? null,
+        deliveryAddress: data.deliveryAddress ?? null,
+        deliveryLat: data.deliveryLat ?? null,
+        deliveryLng: data.deliveryLng ?? null,
+        paymentMethod: data.paymentMethod,
+        paymentStatus: data.paymentMethod === 'cliq' ? 'awaiting_confirmation' : 'unpaid',
+        subtotal: payload.subtotal,
+        total: payload.subtotal,
+        notes: data.notes ?? null,
+        items: { create: payload.lines },
+      },
+      include: { items: true },
+    });
+  });
+  if (!order) return res.status(409).json({ error: 'not_editable' });
+
+  emitOrderEvent('order:updated', order);
+  queueOrderReceipt(order.id, 'updated');
   res.json({ order });
 });
 

@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 
 import BackButton from "@/components/BackButton";
+import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -12,7 +13,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 
-import { apiRequestCached, imageUrl } from "@/lib/api-client";
+import { apiRequest, apiRequestCached, imageUrl } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { allMenuItems } from "@/lib/menu-sections";
 import { Text } from "@/lib/arabic-font";
@@ -28,8 +29,36 @@ const MUTED = "#68706E";
 const WHITE = "#FFFFFF";
 
 export default function CartScreen() {
-  const { lines, setQuantity, remove, total } = useCart();
+  const { lines, setQuantity, remove, total, editing, startEditing, clear } = useCart();
   const { t, pick, dir } = useAppLang();
+  const { user, loading: authLoading } = useAuth();
+
+  // Opened from the WhatsApp receipt's "edit" link (beemres://cart?editOrder=12):
+  // load that order into the cart. Only a still-pending order can change.
+  const { editOrder } = useLocalSearchParams();
+  const [editNotice, setEditNotice] = useState("");
+  const loadedEdit = useRef(null);
+
+  useEffect(() => {
+    const id = Number(editOrder);
+    if (!id || authLoading || loadedEdit.current === id) return;
+    if (!user) {
+      router.push({ pathname: "/login", params: { returnTo: "back" } });
+      return;
+    }
+    loadedEdit.current = id;
+    apiRequest(`/api/orders/${id}`)
+      .then(({ order }) => {
+        if (order.status !== "pending") {
+          setEditNotice(t("cartEditLocked", { id }));
+          return;
+        }
+        startEditing(order, menuImages);
+        setEditNotice("");
+      })
+      .catch(() => setEditNotice(t("cartEditMissing")));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editOrder, user, authLoading]);
 
   // Items added before the cart stored images: look their image up in the menu
   const [menuImages, setMenuImages] = useState({});
@@ -79,6 +108,19 @@ export default function CartScreen() {
       {/* =====================================================
           CART ITEMS
       ====================================================== */}
+
+      {(editing || editNotice) && (
+        <View style={[styles.editBanner, editNotice && !editing && styles.editBannerLocked]}>
+          <Text style={styles.editBannerText}>
+            {editing ? t("cartEditing", { id: editing.orderId }) : editNotice}
+          </Text>
+          {editing && (
+            <TouchableOpacity onPress={clear} hitSlop={8}>
+              <Text style={styles.editBannerCancel}>{t("cartEditCancel")}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -196,6 +238,38 @@ export default function CartScreen() {
 }
 
 const styles = StyleSheet.create({
+  // "editing order #12" strip shown when the cart was opened from the receipt link
+  editBanner: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: LIGHT_ORANGE,
+    borderWidth: 1,
+    borderColor: ORANGE,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  editBannerLocked: {
+    backgroundColor: LIGHT_TEAL,
+    borderColor: TEAL,
+  },
+  editBannerText: {
+    flex: 1,
+    color: DARK,
+    fontSize: 13.5,
+    fontWeight: "700",
+  },
+  editBannerCancel: {
+    color: ORANGE,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
   /* =====================================================
      SCREEN
   ====================================================== */
