@@ -9,10 +9,10 @@ import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text } from "@/lib/arabic-font";
 
 export default function CheckoutScreen() {
   const { lines, total, clear } = useCart();

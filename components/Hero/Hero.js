@@ -7,13 +7,13 @@ import { useCallback } from "react";
 import {
   Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
 import { Image } from "expo-image";
 
 import { useAppLang } from "@/lib/app-lang";
+import { Text } from "@/lib/arabic-font";
 
 const heroVideo = require("../../assets/video/hero-video.mp4");
 

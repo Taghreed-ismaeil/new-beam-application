@@ -7,8 +7,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -31,6 +29,7 @@ import { useAppLang } from "@/lib/app-lang";
 import { findMenuCategory } from "@/lib/menu-category";
 import { categoryItems } from "@/lib/menu-sections";
 import { enterDown, enterFromLeft, enterFromRight } from "@/lib/motion";
+import { Text, TextInput } from "@/lib/arabic-font";
 
 // White logo made for the teal background (same one as the home hero)
 const LOGO = require("../assets/img/remove_beam_logoo.jpg");

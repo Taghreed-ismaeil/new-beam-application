@@ -13,11 +13,11 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
+import { Text } from "@/lib/arabic-font";
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";

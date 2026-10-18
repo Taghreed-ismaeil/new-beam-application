@@ -9,7 +9,6 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
   View,
 } from "react-native";
 
@@ -34,6 +33,7 @@ import {
   fetchStaffList,
   updateStaffMember,
 } from "@/lib/staff-api";
+import { Text } from "@/lib/arabic-font";
 
 const ROLES = ["owner", "admin", "manager", "chef", "cashier", "waiter"];
 

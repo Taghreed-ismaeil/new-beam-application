@@ -1,10 +1,11 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRef } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import Animated from "react-native-reanimated";
 
 import { useAppLang } from "@/lib/app-lang";
 import { enterFromRight } from "@/lib/motion";
+import { Text } from "@/lib/arabic-font";
 
 /* =========================================================
    QUICK CATEGORY PILLS

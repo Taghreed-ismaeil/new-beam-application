@@ -8,7 +8,6 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -18,6 +17,7 @@ import MediaViewer from "@/components/MediaViewer";
 import { imageUrl } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { fetchMediaPage } from "@/lib/media-api";
+import { Text } from "@/lib/arabic-font";
 
 /* =========================================================
    RESTAURANT GALLERY

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { fs } from "@/lib/admin-font";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import {
   AdminHeader,
@@ -24,6 +24,7 @@ import {
 } from "@/lib/admin-api";
 import { useStaff } from "@/context/StaffContext";
 import { useDirection, useI18n } from "@/lib/i18n";
+import { Text } from "@/lib/arabic-font";
 
 const EMPTY_ZONE = { name: "", nameEn: "", fee: "", isActive: true };
 

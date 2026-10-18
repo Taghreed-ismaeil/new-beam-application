@@ -3,13 +3,14 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import Animated from "react-native-reanimated";
 
 import { imageUrl } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { fetchMediaPage } from "@/lib/media-api";
 import { enterDown, enterFromLeft, enterFromRight, enterUp } from "@/lib/motion";
+import { Text, AnimatedText } from "@/lib/arabic-font";
 
 /* =========================================================
    MEDIA (tab)
@@ -53,12 +54,12 @@ export default function MediaHub() {
           <Animated.View entering={enterDown(0)} style={styles.logoWrap}>
             <Image source={LOGO} contentFit="contain" style={styles.logo} />
           </Animated.View>
-          <Animated.Text entering={enterDown(1)} style={[styles.title, dir.noSpacing]}>
+          <AnimatedText entering={enterDown(1)} style={[styles.title, dir.noSpacing]}>
             {t("mediaTitle")}
-          </Animated.Text>
-          <Animated.Text entering={enterDown(2)} style={styles.subtitle}>
+          </AnimatedText>
+          <AnimatedText entering={enterDown(2)} style={styles.subtitle}>
             {t("mediaSubtitle")}
-          </Animated.Text>
+          </AnimatedText>
         </View>
         <LinearGradient
           pointerEvents="none"

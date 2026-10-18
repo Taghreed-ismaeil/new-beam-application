@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { router } from "expo-router";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { apiRequest } from "@/lib/api-client";
 import BackButton from "@/components/BackButton";
+import { Text } from "@/lib/arabic-font";
 
 const STATUS_LABEL = {
   pending: "Awaiting confirmation",

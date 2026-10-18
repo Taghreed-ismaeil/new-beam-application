@@ -9,13 +9,13 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 
 import { Banner, Btn, C, Field } from "@/components/admin/ui";
 import { useStaff } from "@/context/StaffContext";
 import { useDirection, useI18n } from "@/lib/i18n";
+import { Text } from "@/lib/arabic-font";
 
 export default function StaffLogin() {
   const { signIn, endedReason } = useStaff();

@@ -10,7 +10,6 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
   View,
 } from "react-native";
 
@@ -31,6 +30,7 @@ import { createOffer, deleteOffer, fetchAdminMenu, fetchOffers, updateOffer } fr
 import { imageUrl } from "@/lib/api-client";
 import { useStaff } from "@/context/StaffContext";
 import { useDirection, useI18n } from "@/lib/i18n";
+import { Text } from "@/lib/arabic-font";
 
 // The real backend (backend/src/routes/offers.ts) stores a single `title`
 // (no i18n split), `discountType`/`discountValue` instead of kind/value, and

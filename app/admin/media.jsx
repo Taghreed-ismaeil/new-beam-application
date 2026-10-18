@@ -9,7 +9,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -31,6 +30,7 @@ import { fs } from "@/lib/admin-font";
 import { deleteMedia, fetchAdminMedia, reviewMedia, uploadRestaurantMedia } from "@/lib/admin-api";
 import { imageUrl } from "@/lib/api-client";
 import { useDirection, useI18n } from "@/lib/i18n";
+import { Text } from "@/lib/arabic-font";
 
 // Media tab moderation: customers' shared photos wait here until approved; staff
 // can also post the restaurant's own photos (live at once). Backend: /api/admin/media.

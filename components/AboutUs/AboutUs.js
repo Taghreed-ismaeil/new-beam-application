@@ -7,11 +7,11 @@ import { useAppLang } from "@/lib/app-lang";
 import {
   Image,
   StyleSheet,
-  Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
+import { Text } from "@/lib/arabic-font";
 
 export const FLAME_FRAMES = [
   require("../../assets/flame-frames/f01.png"),

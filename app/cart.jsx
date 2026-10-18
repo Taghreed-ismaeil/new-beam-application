@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -16,6 +15,7 @@ import { Image } from "expo-image";
 import { apiRequestCached, imageUrl } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { allMenuItems } from "@/lib/menu-sections";
+import { Text } from "@/lib/arabic-font";
 
 const FALLBACK_IMAGE = require("../assets/img/menu-5.jpg");
 

@@ -10,8 +10,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -22,6 +20,7 @@ import BackButton from "@/components/BackButton";
 import { useAppLang } from "@/lib/app-lang";
 import { shareMedia } from "@/lib/media-api";
 import { enterPop, enterUp } from "@/lib/motion";
+import { Text, TextInput, AnimatedText } from "@/lib/arabic-font";
 
 /* =========================================================
    SHARE A PHOTO
@@ -93,12 +92,12 @@ export default function SharePhoto() {
         <Animated.View entering={enterPop(0)} style={styles.sentIcon}>
           <Ionicons name="checkmark" size={46} color={WHITE} />
         </Animated.View>
-        <Animated.Text entering={enterUp(1)} style={styles.sentTitle}>
+        <AnimatedText entering={enterUp(1)} style={styles.sentTitle}>
           {t("mediaSentTitle")}
-        </Animated.Text>
-        <Animated.Text entering={enterUp(2)} style={styles.sentText}>
+        </AnimatedText>
+        <AnimatedText entering={enterUp(2)} style={styles.sentText}>
           {t("mediaSentText")}
-        </Animated.Text>
+        </AnimatedText>
         <Animated.View entering={enterUp(3)}>
           <Pressable
             onPress={() => (router.canGoBack() ? router.back() : router.replace("/media/community"))}

@@ -7,13 +7,12 @@ import * as Location from "expo-location";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { Text, TextInput } from "@/lib/arabic-font";
 
 // Fallback center (Amman) for when GPS permission is denied and the customer
 // hasn't picked a point yet — better than defaulting to (0,0) in the ocean.

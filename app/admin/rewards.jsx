@@ -12,8 +12,6 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
-  TextInput,
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
@@ -49,6 +47,7 @@ import {
 } from "@/lib/admin-api";
 import { imageUrl } from "@/lib/api-client";
 import { useDirection, useI18n } from "@/lib/i18n";
+import { Text, TextInput } from "@/lib/arabic-font";
 
 const EMPTY = {
   menuItemId: null,

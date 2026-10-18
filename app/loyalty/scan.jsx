@@ -7,8 +7,9 @@ import { apiRequest, imageUrl } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { router } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { Image } from "expo-image";
+import { Text } from "@/lib/arabic-font";
 
 // Rarity QR codes are real loyalty scans underneath — each one is mapped
 // to that item's real qrToken/qrGroupToken from the database.

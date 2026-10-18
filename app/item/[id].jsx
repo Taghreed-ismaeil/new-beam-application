@@ -9,8 +9,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -24,6 +22,7 @@ import { useAppLang } from "@/lib/app-lang";
 import { findMenuCategory } from "@/lib/menu-category";
 import { allMenuItems, categoryItems, getMenuSections } from "@/lib/menu-sections";
 import { enterDown, enterPop, enterUp } from "@/lib/motion";
+import { Text, TextInput } from "@/lib/arabic-font";
 
 /* =========================================================
    ITEM DETAILS

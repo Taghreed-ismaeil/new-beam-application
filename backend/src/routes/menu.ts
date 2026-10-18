@@ -28,11 +28,21 @@ function toPublicMenuItem(item: any) {
 // ---------- Public ----------
 export const menuRouter = Router();
 
+// Top-level categories only; each carries its own items plus its active
+// sub-categories (`subcategories`, each with its items) in menu order.
 menuRouter.get('/', async (_req, res) => {
+  const visibleItems = { where: { isAvailable: true }, orderBy: { sortOrder: 'asc' as const } };
   const categories = await prisma.menuCategory.findMany({
-    where: { isActive: true },
-    orderBy: { sortOrder: 'asc' },
-    include: { items: { where: { isAvailable: true }, orderBy: { sortOrder: 'asc' } } },
+    where: { isActive: true, parentId: null },
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    include: {
+      items: visibleItems,
+      children: {
+        where: { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+        include: { items: visibleItems },
+      },
+    },
   });
   res.json({
     categories: categories.map((c) => ({
@@ -42,6 +52,13 @@ menuRouter.get('/', async (_req, res) => {
       sortOrder: c.sortOrder,
       imageUrl: c.imageUrl,
       items: c.items.map(toPublicMenuItem),
+      subcategories: c.children.map((s) => ({
+        id: s.id,
+        name: s.name,
+        nameEn: s.nameEn,
+        sortOrder: s.sortOrder,
+        items: s.items.map(toPublicMenuItem),
+      })),
     })),
   });
 });

@@ -6,7 +6,6 @@ import {
   Animated,
   Easing,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
   useWindowDimensions,
@@ -30,6 +29,7 @@ export function getFooterFadeHeight(width) {
 }
 
 import { useAppLang } from "@/lib/app-lang";
+import { Text } from "@/lib/arabic-font";
 
 const LOGO = require("@/assets/img/remove_beam_logoo.jpg");
 

@@ -1,3 +1,4 @@
+import { useFonts } from "expo-font";
 import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router/react-navigation";
 import { Stack, useGlobalSearchParams, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -11,6 +12,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { StaffProvider } from "@/context/StaffContext";
 import { AppLangProvider } from "@/lib/app-lang";
+import { ARABIC_FONTS } from "@/lib/arabic-font";
 import { I18nProvider } from "@/lib/i18n";
 import BottomTabBar from "@/components/BottomTabBar/BottomTabBar";
 import IntroVideo from "@/components/IntroVideo";
@@ -56,6 +58,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  // Bundled font files load in a few ms; the native splash stays up until then,
+  // so Arabic never flashes in the system font first.
+  const [fontsLoaded, fontError] = useFonts(ARABIC_FONTS);
+
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

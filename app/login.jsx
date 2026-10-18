@@ -10,13 +10,12 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { Text, TextInput } from "@/lib/arabic-font";
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";
