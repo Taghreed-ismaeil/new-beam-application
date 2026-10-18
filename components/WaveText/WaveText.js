@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Easing,
@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { RNAnimatedText, Text } from "@/lib/arabic-font";
 
 const WAVE_DURATION = 1800; // ms for one full wave cycle
 const WAVE_AMPLITUDE = 6; // px each letter rises/falls
@@ -21,18 +22,95 @@ const FONT_FAMILY = Platform.select({
   default: undefined,
 });
 
+// ---------- Arabic ----------
+// Arabic letters must stay joined, so the sentence is never split into
+// letters. Instead it's drawn whole — correctly shaped and joined — and that
+// drawing is cut into thin vertical strips, each riding the same sine wave a
+// little later than its neighbour. On screen it waves letter by letter exactly
+// like the English line, while the text itself stays one joined sentence.
+const STRIP = 6; // px per strip — thinner = smoother wave
+// ≈ the English line's phase per pixel (0.45 rad per ~16px letter)
+const PHASE_PER_PX = 0.028;
+// The strips are placed with absolute x maths; keep that box LTR so the app's
+// Arabic (RTL) layout can't mirror it. Native only — web has no `direction`.
+const LTR = Platform.OS === "web" ? null : { direction: "ltr" };
+
+function sineOffsets(progress, phases) {
+  const inputRange = Array.from({ length: WAVE_SAMPLES + 1 }, (_, k) => k / WAVE_SAMPLES);
+  return phases.map((phase) =>
+    progress.interpolate({
+      inputRange,
+      outputRange: inputRange.map((x) => -WAVE_AMPLITUDE * Math.sin(x * Math.PI * 2 - phase)),
+    }),
+  );
+}
+
+const ArabicWave = memo(function ArabicWave({ text, color, fontSize, progress }) {
+  const [box, setBox] = useState(null);
+  const textStyle = [styles.arabic, { color, fontSize, lineHeight: Math.round(fontSize * 1.6) }];
+
+  // re-measure when the sentence or its size changes
+  useEffect(() => setBox(null), [text, fontSize]);
+
+  const strips = box ? Math.ceil(box.w / STRIP) : 0;
+  const offsets = useMemo(
+    // Arabic reads right to left, so the wave starts at the rightmost strip
+    () => sineOffsets(progress, Array.from({ length: strips }, (_, i) => (strips - 1 - i) * STRIP * PHASE_PER_PX)),
+    [progress, strips],
+  );
+
+  return (
+    <View style={styles.arabicRow}>
+      {/* invisible copy, only to measure the joined sentence */}
+      {!box && (
+        <Text
+          numberOfLines={1}
+          style={[textStyle, styles.measure]}
+          onLayout={(e) => {
+            const { width, height } = e.nativeEvent.layout;
+            if (width > 0) setBox({ w: Math.ceil(width) + 1, h: Math.ceil(height) });
+          }}
+        >
+          {text}
+        </Text>
+      )}
+
+      {box && (
+        <View style={[LTR, { width: box.w, height: box.h + WAVE_AMPLITUDE * 2 }]} accessible accessibilityLabel={text}>
+          {offsets.map((translateY, i) => (
+            <Animated.View
+              key={i}
+              style={[
+                styles.strip,
+                { left: i * STRIP, width: STRIP + 0.5, height: box.h + WAVE_AMPLITUDE * 2, transform: [{ translateY }] },
+              ]}
+            >
+              <Text
+                numberOfLines={1}
+                // min/maxWidth too: web caps Text at its parent's width (the thin strip)
+                style={[
+                  textStyle,
+                  { position: "absolute", top: WAVE_AMPLITUDE, left: -i * STRIP, width: box.w, minWidth: box.w, maxWidth: box.w },
+                ]}
+              >
+                {text}
+              </Text>
+            </Animated.View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+});
+
 // memo: parents here re-render often (the ring spins every frame), and
 // rebuilding the interpolation nodes each time crashed web with Out of Memory.
 const WaveText = memo(function WaveText({ text, color = "#FC4A14" }) {
   const { width } = useWindowDimensions();
 
-  // Arabic letters must stay joined, so Arabic waves word by word (right to left)
   const isArabic = /[؀-ۿ]/.test(text);
 
-  const chars = useMemo(
-    () => (isArabic ? text.split(" ") : text.split("")),
-    [text, isArabic],
-  );
+  const chars = useMemo(() => (isArabic ? [] : text.split("")), [text, isArabic]);
 
   // Scales with the screen so the whole sentence fits on one line on small phones.
   const fontSize = Math.max(15, Math.min(width * 0.052, 24));
@@ -70,32 +148,30 @@ const WaveText = memo(function WaveText({ text, color = "#FC4A14" }) {
 
   // Built once — sin sampled over one full cycle, value at 0 equals value
   // at 1, so the loop restarts without any jump.
-  const offsets = useMemo(() => {
-    const inputRange = Array.from(
-      { length: WAVE_SAMPLES + 1 },
-      (_, k) => k / WAVE_SAMPLES,
+  const offsets = useMemo(
+    () => sineOffsets(progress, chars.map((_, i) => i * WAVE_PHASE_STEP)),
+    [chars, progress],
+  );
+
+  if (isArabic) {
+    return (
+      <ArabicWave
+        text={text.trim()}
+        color={color}
+        // a touch bigger than the Latin capitals so both lines carry the same weight
+        fontSize={Math.round(fontSize * 1.05)}
+        progress={progress}
+      />
     );
-
-    return chars.map((_, i) => {
-      const phase = i * WAVE_PHASE_STEP;
-
-      return progress.interpolate({
-        inputRange,
-        outputRange: inputRange.map(
-          (x) => -WAVE_AMPLITUDE * Math.sin(x * Math.PI * 2 - phase),
-        ),
-      });
-    });
-  }, [chars, progress]);
+  }
 
   return (
-    <View style={[styles.row, isArabic && styles.rowArabic]}>
+    <View style={styles.row}>
       {chars.map((ch, i) => (
-        <Animated.Text
+        <RNAnimatedText
           key={i}
           style={[
             styles.char,
-            isArabic && styles.word,
             {
               color,
               fontSize,
@@ -103,8 +179,8 @@ const WaveText = memo(function WaveText({ text, color = "#FC4A14" }) {
             },
           ]}
         >
-          {ch === " " ? " " : ch}
-        </Animated.Text>
+          {ch === " " ? " " : ch}
+        </RNAnimatedText>
       ))}
     </View>
   );
@@ -119,12 +195,28 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  rowArabic: {
-    flexDirection: "row-reverse",
+  arabicRow: {
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  word: {
-    marginHorizontal: 4,
+  arabic: {
+    fontWeight: "700",
+    textAlign: "left",
+    includeFontPadding: false,
+  },
+
+  // in normal flow (not absolute) so it takes its natural one-line width —
+  // the strips then replace it in exactly the same spot
+  measure: {
+    opacity: 0,
+    marginVertical: WAVE_AMPLITUDE,
+  },
+
+  strip: {
+    position: "absolute",
+    top: 0,
+    overflow: "hidden",
   },
 
   char: {

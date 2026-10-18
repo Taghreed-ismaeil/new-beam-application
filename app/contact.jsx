@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -17,6 +16,7 @@ import BackButton from "@/components/BackButton";
 import { enterDown, enterUp } from "@/lib/motion";
 import { apiRequest } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
+import { Text } from "@/lib/arabic-font";
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";

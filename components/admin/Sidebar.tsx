@@ -2,12 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { fs } from "@/lib/admin-font";
 import { router, usePathname, type Href } from "expo-router";
 import React from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { NAV_GROUPS, ROLE_LABEL, SECTIONS } from "@/components/admin/nav";
 import { C, RADIUS } from "@/components/admin/ui";
 import { useStaff } from "@/context/StaffContext";
 import { useDirection, useI18n } from "@/lib/i18n";
+import { Text } from "@/lib/arabic-font";
 
 const BEAM_LOGO = require("../../assets/img/beam_logoo.jpg");
 

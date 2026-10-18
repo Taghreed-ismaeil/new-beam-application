@@ -10,10 +10,10 @@ import {
   PanResponder,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { Text, RNAnimatedText } from "@/lib/arabic-font";
 
 const FALLBACK_IMAGE = require("../../assets/img/menu-1.jpg");
 
@@ -314,11 +314,11 @@ export default function Menu() {
               )}
             </Animated.View>
             <View style={styles.dealPricePill}>
-              <Animated.Text
+              <RNAnimatedText
                 style={[styles.dealPriceText, { opacity: dealOpacity }]}
               >
                 {Number(activeItem.price).toFixed(2)} {t("jd")}
-              </Animated.Text>
+              </RNAnimatedText>
             </View>
           </View>
         </Pressable>

@@ -10,8 +10,6 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
-  TextInput,
   View,
 } from "react-native";
 
@@ -43,6 +41,7 @@ import {
 import { imageUrl } from "@/lib/api-client";
 import { useStaff } from "@/context/StaffContext";
 import { useDirection, useI18n } from "@/lib/i18n";
+import { Text, TextInput } from "@/lib/arabic-font";
 
 // Alternates orange/teal per category so a long menu reads as a sequence of
 // distinct sections while scrolling, not one continuous list.

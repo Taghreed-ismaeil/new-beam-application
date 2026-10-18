@@ -9,7 +9,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -27,6 +26,7 @@ import {
 } from "@/lib/admin-api";
 import { useDirection, useI18n } from "@/lib/i18n";
 import { useLiveUpdates } from "@/lib/use-live-updates";
+import { Text } from "@/lib/arabic-font";
 
 const KITCHEN_STATUSES = ["preparing", "ready", "completed"];
 const RANGES = ["day", "week", "month"];

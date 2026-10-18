@@ -8,8 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from "react-native";
 
@@ -34,6 +32,7 @@ import {
 } from "@/lib/admin-api";
 import { useStaff } from "@/context/StaffContext";
 import { useDirection, useI18n } from "@/lib/i18n";
+import { Text, TextInput } from "@/lib/arabic-font";
 
 const TABS = ["stock", "log"];
 const LOG_FILTERS = ["all", "in", "out"];

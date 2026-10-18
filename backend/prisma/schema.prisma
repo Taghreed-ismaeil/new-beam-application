@@ -175,6 +175,12 @@ model MenuCategory {
   imageUrl  String?
   isActive  Boolean @default(true)
 
+  // Sub-categories: a category with a parentId is a section inside that parent
+  // (e.g. Drinks → Hot Drinks / Cold Drinks / Mojito). Top-level categories have none.
+  parentId  Int?
+  parent    MenuCategory?  @relation("CategoryChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children  MenuCategory[] @relation("CategoryChildren")
+
   items MenuItem[]
 }
 

@@ -360,8 +360,37 @@ loyaltyRouter.post('/scan', async (req, res) => {
   });
 });
 
+// Lucky-wheel prize on the Gifts QR: each scan has a WHEEL_CHANCE shot at a
+// wheel spin instead of a gift piece, and after WHEEL_PITY_SCANS scans in a row
+// without one, the next scan wins it for sure. The streak is counted from the
+// scan log (gift_qr rows since this user's last gift_wheel row), so no schema change.
+const WHEEL_CHANCE = 0.005; // 0.5%
+const WHEEL_PITY_SCANS = 10;
+
+async function rollGiftWheel(userId: number) {
+  const lastWheel = await prisma.scanLog.findFirst({
+    where: { userId, reason: 'gift_wheel' },
+    orderBy: { scannedAt: 'desc' },
+    select: { scannedAt: true },
+  });
+  const streak = await prisma.scanLog.count({
+    where: {
+      userId,
+      reason: 'gift_qr',
+      accepted: true,
+      ...(lastWheel ? { scannedAt: { gt: lastWheel.scannedAt } } : {}),
+    },
+  });
+  return streak >= WHEEL_PITY_SCANS || Math.random() < WHEEL_CHANCE;
+}
+
 loyaltyRouter.post('/gift-scan', async (req, res) => {
   const userId = (req.auth as any).userId;
+
+  if (await rollGiftWheel(userId)) {
+    await logScan(userId, null, true, 'gift_wheel');
+    return res.json({ accepted: true, wheel: true });
+  }
 
   const items = await prisma.menuItem.findMany({ where: { qrToken: { not: null } } });
   if (items.length === 0) {

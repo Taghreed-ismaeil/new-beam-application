@@ -1,4 +1,5 @@
 import GiftsBackdrop from "@/components/GiftsBackdrop";
+import SpecialPrizeCard from "@/components/SpecialPrizeCard";
 import TileImage from "@/components/TileImage";
 import { useAuth } from "@/context/AuthContext";
 import { apiRequestCached } from "@/lib/api-client";
@@ -12,10 +13,10 @@ import { useCallback, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text, AnimatedText } from "@/lib/arabic-font";
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";
@@ -30,6 +31,19 @@ export default function LoyaltyCollectionsScreen() {
   const { user } = useAuth();
   const { t, pick } = useAppLang();
   const [progress, setProgress] = useState([]);
+  // The month's special prize, picked by the admin. Until one is set (or while
+  // the endpoint isn't live) this stays null and the card shows a mystery gift.
+  const [specialPrize, setSpecialPrize] = useState(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      apiRequestCached(
+        "/api/loyalty/special-prize",
+        (d) => setSpecialPrize(d?.prize ?? null),
+        () => {},
+      );
+    }, []),
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -81,13 +95,13 @@ export default function LoyaltyCollectionsScreen() {
 
         <View style={styles.headerContent}>
           <View style={styles.titleSection}>
-            <Animated.Text entering={enterDown(0)} style={styles.headerTitle}>
+            <AnimatedText entering={enterDown(0)} style={styles.headerTitle}>
               {t("loyTitle")}
-            </Animated.Text>
+            </AnimatedText>
 
-            <Animated.Text entering={enterDown(1)} style={styles.headerSubtitle}>
+            <AnimatedText entering={enterDown(1)} style={styles.headerSubtitle}>
               {t("loySubtitle")}
-            </Animated.Text>
+            </AnimatedText>
           </View>
         </View>
 
@@ -122,6 +136,10 @@ export default function LoyaltyCollectionsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.grid}
       >
+        <Animated.View entering={enterPop(3)} style={styles.specialSlot}>
+          <SpecialPrizeCard prize={specialPrize} />
+        </Animated.View>
+
         {progress.map((item, index) => (
           <Animated.View key={item.id} entering={enterPop(index + 3)} style={styles.card}>
             {/* Tile */}
@@ -274,6 +292,12 @@ const styles = StyleSheet.create({
   /* =====================================================
      GRID
   ====================================================== */
+
+  // full row above the collection cards
+  specialSlot: {
+    width: "100%",
+    marginBottom: 4,
+  },
 
   grid: {
     flexDirection: "row",

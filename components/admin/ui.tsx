@@ -11,8 +11,6 @@ import {
   Pressable,
   StyleSheet,
   Switch,
-  Text,
-  TextInput,
   TextInputProps,
   useWindowDimensions,
   View,
@@ -24,6 +22,7 @@ import { SIDEBAR_BREAKPOINT } from "@/components/admin/nav";
 import { imageUrl } from "@/lib/api-client";
 import { uploadImage } from "@/lib/admin-api";
 import { useDirection, useI18n } from "@/lib/i18n";
+import { Text, TextInput } from "@/lib/arabic-font";
 
 // ---------------------------------------------------------------------------
 // Design tokens — derived from the Beem logo: deep brand green (#005751) as the

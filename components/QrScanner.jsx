@@ -3,10 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import {
   Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text } from "@/lib/arabic-font";
 
 // Native (real device / Expo Go): opens the phone's own system camera app to take a still photo,
 // then decodes it with expo-camera's scanFromURLAsync — Expo Go's live in-app preview has been

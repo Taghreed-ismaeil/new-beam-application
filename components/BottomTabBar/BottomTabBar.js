@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, usePathname, useSegments } from "expo-router";
 import { useEffect } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -11,6 +11,7 @@ import Animated, {
 
 import { useAppLang } from "@/lib/app-lang";
 import { prepareTabTransition } from "@/lib/tab-transition";
+import { Text } from "@/lib/arabic-font";
 
 // `route` is the root Stack route name each tab opens (used for its slide animation).
 const TABS = [

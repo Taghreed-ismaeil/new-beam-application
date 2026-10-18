@@ -16,10 +16,10 @@ import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text, AnimatedText } from "@/lib/arabic-font";
 
 const ORANGE = "#FC4A14";
 const ORANGE_DARK = "#C94320";
@@ -213,12 +213,12 @@ export default function CheckoutScreen() {
             HEADER
         ====================================================== */}
         <View style={styles.header}>
-          <Animated.Text entering={enterDown(0)} style={styles.headerTitle}>
+          <AnimatedText entering={enterDown(0)} style={styles.headerTitle}>
             {t("confirmTitle")}
-          </Animated.Text>
-          <Animated.Text entering={enterDown(1)} style={styles.headerSubtitle}>
+          </AnimatedText>
+          <AnimatedText entering={enterDown(1)} style={styles.headerSubtitle}>
             {itemsLabel} · {t("confirmAlmost")}
-          </Animated.Text>
+          </AnimatedText>
         </View>
 
         {lines.length === 0 ? (

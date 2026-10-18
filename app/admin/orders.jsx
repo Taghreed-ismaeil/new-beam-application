@@ -10,8 +10,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from "react-native";
 
@@ -38,6 +36,7 @@ import {
 
 import { useDirection, useI18n } from "@/lib/i18n";
 import { useLiveUpdates } from "@/lib/use-live-updates";
+import { Text, TextInput } from "@/lib/arabic-font";
 
 const FILTERS = [
   "open",

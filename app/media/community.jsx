@@ -10,7 +10,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -22,6 +21,7 @@ import { useAuth } from "@/context/AuthContext";
 import { imageUrl } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { fetchMediaPage, fetchMyMedia } from "@/lib/media-api";
+import { Text } from "@/lib/arabic-font";
 
 /* =========================================================
    COMMUNITY FEED ("شاركنا صورك")

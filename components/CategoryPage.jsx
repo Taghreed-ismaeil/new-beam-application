@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -20,6 +19,7 @@ import { useAppLang } from "@/lib/app-lang";
 import { enterDown } from "@/lib/motion";
 import { findMenuCategory } from "@/lib/menu-category";
 import { getMenuSections } from "@/lib/menu-sections";
+import { Text, AnimatedText } from "@/lib/arabic-font";
 
 // How far above a section to stop when a chip scrolls to it, so its band
 // isn't hidden under the floating back button.
@@ -237,14 +237,14 @@ export default function CategoryPage({
         ===================================================== */}
 
         <View style={[styles.topArea, { backgroundColor: headerColor }]}>
-          <Animated.Text
+          <AnimatedText
             entering={enterDown(0)}
             style={[styles.topBrand, dir.noSpacing, lang === "ar" && styles.topBrandAr]}
           >
             {t("brandUpper")}
-          </Animated.Text>
+          </AnimatedText>
 
-          <Animated.Text
+          <AnimatedText
             entering={enterDown(1)}
             style={[
               styles.topTitle,
@@ -254,7 +254,7 @@ export default function CategoryPage({
             ]}
           >
             {pageTitle}
-          </Animated.Text>
+          </AnimatedText>
 
           {/* Section shortcuts — tap one to jump down to its band */}
           {sections && sections.length > 1 && (

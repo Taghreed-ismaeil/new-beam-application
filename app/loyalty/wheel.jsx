@@ -15,7 +15,6 @@ import {
   Modal,
   Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -28,6 +27,7 @@ import Svg, {
   RadialGradient,
   Stop,
 } from "react-native-svg";
+import { Text } from "@/lib/arabic-font";
 
 // The spin itself happens server-side (POST /api/loyalty/wheel/spin) — it
 // picks the weighted segment and, if it's a prize, mints a real Voucher row

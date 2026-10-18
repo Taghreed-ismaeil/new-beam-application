@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { router } from "expo-router";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { apiRequest } from "@/lib/api-client";
 import BackButton from "@/components/BackButton";
+import { Text, TextInput } from "@/lib/arabic-font";
 
 export default function NewReservationScreen() {
   const [partySize, setPartySize] = useState("2");

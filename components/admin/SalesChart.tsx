@@ -1,9 +1,10 @@
 import React from "react";
 import { fs } from "@/lib/admin-font";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { C } from "@/components/admin/ui";
 import { useI18n } from "@/lib/i18n";
+import { Text } from "@/lib/arabic-font";
 
 type Point = { date: string; value: number };
 

@@ -9,7 +9,6 @@ import {
   ScrollView,
   Share,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -20,6 +19,7 @@ import { apiRequest } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { enterUp } from "@/lib/motion";
 import Animated from "react-native-reanimated";
+import { Text } from "@/lib/arabic-font";
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";

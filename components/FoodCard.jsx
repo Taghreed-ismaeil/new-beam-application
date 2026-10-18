@@ -1,10 +1,11 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 import Animated from "react-native-reanimated";
 
 import { imageUrl, isUsableImagePath } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { enterUp } from "@/lib/motion";
+import { Text } from "@/lib/arabic-font";
 
 /* =========================================================
    FOOD CARD

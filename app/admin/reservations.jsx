@@ -9,7 +9,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 
@@ -32,6 +31,7 @@ import {
 } from "@/lib/admin-api";
 import { useDirection, useI18n } from "@/lib/i18n";
 import { useLiveUpdates } from "@/lib/use-live-updates";
+import { Text } from "@/lib/arabic-font";
 
 const FILTERS = ["open", "pending", "confirmed", "seated", "completed", "all"];
 

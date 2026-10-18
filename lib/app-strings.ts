@@ -147,9 +147,20 @@ export const STRINGS = {
   loyTitle: ["Collect & Win", "اجمع واربح"],
   loySubtitle: [
     "Collect your stamps and unlock delicious rewards.",
-    "اجمع قطعك وافتح جوايز لذيذة.",
+    "اجمع قطعك وافتح جوائز لذيذة.",
   ],
-  loyMyRewards: ["My Rewards", "جواىْزي"],
+  loyMyRewards: ["My Rewards", "الجوائز"],
+  // special prize of the month (top of the Gifts page)
+  loySpecialBadge: ["PRIZE OF THE MONTH", "جائزة الشهر"],
+  loySpecialSoonTitle: ["A special prize is coming", "جائزة مميزة جاية قريباً"],
+  loySpecialSoonText: [
+    "Every month we pick one meal you can win instantly with any QR scan.",
+    "كل شهر بنختار وجبة بتربحها فوراً مع أي مسحة QR.",
+  ],
+  loySpecialWinText: [
+    "Win it instantly with any QR scan — no need to finish the picture.",
+    "اربحها فوراً مع أي مسحة QR، بدون ما تستنى الصورة تكمل.",
+  ],
   loyScanQr: ["Scan QR", "امسح QR"],
   loyErrGeneric: [
     "Something went wrong, try again",
@@ -159,7 +170,7 @@ export const STRINGS = {
   loyWhichItem: ["Which item did you buy?", "أي صنف اشتريت؟"],
   loyChooseItem: ["Choose the item from your order", "اختار الصنف من طلبك"],
   loyBack: ["Back", "رجوع"],
-  loyRewardsLabel: ["BEAM REWARDS", "جواىْز بيم"],
+  loyRewardsLabel: ["BEAM REWARDS", "جوائز بيم"],
   loyPieceRevealed: ["A new piece revealed! 🎨", "انكشفت قطعة جديدة! 🎨"],
   loyCongratsWon: ["🎉 Congrats! You won", "🎉 مبروك! ربحت"],
   loyRedeemCode: ["REDEEM CODE", "كود الاستلام"],
@@ -175,7 +186,7 @@ export const STRINGS = {
   loyErrNothing: ["Nothing to reveal right now", "ما في إشي ينكشف هلا"],
   loyErrAllCompleted: [
     "You've collected everything! Redeem your vouchers from My Rewards.",
-    "جمعت كل إشي! استلم جواىْزك من صفحة جواىْز.",
+    "جمعت كل إشي! استلم جوائزك من صفحة الجوائز.",
   ],
   loyReward: ["Reward", "جاىْزة"],
   loyLuckyWheel: ["Lucky Wheel", "عجلة الحظ"],
@@ -188,7 +199,7 @@ export const STRINGS = {
   ],
   loyReady: ["Ready", "جاهزة"],
   loyUsed: ["Used", "مستخدمة"],
-  loyNoRewards: ["No rewards yet", "لسا ما في جواىْز"],
+  loyNoRewards: ["No rewards yet", "لسا ما في جوائز"],
   loyNoRewardsText: [
     "Scan QR codes to collect pieces — finish a set and your reward shows up here.",
     "امسح أكواد QR واجمع القطع — كمّل مجموعة وجاىْزتك بتطلع هون.",

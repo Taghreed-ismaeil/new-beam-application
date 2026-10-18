@@ -12,10 +12,10 @@ import {
   Modal,
   Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text, RNAnimatedText } from "@/lib/arabic-font";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
@@ -275,7 +275,7 @@ function EmojiDrop({ emoji, delay, startX }) {
   const rotate = fall.interpolate({ inputRange: [0, 1], outputRange: ["-15deg", "25deg"] });
 
   return (
-    <Animated.Text
+    <RNAnimatedText
       pointerEvents="none"
       style={{
         position: "absolute",
@@ -286,7 +286,7 @@ function EmojiDrop({ emoji, delay, startX }) {
       }}
     >
       {emoji}
-    </Animated.Text>
+    </RNAnimatedText>
   );
 }
 

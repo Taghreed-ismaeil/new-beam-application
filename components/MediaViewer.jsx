@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { imageUrl } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
+import { Text } from "@/lib/arabic-font";
 
 /** Full-screen look at one media photo, with its caption. Tap anywhere to close. */
 export default function MediaViewer({ post, onClose }) {
