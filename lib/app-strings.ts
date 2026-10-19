@@ -7,6 +7,7 @@ export const STRINGS = {
   itemNotes: ["Notes", "ملاحظات"],
   itemNotesPlaceholder: ["Anything we should know? e.g. no pickles", "بدك نعرف إشي؟ مثلاً بدون مخلل"],
   itemAddToCart: ["Add to cart", "أضف للسلة"],
+  itemSaveChanges: ["Save changes", "احفظ التعديل"],
   itemNotFound: ["This item isn't available right now", "هالصنف مش متوفر هلأ"],
   cancel: ["Cancel", "إلغاء"],
   tryAgain: ["Try again", "حاول مرة ثانية"],
@@ -350,10 +351,52 @@ export const STRINGS = {
   cartEditing: ["Editing order #{id}", "عم تعدّل الطلب #{id}"],
   cartEditCancel: ["Cancel", "إلغاء"],
   cartEditLocked: [
-    "Order #{id} is already being prepared, so it can't be changed — call us if you need anything.",
-    "الطلب #{id} صار عم يتحضّر وما بنقدر نعدّله — تواصل معنا إذا بدك إشي.",
+    "Order #{id} is ready, so it can't be changed or added to — call us if you need anything.",
+    "الطلب #{id} صار جاهز وما بنقدر نعدّله أو نضيف عليه — تواصل معنا إذا بدك إشي.",
   ],
   cartEditMissing: ["We couldn't open that order.", "ما قدرنا نفتح هالطلب."],
+  // the customer's current order on the cart screen
+  cartActiveOrder: ["Your current order #{id}", "طلبك الحالي #{id}"],
+  cartEditOrder: ["Edit order", "تعديل الطلب"],
+  cartAddToOrder: ["Add to order", "أضف على الطلب"],
+  cartChooseTitle: ["What would you like to do?", "شو بدك تعمل على طلبك؟"],
+  cartChooseEdit: ["Change items", "عدّل الأصناف"],
+  cartChooseEditHint: ["Change amounts, remove or swap", "غيّر الكمية، شيل أو بدّل"],
+  cartChooseAdd: ["Add new items", "أضف أصناف جديدة"],
+  cartChooseAddHint: ["What you ordered stays as it is", "طلبك الحالي بضل زي ما هو"],
+  cartTrackOrder: ["Track order", "تتبّع الطلب"],
+  cartNowAddOnly: [
+    "Order #{id} is now being prepared, so it can't be changed — but you can still add to it.",
+    "الطلب #{id} صار قيد التجهيز وما بنقدر نعدّله، بس لسا بتقدر تضيف عليه.",
+  ],
+  cartAdding: ["Adding to order #{id}", "عم تضيف على الطلب #{id}"],
+  cartAddHint: [
+    "Anything you add here joins your order — what you already ordered stays as it is.",
+    "أي إشي بتضيفه هون بنضيفه على طلبك، والأصناف اللي طلبتها بتضل زي ما هي.",
+  ],
+  cartAddOnlyHint: [
+    "Your order is being prepared — you can't change it, but anything you add here joins it.",
+    "طلبك قيد التجهيز — ما بتقدر تعدّله، بس أي إشي بتضيفه هون بنضيفه عليه.",
+  ],
+  cartAddConfirm: ["Add to my order", "أضف على طلبي"],
+  cartAddFailed: ["We couldn't add these items — try again.", "ما قدرنا نضيف الأصناف — جرّب مرة ثانية."],
+  cartAddClosed: [
+    "Your order is almost ready, so nothing more can be added — place a new order instead.",
+    "طلبك صار جاهز تقريباً وما بنقدر نضيف عليه — اعمل طلب جديد.",
+  ],
+  cartReplaceConfirm: [
+    "This replaces the items in your cart. Continue?",
+    "هاد رح يشيل الأصناف اللي بالسلة. بدك تكمّل؟",
+  ],
+  cartReplaceOk: ["Continue", "كمّل"],
+  // order status labels (orders screen + cart)
+  statusPending: ["Waiting for the restaurant", "بانتظار المطعم"],
+  statusAccepted: ["Accepted", "تم القبول"],
+  statusPreparing: ["Being prepared", "قيد التجهيز"],
+  statusReady: ["Ready", "جاهز"],
+  statusOnTheWay: ["On the way", "بالطريق"],
+  statusCompleted: ["Completed", "مكتمل"],
+  statusCancelled: ["Cancelled", "ملغي"],
   confirmErrNotEditable: [
     "This order is already being prepared and can't be changed anymore.",
     "هالطلب صار عم يتحضّر وما بنقدر نعدّله هلأ.",
@@ -464,21 +507,36 @@ export const STRINGS = {
   ],
   loginErrName: ["Please enter your name", "دخّل اسمك"],
   loginErrAlreadyRegistered: [
-    "This number already has an account — please log in instead",
-    "هالرقم إله حساب — سجّل دخول اخر",
+    "This number already has an account — log in with your password (or tap Forgot password).",
+    "هالرقم إله حساب — سجّل دخول بكلمة السر (أو اكبس نسيت كلمة السر).",
   ],
-  loginErrDeleted: ["This account no longer exists", "هالحساب مش موجود"],
+  loginErrDeleted: [
+    "This account was deleted — you can create a new one with the same number.",
+    "هالحساب انحذف — بتقدر تعمل حساب جديد بنفس الرقم.",
+  ],
   loginErrNoAccount: [
-    "No account with this number — switch to Register",
-    "ما في حساب بهالرقم —   إنشى حساب",
+    "No account with this number yet — fill in your name to create one.",
+    "ما في حساب على هالرقم — دخّل اسمك وأنشئ حساب جديد.",
   ],
   loginErrNoAccountYet: [
-    "No account with this number yet — switch to Register",
-    "لا يوجد حساب لهاد الرقم  —   إنشى حساب",
+    "No account with this number yet — create one first.",
+    "ما في حساب على هالرقم — أنشئ حساب أول.",
+  ],
+  loginErrSetPassword: [
+    "Your account is from before passwords — enter your name and a new password to finish it. Your points and orders stay.",
+    "حسابك قديم وما إله كلمة سر — دخّل اسمك وكلمة سر جديدة وكمّل، ونقاطك وطلباتك بتضل زي ما هي.",
+  ],
+  loginErrInvalidPhone: [
+    "Please enter a valid mobile number, e.g. 0791234567",
+    "دخّل رقم موبايل صحيح، مثلاً 0791234567",
+  ],
+  loginErrPasswordShort: [
+    "Choose a password of at least 6 characters",
+    "اختار كلمة سر 6 أحرف على الأقل",
   ],
   loginErrWrong: [
-    "Wrong phone number or password",
-    "رقم الموبايل أو كلمة السر غير صحيحة ",
+    "Wrong password — try again or tap Forgot password",
+    "كلمة السر غلط — جرّب مرة ثانية أو اكبس نسيت كلمة السر",
   ],
   loginErrGeneric: [
     "Something went wrong, try again",
