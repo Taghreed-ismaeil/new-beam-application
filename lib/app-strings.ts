@@ -359,12 +359,21 @@ export const STRINGS = {
   cartActiveOrder: ["Your current order #{id}", "طلبك الحالي #{id}"],
   cartEditOrder: ["Edit order", "تعديل الطلب"],
   cartAddToOrder: ["Add to order", "أضف على الطلب"],
+  cartChooseTitle: ["What would you like to do?", "شو بدك تعمل على طلبك؟"],
+  cartChooseEdit: ["Change items", "عدّل الأصناف"],
+  cartChooseEditHint: ["Change amounts, remove or swap", "غيّر الكمية، شيل أو بدّل"],
+  cartChooseAdd: ["Add new items", "أضف أصناف جديدة"],
+  cartChooseAddHint: ["What you ordered stays as it is", "طلبك الحالي بضل زي ما هو"],
   cartTrackOrder: ["Track order", "تتبّع الطلب"],
   cartNowAddOnly: [
     "Order #{id} is now being prepared, so it can't be changed — but you can still add to it.",
     "الطلب #{id} صار قيد التجهيز وما بنقدر نعدّله، بس لسا بتقدر تضيف عليه.",
   ],
   cartAdding: ["Adding to order #{id}", "عم تضيف على الطلب #{id}"],
+  cartAddHint: [
+    "Anything you add here joins your order — what you already ordered stays as it is.",
+    "أي إشي بتضيفه هون بنضيفه على طلبك، والأصناف اللي طلبتها بتضل زي ما هي.",
+  ],
   cartAddOnlyHint: [
     "Your order is being prepared — you can't change it, but anything you add here joins it.",
     "طلبك قيد التجهيز — ما بتقدر تعدّله، بس أي إشي بتضيفه هون بنضيفه عليه.",

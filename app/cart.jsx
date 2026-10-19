@@ -82,6 +82,8 @@ export default function CartScreen() {
   // The customer's latest order that isn't finished yet, refreshed whenever the
   // cart is opened, so the right button shows as the restaurant moves it along.
   const [activeOrder, setActiveOrder] = useState(null);
+  // "Edit order" opens two choices: change the items, or add new ones
+  const [showChoice, setShowChoice] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -242,12 +244,15 @@ export default function CartScreen() {
 
       {editing && addMode && (
         <Text style={[styles.addHint, dir.text]}>
-          {editNotice || t("cartAddOnlyHint")}
+          {editNotice ||
+            // chose "add" while a full edit was still possible vs. the kitchen already started
+            t(activeOrder?.id === editing.orderId && activeOrder?.can?.edit ? "cartAddHint" : "cartAddOnlyHint")}
         </Text>
       )}
 
       {showActive && (
-        <View style={[styles.activeBox, dir.row]}>
+        <View style={styles.activeBox}>
+          <View style={[styles.activeTop, dir.row]}>
           <View style={styles.activeInfo}>
             <Text style={[styles.activeTitle, dir.text]}>
               {t("cartActiveOrder", { id: activeOrder.id })}
@@ -258,9 +263,14 @@ export default function CartScreen() {
           </View>
 
           {activeOrder.can?.edit ? (
-            <TouchableOpacity style={styles.activeBtn} onPress={editActive} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={[styles.activeBtn, showChoice && styles.activeBtnOpen]}
+              onPress={() => setShowChoice((v) => !v)}
+              activeOpacity={0.8}
+            >
               <Ionicons name="create-outline" size={15} color={WHITE} />
               <Text style={styles.activeBtnText}>{t("cartEditOrder")}</Text>
+              <Ionicons name={showChoice ? "chevron-up" : "chevron-down"} size={14} color={WHITE} />
             </TouchableOpacity>
           ) : activeOrder.can?.add ? (
             <TouchableOpacity style={styles.activeBtn} onPress={addToActive} activeOpacity={0.8}>
@@ -275,6 +285,40 @@ export default function CartScreen() {
             >
               <Text style={[styles.activeBtnText, styles.activeBtnGhostText]}>{t("cartTrackOrder")}</Text>
             </TouchableOpacity>
+          )}
+          </View>
+
+          {/* still before the kitchen starts: change the order, or just add to it */}
+          {showChoice && activeOrder.can?.edit && (
+            <View style={styles.choiceWrap}>
+              <Text style={[styles.choiceTitle, dir.text]}>{t("cartChooseTitle")}</Text>
+              <View style={[styles.choiceRow, dir.isRTL ? dir.rowReverse : dir.row]}>
+                <TouchableOpacity
+                  style={styles.choiceBtn}
+                  onPress={() => {
+                    setShowChoice(false);
+                    editActive();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="create-outline" size={20} color={ORANGE} />
+                  <Text style={styles.choiceBtnTitle}>{t("cartChooseEdit")}</Text>
+                  <Text style={styles.choiceBtnHint}>{t("cartChooseEditHint")}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.choiceBtn}
+                  onPress={() => {
+                    setShowChoice(false);
+                    addToActive();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add-circle-outline" size={20} color={TEAL} />
+                  <Text style={styles.choiceBtnTitle}>{t("cartChooseAdd")}</Text>
+                  <Text style={styles.choiceBtnHint}>{t("cartChooseAddHint")}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
         </View>
       )}
@@ -463,8 +507,50 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: "#E6ECEA",
+  },
+  activeTop: {
     alignItems: "center",
     gap: 10,
+  },
+  activeBtnOpen: {
+    backgroundColor: "#D93D0E",
+  },
+  choiceWrap: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#EEF2F1",
+  },
+  choiceTitle: {
+    color: MUTED,
+    fontSize: 12.5,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  choiceRow: {
+    gap: 10,
+  },
+  choiceBtn: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    backgroundColor: "#F7FAF9",
+    borderWidth: 1,
+    borderColor: "#E6ECEA",
+  },
+  choiceBtnTitle: {
+    color: DARK,
+    fontSize: 13.5,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  choiceBtnHint: {
+    color: MUTED,
+    fontSize: 11.5,
+    textAlign: "center",
   },
   activeInfo: {
     flex: 1,
