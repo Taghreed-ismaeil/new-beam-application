@@ -1,3 +1,4 @@
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import Animated from "react-native-reanimated";
 import { enterDown, enterPop, enterUp } from "@/lib/motion";
@@ -423,6 +424,7 @@ export default function CheckoutScreen() {
             </Animated.View>
           </View>
         )}
+        <MadeBy />
       </ScrollView>
     </View>
   );

@@ -233,3 +233,15 @@ export function apiRequestCached<T = any>(
       else console.warn(`[api] refresh of ${path} failed, keeping cached data`, error);
     });
 }
+
+/**
+ * Pull-to-refresh: always hits the network, updates the cache that
+ * apiRequestCached reads, and resolves with the fresh data (or rejects).
+ */
+export async function refreshCached<T = any>(path: string, opts: { cacheKey?: string } = {}): Promise<T> {
+  const key = opts.cacheKey ?? path;
+  const fresh = await apiRequest<T>(path);
+  fetchedAt.set(key, Date.now());
+  await setCachedJson(key, fresh);
+  return fresh;
+}

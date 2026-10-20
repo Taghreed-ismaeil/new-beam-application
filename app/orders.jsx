@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/context/AuthContext";
 import { apiRequest } from "@/lib/api-client";
@@ -255,6 +256,7 @@ export default function OrdersScreen() {
             })}
           </View>
         )}
+        <MadeBy />
       </ScrollView>
     </View>
   );

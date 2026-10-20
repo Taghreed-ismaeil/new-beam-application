@@ -1,3 +1,4 @@
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import { router, useFocusEffect } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -373,6 +374,7 @@ export default function AboutScreen() {
           </View>
         </View>
         */}
+        <MadeBy />
       </ScrollView>
     </View>
   );

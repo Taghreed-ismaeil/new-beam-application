@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { router } from "expo-router";
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import MadeBy from "@/components/MadeBy";
 import { apiRequest } from "@/lib/api-client";
 import BackButton from "@/components/BackButton";
 import { Text, TextInput } from "@/lib/arabic-font";
@@ -58,6 +59,7 @@ export default function NewReservationScreen() {
       <TouchableOpacity style={styles.submitBtn} onPress={submit} disabled={submitting}>
         <Text style={styles.submitBtnText}>{submitting ? "Booking..." : "Confirm reservation"}</Text>
       </TouchableOpacity>
+        <MadeBy />
       </ScrollView>
     </View>
   );

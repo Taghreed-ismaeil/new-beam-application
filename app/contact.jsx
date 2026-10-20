@@ -12,6 +12,7 @@ import {
 
 import Animated from "react-native-reanimated";
 
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import { enterDown, enterUp } from "@/lib/motion";
 import { apiRequest } from "@/lib/api-client";
@@ -429,6 +430,7 @@ export default function ContactScreen() {
             <ActivityIndicator size="small" color={ORANGE} />
           </View>
         )}
+        <MadeBy />
       </ScrollView>
     </View>
   );

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { router } from "expo-router";
 import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import MadeBy from "@/components/MadeBy";
 import { apiRequest } from "@/lib/api-client";
 import BackButton from "@/components/BackButton";
 import { Text } from "@/lib/arabic-font";
@@ -51,6 +52,7 @@ export default function MyReservationsScreen() {
           <Text style={[styles.badge, { color: STATUS_COLOR[r.status] }]}>{STATUS_LABEL[r.status] ?? r.status}</Text>
         </View>
       ))}
+        <MadeBy />
       </ScrollView>
     </View>
   );

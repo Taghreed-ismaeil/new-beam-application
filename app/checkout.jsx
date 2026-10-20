@@ -1,3 +1,4 @@
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import QrScanner from "@/components/QrScanner";
 import { useCart } from "@/context/CartContext";
@@ -239,6 +240,7 @@ export default function CheckoutScreen() {
             <Text style={styles.submitBtnText}>Confirm order</Text>
           )}
         </TouchableOpacity>
+        <MadeBy />
       </ScrollView>
     </View>
   );

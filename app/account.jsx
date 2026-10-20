@@ -1,11 +1,12 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Linking,
   Pressable,
+  RefreshControl,
   ScrollView,
   Share,
   StyleSheet,
@@ -13,6 +14,8 @@ import {
   View,
 } from "react-native";
 
+import MadeBy from "@/components/MadeBy";
+import FeedbackSheet from "@/components/FeedbackSheet";
 import LeafletMap from "@/components/LeafletMap";
 import { useAuth } from "@/context/AuthContext";
 import { apiRequest } from "@/lib/api-client";
@@ -53,31 +56,50 @@ export default function AccountScreen() {
   const [readyRewards, setReadyRewards] = useState(0);
   const [loggingOut, setLoggingOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // "rating" | "complaint" | null — which feedback popup is open
+  const [feedbackMode, setFeedbackMode] = useState(null);
+  const closeFeedback = useCallback(() => setFeedbackMode(null), []);
 
   const isSmall = width < 360;
 
-  useEffect(() => {
+  const loadStats = useCallback(() => {
     // Guests have no orders or rewards to fetch.
     if (!user) {
       setOrders([]);
       setReadyRewards(0);
-      return;
+      return Promise.resolve();
     }
 
-    apiRequest("/api/orders/mine")
-      .then((d) => {
-        setOrders(d.orders ?? []);
-      })
-      .catch(() => {
-        setOrders([]);
-      });
-
-    apiRequest("/api/loyalty/vouchers")
-      .then((d) => {
-        setReadyRewards((d.vouchers ?? []).filter((v) => !v.redeemedAt).length);
-      })
-      .catch(() => {});
+    return Promise.all([
+      apiRequest("/api/orders/mine")
+        .then((d) => {
+          setOrders(d.orders ?? []);
+        })
+        .catch(() => {
+          setOrders([]);
+        }),
+      apiRequest("/api/loyalty/vouchers")
+        .then((d) => {
+          setReadyRewards((d.vouchers ?? []).filter((v) => !v.redeemedAt).length);
+        })
+        .catch(() => {}),
+    ]);
   }, [user]);
+
+  // Re-read on every visit, so a new order or reward shows up straight away
+  useFocusEffect(
+    useCallback(() => {
+      loadStats();
+    }, [loadStats]),
+  );
+
+  // Pull down to refresh
+  const [refreshing, setRefreshing] = useState(false);
+  async function onRefresh() {
+    setRefreshing(true);
+    await loadStats();
+    setRefreshing(false);
+  }
 
   // Guests can browse freely now, so logging out just turns this screen back
   // into its guest view instead of forcing the login page.
@@ -154,6 +176,7 @@ export default function AccountScreen() {
       <ScrollView
         style={styles.screen}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={TEAL} colors={[TEAL]} />}
         contentContainerStyle={[
           styles.content,
           {
@@ -476,7 +499,69 @@ export default function AccountScreen() {
 
             <Ionicons name="chevron-forward" size={20} color={ORANGE} />
           </Pressable>
+
+          {/* Rate us → star popup */}
+
+          <Pressable
+            onPress={() => (user ? setFeedbackMode("rating") : goToLogin())}
+            style={({ pressed }) => [
+              styles.menuItem,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={[styles.menuIcon, styles.tealMenuIcon]}>
+              <Ionicons name="star-outline" size={21} color={LIGHT_TEAL} />
+            </View>
+
+            <View style={styles.menuText}>
+              <Text style={[styles.menuTitle, dir.text]}>
+                {t("accountRate")}
+              </Text>
+
+              <Text style={[styles.menuSubtitle, dir.text]}>
+                {t("accountRateSub")}
+              </Text>
+            </View>
+
+            <Ionicons name="chevron-forward" size={20} color={TEAL} />
+          </Pressable>
+
+          {/* Complaints → popup, lands in the admin panel */}
+
+          <Pressable
+            onPress={() => (user ? setFeedbackMode("complaint") : goToLogin())}
+            style={({ pressed }) => [
+              styles.menuItem,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={[styles.menuIcon, styles.orangeMenuIcon]}>
+              <Ionicons
+                name="chatbox-ellipses-outline"
+                size={21}
+                color={LIGHT_ORANGE}
+              />
+            </View>
+
+            <View style={styles.menuText}>
+              <Text style={[styles.menuTitle, dir.text]}>
+                {t("accountComplaint")}
+              </Text>
+
+              <Text style={[styles.menuSubtitle, dir.text]}>
+                {t("accountComplaintSub")}
+              </Text>
+            </View>
+
+            <Ionicons name="chevron-forward" size={20} color={ORANGE} />
+          </Pressable>
         </Animated.View>
+
+        <FeedbackSheet
+          mode={feedbackMode}
+          visible={!!feedbackMode}
+          onClose={closeFeedback}
+        />
 
         {/* ================= LOGOUT / DELETE (signed-in only) ================= */}
 
@@ -522,17 +607,7 @@ export default function AccountScreen() {
         )}
         {/* language switch lives in the top corner of every screen (components/LangToggle) */}
 
-        {/* ================= FOOTER ================= */}
-
-        <View style={styles.footer}>
-          <View style={styles.footerLine} />
-
-          <Text style={[styles.footerText, dir.noSpacing]}>
-            {t("accountFooter")}
-          </Text>
-
-          <View style={styles.footerLine} />
-        </View>
+        <MadeBy />
       </ScrollView>
     </View>
   );

@@ -1,20 +1,22 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
   View,
 } from "react-native";
 
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import Animated from "react-native-reanimated";
 import FoodCard from "@/components/FoodCard";
 import { useCart } from "@/context/CartContext";
-import { apiRequestCached } from "@/lib/api-client";
+import { apiRequestCached, refreshCached } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { enterDown } from "@/lib/motion";
 import { findMenuCategory } from "@/lib/menu-category";
@@ -98,30 +100,53 @@ export default function CategoryPage({
      FETCH MENU
   ========================================================= */
 
-  useEffect(() => {
-    // Cached first (warmed during the intro), so the page paints instantly; the
-    // network refresh then updates it in place.
-    let painted = false;
-    apiRequestCached(
-      "/api/menu",
-      (data) => {
-        const categories = data.categories ?? [];
+  const applyMenu = useCallback(
+    (data) => {
+      const categories = data.categories ?? [];
 
-        const foundCategory = categoryKey
-          ? findMenuCategory(categories, categoryKey)
-          : categories.find((c) => String(c.id) === String(categoryId));
+      const foundCategory = categoryKey
+        ? findMenuCategory(categories, categoryKey)
+        : categories.find((c) => String(c.id) === String(categoryId));
 
-        painted = true;
-        setCategory(foundCategory ?? null);
-        setMenuIndex(Math.max(categories.indexOf(foundCategory), 0));
-        setLoading(false);
-      },
-      () => {
-        if (!painted) setCategory(null);
-        setLoading(false);
-      },
-    );
-  }, [categoryKey, categoryId]);
+      setCategory(foundCategory ?? null);
+      setMenuIndex(Math.max(categories.indexOf(foundCategory), 0));
+      setLoading(false);
+    },
+    [categoryKey, categoryId],
+  );
+
+  // Cached first (warmed during the intro), so the page paints instantly; the
+  // network refresh then updates it in place. Runs on every visit, so admin
+  // menu changes show up without restarting the app.
+  useFocusEffect(
+    useCallback(() => {
+      let painted = false;
+      apiRequestCached(
+        "/api/menu",
+        (data) => {
+          painted = true;
+          applyMenu(data);
+        },
+        () => {
+          if (!painted) setCategory(null);
+          setLoading(false);
+        },
+      );
+    }, [applyMenu]),
+  );
+
+  // Pull down to refresh
+  const [refreshing, setRefreshing] = useState(false);
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      applyMenu(await refreshCached("/api/menu"));
+    } catch {
+      // keep what's on screen
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   /* =========================================================
      CART
@@ -230,6 +255,7 @@ export default function CategoryPage({
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={headerColor} colors={[headerColor]} />}
         contentContainerStyle={styles.content}
       >
         {/* =====================================================
@@ -376,23 +402,7 @@ export default function CategoryPage({
         </View>
         )}
 
-        {/* =====================================================
-            FOOTER
-        ===================================================== */}
-
-        <View style={[styles.footer, dir.row]}>
-          <View style={styles.footerLine} />
-
-          <View style={[styles.footerCenter, dir.row]}>
-            <Text style={[styles.footerText, dir.noSpacing]}>{t("categoryFooter1")}</Text>
-
-            <Text style={styles.footerDot}>•</Text>
-
-            <Text style={[styles.footerText, dir.noSpacing]}>{t("categoryFooter2")}</Text>
-          </View>
-
-          <View style={styles.footerLine} />
-        </View>
+        <MadeBy />
       </ScrollView>
     </View>
   );

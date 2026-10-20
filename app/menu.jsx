@@ -1,10 +1,11 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
@@ -21,10 +22,11 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+import MadeBy from "@/components/MadeBy";
 import FoodCard from "@/components/FoodCard";
 import QuickCategoryPills from "@/components/QuickCategoryPills";
 import { useCart } from "@/context/CartContext";
-import { apiRequestCached, imageUrl, isUsableImagePath } from "@/lib/api-client";
+import { apiRequestCached, imageUrl, isUsableImagePath, refreshCached } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { findMenuCategory } from "@/lib/menu-category";
 import { categoryItems } from "@/lib/menu-sections";
@@ -209,12 +211,30 @@ export default function Menu() {
   // Search results: two cards per row
   const cardWidth = (width - gutter * 2 - 12) / 2;
 
-  useEffect(() => {
-    apiRequestCached("/api/menu", (data) => {
+  // Re-read on every visit (the cache spares the network within 30s), so menu
+  // changes made in the admin panel show up without restarting the app.
+  useFocusEffect(
+    useCallback(() => {
+      apiRequestCached("/api/menu", (data) => {
+        setCategories(data.categories ?? []);
+        setLoading(false);
+      });
+    }, []),
+  );
+
+  // Pull down to refresh
+  const [refreshing, setRefreshing] = useState(false);
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      const data = await refreshCached("/api/menu");
       setCategories(data.categories ?? []);
-      setLoading(false);
-    });
-  }, []);
+    } catch {
+      // keep what's on screen
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   const allCategories = categories.map((item, index) => {
     const meta = CATEGORY_META[getCategoryKey(item)] || {};
@@ -336,6 +356,7 @@ export default function Menu() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={TEAL} colors={[TEAL]} />}
         contentContainerStyle={[
           styles.content,
           {
@@ -546,17 +567,7 @@ export default function Menu() {
         </View>
         )}
 
-        {/* ================= FOOTER ================= */}
-
-        <View style={styles.footer}>
-          <View style={styles.footerLine} />
-
-          <Text style={[styles.footerText, dir.noSpacing]}>
-            {t("menuFooter")}
-          </Text>
-
-          <View style={styles.footerLine} />
-        </View>
+        <MadeBy />
       </ScrollView>
     </View>
   );

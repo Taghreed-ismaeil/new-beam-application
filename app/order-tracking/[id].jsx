@@ -1,3 +1,4 @@
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import Reanimated from "react-native-reanimated";
 import { enterDown, enterFromLeft, enterPop, enterUp } from "@/lib/motion";
@@ -409,6 +410,7 @@ export default function OrderTrackingScreen() {
             <Text style={styles.homeBtnText}>{t("trackBackHome")}</Text>
           </TouchableOpacity>
         </View>
+        <MadeBy />
       </ScrollView>
     </View>
   );
