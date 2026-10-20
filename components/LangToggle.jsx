@@ -6,7 +6,6 @@ import { useAppLang } from "@/lib/app-lang";
 import { Text } from "@/lib/arabic-font";
 
 const ORANGE = "#FC4A14";
-const TEAL = "#005751";
 
 // Staff screens keep their own layout; the login page has room for it too.
 const HIDDEN_ON = ["/admin"];
@@ -48,33 +47,33 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 16,
     zIndex: 50,
-    elevation: 50,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.94)",
-    borderWidth: 1.5,
-    borderColor: ORANGE,
+    elevation: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: ORANGE,
+    borderWidth: 3,
+    borderColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.16,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
+    shadowColor: ORANGE,
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   pressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.94 }],
+    opacity: 0.9,
+    transform: [{ scale: 0.92 }],
   },
   label: {
-    color: TEAL,
-    fontSize: 13,
-    fontWeight: "800",
-    letterSpacing: 0.5,
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+    letterSpacing: 0.8,
   },
   labelAr: {
-    fontSize: 17,
+    fontSize: 21,
     letterSpacing: 0,
-    marginTop: -2,
+    marginTop: -3,
   },
 });

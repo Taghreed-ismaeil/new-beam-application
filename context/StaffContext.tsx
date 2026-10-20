@@ -38,7 +38,8 @@ type Resource =
   | "customers"
   | "settings"
   | "staff"
-  | "media";
+  | "media"
+  | "feedback";
 
 type Permission = true | "view" | false;
 
@@ -57,6 +58,7 @@ const FULL_ACCESS: Record<Resource, Permission> = {
   settings: true,
   staff: true,
   media: true,
+  feedback: true,
 };
 
 const ROLE_PERMISSIONS: Record<StaffRole, Record<Resource, Permission>> = {
@@ -77,6 +79,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, Record<Resource, Permission>> = {
     settings: "view",
     staff: false,
     media: true,
+    feedback: true,
   },
   chef: {
     dashboard: true,
@@ -93,6 +96,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, Record<Resource, Permission>> = {
     settings: false,
     staff: false,
     media: false,
+    feedback: false,
   },
   cashier: {
     dashboard: true,
@@ -109,6 +113,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, Record<Resource, Permission>> = {
     settings: false,
     staff: false,
     media: false,
+    feedback: false,
   },
   waiter: {
     dashboard: false,
@@ -125,6 +130,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, Record<Resource, Permission>> = {
     settings: false,
     staff: false,
     media: false,
+    feedback: false,
   },
   driver: {
     dashboard: false,
@@ -141,6 +147,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, Record<Resource, Permission>> = {
     settings: false,
     staff: false,
     media: false,
+    feedback: false,
   },
 };
 

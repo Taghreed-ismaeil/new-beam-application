@@ -1,5 +1,13 @@
 import { LinearGradient } from "expo-linear-gradient";
+import { useEffect } from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";
@@ -14,14 +22,35 @@ const CREAM = "#FFF9F4";
  * soft glows (teal top-left, orange bottom-right) and two faint diagonal
  * ribbons. Render it as the first child of a full-screen container.
  *
+ * `moving` makes the two ribbons drift slowly up and down the whole page
+ * (teal down, orange up), back and forth forever — used on the login page.
+ *
  * `spot` optionally adds a white spotlight behind a hero element:
  * { top, size } in px (the wheel uses it).
  */
-export default function GiftsBackdrop({ spot }) {
-  const { width } = useWindowDimensions();
+export default function GiftsBackdrop({ spot, moving = false }) {
+  const { width, height } = useWindowDimensions();
+
+  // 0 → 1 → 0 … : how far down the page the teal ribbon is (the orange one mirrors it)
+  const drift = useSharedValue(0);
+  useEffect(() => {
+    if (!moving) return;
+    drift.set(withRepeat(withTiming(1, { duration: 9000, easing: Easing.inOut(Easing.sin) }), -1, true));
+  }, [moving, drift]);
+
+  // both ribbons sit at the top; translateY carries them across the full height
+  const travel = height + 120;
+  const tealStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: moving ? -60 + drift.get() * travel : 96 }, { rotate: "-24deg" }],
+  }));
+  const orangeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: moving ? height + 60 - drift.get() * travel : height - 176 }, { rotate: "-24deg" }],
+  }));
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    // overflow hidden: the big glows and ribbons reach past the screen edges — clipped
+    // here so they never stretch the page (on the web that left a blank strip under the tab bar)
+    <View style={[StyleSheet.absoluteFill, styles.clip]} pointerEvents="none">
       <LinearGradient
         colors={[LIGHT_TEAL, "#F3FAF7", CREAM, LIGHT_ORANGE]}
         locations={[0, 0.35, 0.62, 1]}
@@ -68,16 +97,18 @@ export default function GiftsBackdrop({ spot }) {
       )}
 
       {/* thin diagonal ribbons, one in each brand colour */}
-      <View
+      <Animated.View
         style={[
           styles.ribbon,
-          { width: width * 1.6, top: 96, left: -width * 0.5, backgroundColor: TEAL, opacity: 0.07 },
+          { width: width * 1.6, left: -width * 0.5, backgroundColor: TEAL, opacity: 0.07 },
+          tealStyle,
         ]}
       />
-      <View
+      <Animated.View
         style={[
           styles.ribbon,
-          { width: width * 1.6, bottom: 150, left: -width * 0.3, backgroundColor: ORANGE, opacity: 0.08 },
+          { width: width * 1.6, left: -width * 0.3, backgroundColor: ORANGE, opacity: 0.08 },
+          orangeStyle,
         ]}
       />
     </View>
@@ -85,6 +116,9 @@ export default function GiftsBackdrop({ spot }) {
 }
 
 const styles = StyleSheet.create({
+  clip: {
+    overflow: "hidden",
+  },
   glow: {
     position: "absolute",
     borderRadius: 9999,
@@ -98,6 +132,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     height: 26,
     borderRadius: 13,
-    transform: [{ rotate: "-24deg" }],
+    top: 0,
   },
 });

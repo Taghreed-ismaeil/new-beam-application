@@ -1,3 +1,4 @@
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import GiftsBackdrop from "@/components/GiftsBackdrop";
 import { apiRequestCached } from "@/lib/api-client";
@@ -18,6 +19,7 @@ import {
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { Text } from "@/lib/arabic-font";
+import { Ionicons } from "@expo/vector-icons";
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";
@@ -58,8 +60,8 @@ function VoucherTicket({ voucher, onPress }) {
 
   return (
     <TouchableOpacity
-      activeOpacity={used ? 1 : 0.85}
-      disabled={used}
+      activeOpacity={0.85}
+      disabled={!onPress}
       onPress={onPress}
       style={[styles.ticket, used && styles.ticketUsed]}
     >
@@ -105,10 +107,12 @@ function VoucherTicket({ voucher, onPress }) {
 }
 
 export default function LoyaltyVouchersScreen() {
-  const { t, pick } = useAppLang();
+  const { t, pick, lang } = useAppLang();
   const { user } = useAuth();
   const [vouchers, setVouchers] = useState(null);
   const [selected, setSelected] = useState(null);
+  // the "Used" list popup (opened from the Used counter)
+  const [usedOpen, setUsedOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -144,10 +148,18 @@ export default function LoyaltyVouchersScreen() {
               <Text style={styles.statLabel}>{t("loyReady")}</Text>
             </View>
             <View style={styles.statDivider} />
-            <View style={styles.stat}>
+            <TouchableOpacity
+              style={styles.stat}
+              onPress={() => setUsedOpen(true)}
+              disabled={used.length === 0}
+              activeOpacity={0.7}
+            >
               <Text style={styles.statNumber}>{used.length}</Text>
-              <Text style={styles.statLabel}>{t("loyUsed")}</Text>
-            </View>
+              <View style={styles.statTap}>
+                <Text style={styles.statLabel}>{t("loyUsed")}</Text>
+                {used.length > 0 && <Ionicons name="chevron-forward" size={12} color={LIGHT_TEAL} />}
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -186,12 +198,13 @@ export default function LoyaltyVouchersScreen() {
               <>
                 <Text style={[styles.sectionTitle, { color: MUTED }]}>{t("loyUsed")}</Text>
                 {used.map((v) => (
-                  <VoucherTicket key={v.id} voucher={v} />
+                  <VoucherTicket key={v.id} voucher={v} onPress={() => setSelected(v)} />
                 ))}
               </>
             )}
           </>
         )}
+        <MadeBy />
       </ScrollView>
 
       {/* =====================================================
@@ -205,14 +218,23 @@ export default function LoyaltyVouchersScreen() {
                 <Text style={styles.sheetLabel}>{t("loyRewardLabel")}</Text>
                 <Text style={styles.sheetTitle}>{voucherTitle(selected, t, pick)}</Text>
 
-                <View style={styles.qrFrame}>
+                <View style={[styles.qrFrame, selected.redeemedAt && styles.qrUsed]}>
                   <QRCode value={selected.code} size={170} color={TEAL_DARK} backgroundColor={WHITE} />
+                  {!!selected.redeemedAt && (
+                    <View style={styles.usedStamp}>
+                      <Text style={styles.usedStampText}>{t("loyUsedUpper")}</Text>
+                    </View>
+                  )}
                 </View>
 
                 <Text style={styles.sheetCodeLabel}>{t("loyRedeemCode")}</Text>
-                <Text style={styles.sheetCode}>{selected.code}</Text>
+                <Text style={[styles.sheetCode, selected.redeemedAt && { color: MUTED }]}>{selected.code}</Text>
 
-                <Text style={styles.sheetHint}>{t("loyShowCashier")}</Text>
+                <Text style={styles.sheetHint}>
+                  {selected.redeemedAt
+                    ? t("loyUsedOn", { date: formatDate(selected.redeemedAt, lang) })
+                    : t("loyShowCashier")}
+                </Text>
 
                 <TouchableOpacity style={styles.sheetBtn} onPress={() => setSelected(null)} activeOpacity={0.85}>
                   <Text style={styles.sheetBtnText}>{t("loyDone")}</Text>
@@ -222,11 +244,157 @@ export default function LoyaltyVouchersScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* =====================================================
+          USED LIST — every voucher already redeemed
+      ====================================================== */}
+      <Modal visible={usedOpen} transparent animationType="fade" onRequestClose={() => setUsedOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setUsedOpen(false)}>
+          <Pressable style={[styles.sheet, styles.usedSheet]}>
+            <View style={styles.usedHead}>
+              <Text style={styles.sheetTitle}>{t("loyUsed")}</Text>
+              <View style={styles.usedCount}>
+                <Text style={styles.usedCountText}>{used.length}</Text>
+              </View>
+            </View>
+
+            <ScrollView style={styles.usedList} showsVerticalScrollIndicator={false}>
+              {used.map((v) => {
+                const src = voucherSource(v, t, pick);
+                return (
+                  <TouchableOpacity
+                    key={v.id}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setUsedOpen(false);
+                      setSelected(v);
+                    }}
+                    style={styles.usedRow}
+                  >
+                    <View style={styles.usedIcon}>
+                      <Text style={{ fontSize: 18 }}>{src.icon}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.usedTitle} numberOfLines={1}>
+                        {voucherTitle(v, t, pick)}
+                      </Text>
+                      <Text style={styles.usedDate}>
+                        {t("loyUsedOn", { date: formatDate(v.redeemedAt, lang) })} · {v.code}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={MUTED} />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity style={styles.sheetBtn} onPress={() => setUsedOpen(false)} activeOpacity={0.85}>
+              <Text style={styles.sheetBtnText}>{t("loyDone")}</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  statTap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+
+  qrUsed: {
+    opacity: 0.35,
+  },
+
+  usedStamp: {
+    position: "absolute",
+    alignSelf: "center",
+    top: "42%",
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: ORANGE,
+    backgroundColor: WHITE,
+    transform: [{ rotate: "-12deg" }],
+  },
+
+  usedStampText: {
+    color: ORANGE,
+    fontSize: 16,
+    fontWeight: "900",
+    letterSpacing: 2,
+  },
+
+  usedSheet: {
+    maxWidth: 380,
+    maxHeight: "80%",
+    alignItems: "stretch",
+  },
+
+  usedHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  usedCount: {
+    minWidth: 26,
+    height: 26,
+    borderRadius: 13,
+    paddingHorizontal: 7,
+    backgroundColor: LIGHT_ORANGE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+  },
+
+  usedCountText: {
+    color: ORANGE,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  usedList: {
+    flexGrow: 0,
+  },
+
+  usedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0EDEA",
+  },
+
+  usedIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#F2F3F2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  usedTitle: {
+    color: DARK,
+    fontSize: 14.5,
+    fontWeight: "800",
+  },
+
+  usedDate: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
   screen: {
     flex: 1,
     backgroundColor: BG,

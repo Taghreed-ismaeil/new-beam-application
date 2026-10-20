@@ -38,7 +38,7 @@ const GRADIENT_LOCATIONS = [0, 0.35, 0.7, 1];
    MENU
 ===================================================== */
 
-export default function Menu() {
+export default function Menu({ refreshKey = 0 }) {
   const { t, pick, dir } = useAppLang();
   const [deals, setDeals] = useState([]);
   const [rotation, setRotation] = useState(0);
@@ -64,11 +64,12 @@ export default function Menu() {
   const [menuItems, setMenuItems] = useState(null);
   const [offers, setOffers] = useState([]);
 
+  // refreshKey bumps on Home's pull-to-refresh
   useEffect(() => {
     apiRequestCached("/api/menu", (data) => {
       setMenuItems(allMenuItems(data.categories));
     });
-  }, []);
+  }, [refreshKey]);
 
   // Re-read offers whenever Home comes into focus and every OFFERS_POLL_MS while
   // it stays open, so adding, editing, switching off or deleting an offer in the
@@ -82,7 +83,7 @@ export default function Menu() {
       refresh();
       const timer = setInterval(refresh, OFFERS_POLL_MS);
       return () => clearInterval(timer);
-    }, []),
+    }, [refreshKey]),
   );
 
   useEffect(() => {

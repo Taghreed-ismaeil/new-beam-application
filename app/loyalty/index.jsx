@@ -1,3 +1,4 @@
+import MadeBy from "@/components/MadeBy";
 import GiftsBackdrop from "@/components/GiftsBackdrop";
 import SpecialPrizeCard from "@/components/SpecialPrizeCard";
 import TileImage from "@/components/TileImage";
@@ -167,6 +168,7 @@ export default function LoyaltyCollectionsScreen() {
             </Text>
           </Animated.View>
         ))}
+        <MadeBy />
       </ScrollView>
     </View>
   );

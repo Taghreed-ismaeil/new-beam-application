@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import MediaViewer from "@/components/MediaViewer";
 import { useAuth } from "@/context/AuthContext";
@@ -157,7 +158,12 @@ export default function CommunityFeed() {
             </View>
           )
         }
-        ListFooterComponent={loadingMore ? <ActivityIndicator color={TEAL} style={{ margin: 20 }} /> : null}
+        ListFooterComponent={
+          <>
+            {loadingMore ? <ActivityIndicator color={TEAL} style={{ margin: 20 }} /> : null}
+            {posts !== null && <MadeBy />}
+          </>
+        }
         renderItem={({ item: p, index }) => {
           const accent = index % 2 === 0 ? ORANGE : TEAL;
           return (

@@ -1,3 +1,5 @@
+import MadeBy from "@/components/MadeBy";
+import GiftsBackdrop from "@/components/GiftsBackdrop";
 import { useAuth } from "@/context/AuthContext";
 import { apiRequest } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
@@ -267,6 +269,8 @@ export default function Login() {
 
   return (
     <View style={styles.container}>
+      {/* same soft teal → cream → orange background as the Gifts pages */}
+      <GiftsBackdrop moving />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -558,6 +562,7 @@ export default function Login() {
         </TouchableOpacity>
       )}
       </View>
+        <MadeBy />
       </ScrollView>
     </View>
   );
@@ -566,7 +571,7 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFF9F4",
   },
 
   scroll: {

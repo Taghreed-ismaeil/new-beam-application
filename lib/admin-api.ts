@@ -492,3 +492,19 @@ export function setPurchaseOrderStatus(id: number, status: string) {
 export function deletePurchaseOrder(id: number) {
   return apiRequest<{ ok: true }>(`/api/admin/purchase-orders/${id}`, { method: "DELETE" });
 }
+
+// ---------------------------------------------------------------------------
+// Feedback (ratings + complaints from the app's Account page)
+// ---------------------------------------------------------------------------
+export type FeedbackStatus = "new" | "seen" | "resolved";
+
+export function fetchAdminFeedback(params: { kind?: "rating" | "complaint"; status?: FeedbackStatus }) {
+  const q = new URLSearchParams(Object.entries(params).filter(([, v]) => !!v) as [string, string][]).toString();
+  return apiRequest<{ items: any[]; newComplaints: number; ratingAverage: number | null; ratingCount: number }>(
+    `/api/admin/feedback${q ? `?${q}` : ""}`,
+  );
+}
+
+export function setFeedbackStatus(id: number, status: FeedbackStatus) {
+  return apiRequest<{ ok: true }>(`/api/admin/feedback/${id}`, { method: "PATCH", body: { status } });
+}

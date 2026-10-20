@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
@@ -415,6 +416,7 @@ export default function CartScreen() {
             </View>
           ))
         )}
+        <MadeBy />
       </ScrollView>
 
       {/* =====================================================

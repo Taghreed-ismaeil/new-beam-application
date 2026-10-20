@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import FoodPhotoHero from "@/components/FoodPhotoHero";
 import { useCart } from "@/context/CartContext";
@@ -298,6 +299,7 @@ export default function ItemDetails() {
             style={[styles.notes, dir.text, { borderColor: `rgba(${fade},0.35)` }]}
           />
         </Animated.View>
+        <MadeBy />
       </ScrollView>
 
       {/* ================= BOTTOM BAR ================= */}

@@ -16,6 +16,8 @@ import {
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import MadeBy from "@/components/MadeBy";
+import MyMediaPosts from "@/components/MyMediaPosts";
 import BackButton from "@/components/BackButton";
 import { useAppLang } from "@/lib/app-lang";
 import { shareMedia } from "@/lib/media-api";
@@ -177,6 +179,10 @@ export default function SharePhoto() {
             <Text style={styles.primaryText}>{t("mediaPost")}</Text>
           )}
         </Pressable>
+
+        {/* everything this customer shared — archive or delete from here */}
+        <MyMediaPosts />
+        <MadeBy />
       </ScrollView>
     </KeyboardAvoidingView>
   );
