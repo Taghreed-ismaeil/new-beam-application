@@ -105,12 +105,6 @@ export default function Login() {
       return;
     }
 
-    // the server needs 6+ characters — say so now, not after the code screen
-    if (isRegister && password.length < 6) {
-      setError(t("loginErrPasswordShort"));
-      return;
-    }
-
     setBusy(true);
     setError("");
 
@@ -139,23 +133,13 @@ export default function Login() {
         await login(res.token, res.user);
       }
     } catch (e) {
-      const err = e?.data?.error;
-      if (err === "invalid_phone") {
-        setError(t("loginErrInvalidPhone"));
-      } else if (isRegister && err === "phone_already_registered") {
+      if (isRegister && e?.data?.error === "phone_already_registered") {
         setIsRegister(false);
         setError(t("loginErrAlreadyRegistered"));
-      } else if (!isRegister && err === "no_account_for_phone") {
-        // no account yet → straight to Register, the number stays filled in
-        setIsRegister(true);
-        setError(t("loginErrNoAccount"));
-      } else if (!isRegister && err === "account_deleted") {
-        setIsRegister(true);
+      } else if (!isRegister && e?.data?.error === "account_deleted") {
         setError(t("loginErrDeleted"));
-      } else if (!isRegister && err === "password_not_set") {
-        // old account from before passwords: registering finishes it (points and orders stay)
-        setIsRegister(true);
-        setError(t("loginErrSetPassword"));
+      } else if (!isRegister && e?.data?.error === "no_account_for_phone") {
+        setError(t("loginErrNoAccount"));
       } else if (!isRegister && e?.status === 401) {
         setError(t("loginErrWrong"));
       } else {
@@ -217,15 +201,8 @@ export default function Login() {
       });
 
       setStep("forgot-reset");
-    } catch (e) {
-      const err = e?.data?.error;
-      setError(
-        err === "no_account_for_phone"
-          ? t("loginErrNoAccount")
-          : err === "invalid_phone"
-            ? t("loginErrInvalidPhone")
-            : t("loginErrGeneric"),
-      );
+    } catch {
+      setError(t("loginErrGeneric"));
     } finally {
       setBusy(false);
     }

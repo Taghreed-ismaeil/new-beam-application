@@ -10,7 +10,7 @@ import { prisma } from './prisma';
 // go on one line separated by "•" — every other field gets its own line.
 //
 // Template "order_receipt" (category Utility, language Arabic):
-//   Header (text):  {{1}}                     ← "تم تأكيد طلبك" / "تم تعديل طلبك" (headers can't hold emoji)
+//   Header (text):  {{1}}                     ← "تم تأكيد طلبك ✅" / "تم تعديل طلبك ✏️"
 //   Body:
 //     أهلاً {{1}} 👋
 //     رقم الطلب: #{{2}}
@@ -24,10 +24,8 @@ import { prisma } from './prisma';
 //     شكراً لاختيارك بيم 🧡
 //   Button (URL, dynamic): https://<backend>/o/{{1}}   ← order id → opens the app's cart
 //
-// Receipts go out as soon as WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN
-// are set — independent of OTP_PROVIDER, which also moves *login codes* to
-// WhatsApp and needs its own approved template. WHATSAPP_RECEIPTS=off pauses
-// them. Until then nothing is sent: the full message is printed to the log.
+// Until WhatsApp is configured (OTP_PROVIDER isn't "whatsapp" or the token is
+// empty) nothing is sent: the full message is printed to the server log instead.
 
 const ORDER_TEMPLATE = process.env.WHATSAPP_ORDER_TEMPLATE ?? 'order_receipt';
 const TEMPLATE_LANG = process.env.WHATSAPP_ORDER_TEMPLATE_LANG ?? 'ar';
@@ -74,8 +72,7 @@ export async function sendOrderReceipt(orderId: number, kind: 'confirmed' | 'upd
     .map((i) => `${i.quantity}× ${i.nameSnapshot}${i.notes ? ` (${i.notes})` : ''}`)
     .join(' • ');
 
-  // WhatsApp rejects emoji, line breaks and formatting in a text header
-  const header = kind === 'updated' ? 'تم تعديل طلبك' : 'تم تأكيد طلبك';
+  const header = kind === 'updated' ? 'تم تعديل طلبك ✏️' : 'تم تأكيد طلبك ✅';
   const body = [
     firstName,
     String(order.id),
@@ -86,8 +83,7 @@ export async function sendOrderReceipt(orderId: number, kind: 'confirmed' | 'upd
     PAY_AR[order.paymentMethod] ?? order.paymentMethod,
   ].map((p) => clean(p));
 
-  const configured =
-    process.env.WHATSAPP_RECEIPTS !== 'off' && !!env.whatsapp.accessToken && !!env.whatsapp.phoneNumberId;
+  const configured = env.otpProvider === 'whatsapp' && !!env.whatsapp.accessToken && !!env.whatsapp.phoneNumberId;
   if (!configured) {
     console.log(
       [

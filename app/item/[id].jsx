@@ -60,21 +60,16 @@ const imageSource = (item, fallback) =>
 
 const money = (n) => Number(n).toFixed(2);
 export default function ItemDetails() {
-  const { id, tone, button, fromCart } = useLocalSearchParams();
+  const { id, tone, button } = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const cart = useCart();
   const { t, pick, pickDesc, dir } = useAppLang();
 
   const [menu, setMenu] = useState(null);
-  // Opened from a cart line: start from what is in the cart, and saving updates it
-  const cartLine = fromCart ? cart.lines.find((l) => String(l.menuItemId) === String(id)) : null;
-  const [quantity, setQuantity] = useState(() => cartLine?.quantity ?? 1);
-  // extra item id → quantity; from the cart, start with the extras already in it
-  const [extras, setExtras] = useState(() =>
-    fromCart ? Object.fromEntries(cart.lines.map((l) => [l.menuItemId, l.quantity])) : {},
-  );
-  const [notes, setNotes] = useState(() => cartLine?.notes ?? "");
+  const [quantity, setQuantity] = useState(1);
+  const [extras, setExtras] = useState({}); // extra item id → quantity
+  const [notes, setNotes] = useState("");
 
   useEffect(() => {
     apiRequestCached("/api/menu", (data) => setMenu(data.categories ?? []));
@@ -145,16 +140,12 @@ export default function ItemDetails() {
       price: Number(i.price),
       imageUrl: i.imageUrl,
     });
-    if (cartLine) cart.updateLine(item.id, quantity, notes);
-    else cart.addMany(asCartItem(item), quantity, notes);
+    cart.addMany(asCartItem(item), quantity, notes);
     for (const e of extraItems) {
-      const inCart = cartLine && cart.lines.find((l) => l.menuItemId === e.id);
-      // editing from the cart sets the extras to what is chosen here
-      if (inCart) cart.updateLine(e.id, extras[e.id] ?? 0, inCart.notes ?? undefined);
-      else if (extras[e.id]) cart.addMany(asCartItem(e), extras[e.id]);
+      if (extras[e.id]) cart.addMany(asCartItem(e), extras[e.id]);
     }
     if (router.canGoBack()) router.back();
-    else router.replace(cartLine ? "/cart" : "/menu");
+    else router.replace("/menu");
   }
 
   /* ================= LOADING / MISSING ================= */
@@ -333,7 +324,7 @@ export default function ItemDetails() {
             pressed && styles.pressed,
           ]}
         >
-          <Text style={[styles.addText, dir.noSpacing]}>{t(cartLine ? "itemSaveChanges" : "itemAddToCart")}</Text>
+          <Text style={[styles.addText, dir.noSpacing]}>{t("itemAddToCart")}</Text>
           <Text style={styles.addTotal}>
             {money(total)} {t("jd")}
           </Text>
