@@ -104,12 +104,16 @@ export default function ItemDetails() {
     [menu, id],
   );
 
-  // The extras on offer are the "إضافاتنا" category — minus the item itself
-  // if it happens to be one of them.
+  // The extras on offer are the ones the admin picked for this item (`extraIds`)
+  // out of the "إضافاتنا" category. A server that doesn't send `extraIds` yet
+  // still gets the whole category, minus the item itself.
   const extraItems = useMemo(() => {
     const category = findMenuCategory(menu, "extras");
-    return categoryItems(category).filter((e) => String(e.id) !== String(id));
-  }, [menu, id]);
+    const allowed = item?.extraIds;
+    return categoryItems(category).filter(
+      (e) => String(e.id) !== String(id) && (!Array.isArray(allowed) || allowed.includes(e.id)),
+    );
+  }, [menu, id, item]);
 
   // "More from the same kind": the other items of the item's own sub-section
   // (burgers → the other burgers); an item alone in its sub-section falls back
@@ -309,31 +313,38 @@ export default function ItemDetails() {
 
         {/* collapsed to a dashed "add a note" button until tapped */}
         <Animated.View entering={enterUp(4)} style={styles.block}>
-          {noteOpen ? (
+          {/* the button toggles the box; a written note is kept when it closes */}
+          <Pressable
+            onPress={() => setNoteOpen((open) => !open)}
+            style={({ pressed }) => [styles.addNote, dir.row, pressed && styles.pressed]}
+          >
+            <View style={styles.addNoteIcon}>
+              <Ionicons name="pencil" size={15} color={WHITE} />
+            </View>
+            <View style={styles.addNoteBody}>
+              <Text style={[styles.addNoteText, dir.text]}>{t("itemAddNote")}</Text>
+              {!noteOpen && !!notes.trim() && (
+                <Text style={[styles.addNotePreview, dir.text]} numberOfLines={1}>
+                  {notes.trim()}
+                </Text>
+              )}
+            </View>
+            <Ionicons name={noteOpen ? "chevron-up" : "add"} size={20} color={TEAL} />
+          </Pressable>
+
+          {noteOpen && (
             <Animated.View entering={FadeInDown.springify().damping(16)}>
-              <Text style={[styles.blockTitle, dir.text]}>{t("itemNotes")}</Text>
               <TextInput
                 value={notes}
                 onChangeText={setNotes}
                 placeholder={t("itemNotesPlaceholder")}
                 placeholderTextColor="#A4A4A4"
                 multiline
-                autoFocus={!cartLine?.notes}
+                autoFocus={!notes}
                 maxLength={200}
                 style={[styles.notes, dir.text, { borderColor: `rgba(${fade},0.35)` }]}
               />
             </Animated.View>
-          ) : (
-            <Pressable
-              onPress={() => setNoteOpen(true)}
-              style={({ pressed }) => [styles.addNote, dir.row, pressed && styles.pressed]}
-            >
-              <View style={styles.addNoteIcon}>
-                <Ionicons name="pencil" size={15} color={WHITE} />
-              </View>
-              <Text style={[styles.addNoteText, dir.text]}>{t("itemAddNote")}</Text>
-              <Ionicons name="add" size={20} color={TEAL} />
-            </Pressable>
           )}
         </Animated.View>
 
@@ -717,11 +728,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  addNoteText: {
+  addNoteBody: {
     flex: 1,
+    minWidth: 0,
+  },
+
+  addNoteText: {
     color: TEAL,
     fontSize: 15,
     fontWeight: "800",
+  },
+
+  // the closed box still shows what was written
+  addNotePreview: {
+    color: MUTED,
+    fontSize: 12.5,
+    fontWeight: "600",
+    marginTop: 2,
   },
 
   /* ================= MORE FROM THE SAME KIND ================= */
