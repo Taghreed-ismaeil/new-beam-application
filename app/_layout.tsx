@@ -16,7 +16,6 @@ import { ARABIC_FONTS } from "@/lib/arabic-font";
 import { I18nProvider } from "@/lib/i18n";
 import BottomTabBar from "@/components/BottomTabBar/BottomTabBar";
 import IntroVideo from "@/components/IntroVideo";
-import LangToggle from "@/components/LangToggle";
 import { preloadLoyalty } from "@/lib/preload";
 import { screenAnimationFor } from "@/lib/tab-transition";
 
@@ -85,8 +84,6 @@ export default function RootLayout() {
                     <Stack.Screen name="admin" />
                   </Stack>
                   <BottomTabBar />
-                  {/* language switch in the top corner of every screen */}
-                  <LangToggle />
                 </AuthGate>
                 <StatusBar style="auto" />
                 <IntroVideo />

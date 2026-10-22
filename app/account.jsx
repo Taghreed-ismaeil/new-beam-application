@@ -47,7 +47,7 @@ const RESTAURANT_MAPS_URL =
 export default function AccountScreen() {
   const { width } = useWindowDimensions();
   const { user, logout } = useAuth();
-  const { t, dir } = useAppLang();
+  const { t, lang, setLang, dir } = useAppLang();
 
   const [orders, setOrders] = useState([]);
   const [readyRewards, setReadyRewards] = useState(0);
@@ -520,7 +520,45 @@ export default function AccountScreen() {
             </Pressable>
           </>
         )}
-        {/* language switch lives in the top corner of every screen (components/LangToggle) */}
+        {/* ================= LANGUAGE ================= */}
+
+        <Animated.View entering={enterUp(5)} style={styles.langBlock}>
+          <View style={styles.langTitleRow}>
+            <Ionicons name="language-outline" size={18} color={TEAL} />
+
+            <Text style={styles.langTitle}>{t("accountLanguage")}</Text>
+          </View>
+
+          <View style={styles.langSwitch}>
+            {[
+              { code: "en", label: "English" },
+              { code: "ar", label: "العربية" },
+            ].map((option) => {
+              const selected = lang === option.code;
+
+              return (
+                <Pressable
+                  key={option.code}
+                  onPress={() => setLang(option.code)}
+                  style={({ pressed }) => [
+                    styles.langOption,
+                    selected && styles.langOptionSelected,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.langOptionText,
+                      selected && styles.langOptionTextSelected,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Animated.View>
 
         {/* ================= FOOTER ================= */}
 
@@ -1028,6 +1066,58 @@ const styles = StyleSheet.create({
   },
 
   /* ================= FOOTER ================= */
+
+  /* ================= LANGUAGE ================= */
+
+  langBlock: {
+    marginTop: 22,
+    zIndex: 2,
+  },
+
+  langTitleRow: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginBottom: 10,
+  },
+
+  langTitle: {
+    color: TEAL,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  // Teal two-button switch: selected = filled teal, other = teal outline
+  langSwitch: {
+    borderWidth: 1.5,
+    borderColor: TEAL,
+    borderRadius: 18,
+    padding: 4,
+    gap: 4,
+    backgroundColor: WHITE,
+  },
+
+  langOption: {
+    flex: 1,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  langOptionSelected: {
+    backgroundColor: TEAL,
+  },
+
+  langOptionText: {
+    color: TEAL,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  langOptionTextSelected: {
+    color: WHITE,
+  },
 
   footer: {
     flexDirection: "row",

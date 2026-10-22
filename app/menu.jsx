@@ -194,7 +194,6 @@ export default function Menu() {
   const [query, setQuery] = useState("");
 
   const cart = useCart();
-  const cartCount = cart.lines.reduce((n, l) => n + l.quantity, 0);
 
   const scrollRef = useRef(null);
 
@@ -372,56 +371,26 @@ export default function Menu() {
 
           {/* ================= SEARCH ================= */}
 
-          {/* search + the cart on its right, with how many items it holds */}
           <Animated.View
             entering={enterDown(3)}
-            style={[styles.searchRow, { marginHorizontal: gutter }]}
+            style={[styles.searchBox, dir.row, { marginHorizontal: gutter }]}
           >
-          <View style={[styles.searchBox, dir.row]}>
             <Ionicons name="search" size={20} color={ORANGE} />
 
-            {/* The hint is drawn as plain text over the field: Android measures a
-                placeholder in its own font and then cuts off the wider Arabic face */}
-            <View style={styles.searchField}>
-              {!query && (
-                <Text
-                  pointerEvents="none"
-                  numberOfLines={1}
-                  style={[styles.searchHint, dir.text]}
-                >
-                  {t("searchPlaceholder")}
-                </Text>
-              )}
-              <TextInput
-                style={[styles.searchInput, dir.text]}
-                accessibilityLabel={t("searchPlaceholder")}
-                value={query}
-                onChangeText={setQuery}
-                returnKeyType="search"
-              />
-            </View>
+            <TextInput
+              style={[styles.searchInput, dir.text]}
+              placeholder={t("searchPlaceholder")}
+              placeholderTextColor="#A4A4A4"
+              value={query}
+              onChangeText={setQuery}
+              returnKeyType="search"
+            />
 
             {!!query && (
               <Pressable onPress={() => setQuery("")} hitSlop={10}>
                 <Ionicons name="close-circle" size={21} color="#C8C8C8" />
               </Pressable>
             )}
-          </View>
-
-            <Pressable
-              onPress={() => router.push("/cart")}
-              accessibilityRole="button"
-              accessibilityLabel={t("cartTitle")}
-              style={({ pressed }) => [styles.cartBox, pressed && styles.cartBoxPressed]}
-            >
-              {/* same bag as the cart on the home page */}
-              <Ionicons name="bag" size={26} color={ORANGE} />
-              {cartCount > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{cartCount > 99 ? "99+" : cartCount}</Text>
-                </View>
-              )}
-            </Pressable>
           </Animated.View>
         </View>
 
@@ -629,16 +598,9 @@ const styles = StyleSheet.create({
 
   /* ================= SEARCH ================= */
 
-  searchRow: {
-    marginTop: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-
   searchBox: {
-    flex: 1,
     height: 52,
+    marginTop: 16,
     backgroundColor: WHITE,
     borderWidth: 2,
     borderColor: ORANGE,
@@ -649,69 +611,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
-  cartBox: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-    backgroundColor: WHITE,
-    borderWidth: 2,
-    borderColor: ORANGE,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
-  },
-
-  cartBoxPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.95 }],
-  },
-
-  cartBadge: {
-    position: "absolute",
-    top: -7,
-    right: -7,
-    minWidth: 22,
-    height: 22,
-    paddingHorizontal: 5,
-    borderRadius: 11,
-    backgroundColor: ORANGE,
-    borderWidth: 2,
-    borderColor: WHITE,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  cartBadgeText: {
-    color: WHITE,
-    fontSize: 11,
-    fontWeight: "800",
-  },
-
-  searchField: {
-    flex: 1,
-    // web inputs keep a default width; without this it overflows the shorter box
-    minWidth: 0,
-    height: "100%",
-    justifyContent: "center",
-  },
-
-  searchHint: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    color: "#A4A4A4",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
   searchInput: {
-    width: "100%",
+    flex: 1,
     height: "100%",
-    paddingVertical: 0,
     color: "#17201F",
     fontSize: 14,
     fontWeight: "600",

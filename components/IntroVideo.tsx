@@ -81,11 +81,7 @@ function IntroVideoPlayer() {
       duration: 400,
       useNativeDriver: true,
     }).start(() => {
-      try {
-        player.pause();
-      } catch {
-        // already released
-      }
+      player.pause();
       setVisible(false);
     });
   };

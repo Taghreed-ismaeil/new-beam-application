@@ -34,15 +34,16 @@ export default function Hero() {
 
   const heroHeight = Math.max(350, Math.min(height * 0.55, 500));
 
-  const buttonFont = Math.max(14, Math.min(width * 0.04, 18));
+  const buttonFont = Math.max(13, Math.min(width * 0.035, 16));
 
-  const iconSize = Math.max(25, Math.min(width * 0.07, 34));
+  const iconSize = Math.max(20, Math.min(width * 0.055, 28));
 
   // The logo box is centered; "contain" scales the image to fit the box and
   // centers it inside — from that we know where the S and the E land on screen.
   const logoBoxW = width * 0.5;
   const logoBoxH = 100;
   const logoScale = Math.min(logoBoxW / LOGO_IMG_W, logoBoxH / LOGO_IMG_H);
+  const logoSLeft = (width - LOGO_IMG_W * logoScale) / 2 + LOGO_S_X * logoScale;
   const logoTextWidth = (LOGO_E_X - LOGO_S_X) * logoScale;
 
   const player = useVideoPlayer(heroVideo, (p) => {
@@ -55,20 +56,8 @@ export default function Hero() {
   // underneath other screens it steals CPU/GPU and makes animations stutter.
   useFocusEffect(
     useCallback(() => {
-      try {
-        player.play();
-      } catch {
-        // player already released
-      }
-      // When the screen closes, useVideoPlayer may free the native player before
-      // this cleanup runs — pausing it then throws, so ignore that case.
-      return () => {
-        try {
-          player.pause();
-        } catch {
-          // already released
-        }
-      };
+      player.play();
+      return () => player.pause();
     }, [player]),
   );
 
@@ -123,12 +112,11 @@ export default function Hero() {
           <View
             style={[
               styles.actionsRow,
-              // centered under the logo, at least as wide as its lettering
-              { alignSelf: "center", minWidth: logoTextWidth },
+              { marginLeft: logoSLeft, width: logoTextWidth },
               dir.row,
-              // button + cart side by side with a gap (the bigger button no
-              // longer fits between the S and the E in English)
-              styles.actionsRowAr,
+              // "تصفّح المنيو" is shorter, so space-between left the cart
+              // stranded at the far edge — keep it next to the button.
+              dir.isRTL && styles.actionsRowAr,
             ]}
           >
             <Pressable
@@ -228,8 +216,8 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 2,
     borderColor: "#FC4A14",
-    paddingVertical: 10,
-    paddingHorizontal: 16, // button + cart must fit between S and E
+    paddingVertical: 8,
+    paddingHorizontal: 12, // button + cart must fit between S and E
   },
 
   buttonText: {

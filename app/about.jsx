@@ -73,20 +73,8 @@ export default function AboutScreen() {
   // underneath other screens it steals CPU/GPU and makes animations stutter.
   useFocusEffect(
     useCallback(() => {
-      try {
-        player.play();
-      } catch {
-        // player already released
-      }
-      // When the screen closes, useVideoPlayer may free the native player before
-      // this cleanup runs — pausing it then throws, so ignore that case.
-      return () => {
-        try {
-          player.pause();
-        } catch {
-          // already released
-        }
-      };
+      player.play();
+      return () => player.pause();
     }, [player]),
   );
 
