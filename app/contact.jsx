@@ -12,12 +12,12 @@ import {
 
 import Animated from "react-native-reanimated";
 
-import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
-import { enterDown, enterUp } from "@/lib/motion";
+import MadeBy from "@/components/MadeBy";
 import { apiRequest } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { Text } from "@/lib/arabic-font";
+import { enterDown, enterUp } from "@/lib/motion";
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";
@@ -312,8 +312,6 @@ export default function ContactScreen() {
               <Ionicons name="arrow-forward" size={17} color={LIGHT_TEAL} />
             </View>
           </Pressable>
-
-
         </Animated.View>
 
         {/* ================================================= */}
@@ -346,23 +344,24 @@ export default function ContactScreen() {
 
           <View style={styles.hoursDivider} />
 
-          <View style={styles.dayRow}>
-            <Text style={styles.day}>{t("contactMonThu")}</Text>
-
-            <Text style={styles.time}>{t("contactTime1")}</Text>
-          </View>
-
-          <View style={styles.dayRow}>
-            <Text style={styles.day}>{t("contactFriSat")}</Text>
-
-            <Text style={styles.time}>{t("contactTime2")}</Text>
-          </View>
-
-          <View style={[styles.dayRow, styles.lastDayRow]}>
-            <Text style={styles.day}>{t("contactSun")}</Text>
-
-            <Text style={styles.time}>{t("contactTime3")}</Text>
-          </View>
+          {/* day on one side, its hours in a pill on the other — kept as two
+              separate texts so Arabic never runs them together */}
+          {[
+            ["contactMonThu", "contactTime1"],
+            ["contactFriSat", "contactTime2"],
+            ["contactSun", "contactTime3"],
+          ].map(([day, time], i) => (
+            <View key={day} style={[styles.dayRow, i > 0 && styles.dayRowDivider]}>
+              <Text style={styles.day} numberOfLines={1}>
+                {t(day)}
+              </Text>
+              <View style={styles.timePill}>
+                <Text style={[styles.time, { writingDirection: dir.isRTL ? "rtl" : "ltr" }]} numberOfLines={1}>
+                  {t(time)}
+                </Text>
+              </View>
+            </View>
+          ))}
         </Animated.View>
 
         {/* ================================================= */}
@@ -414,16 +413,6 @@ export default function ContactScreen() {
         {/* ================================================= */}
         {/*                      BOTTOM                       */}
         {/* ================================================= */}
-
-        <Animated.View entering={enterUp(4)} style={styles.bottomTextContainer}>
-          <View style={styles.line} />
-
-          <Text style={[styles.bottomText, dir.noSpacing]}>
-            {t("contactBottom")}
-          </Text>
-
-          <View style={styles.line} />
-        </Animated.View>
 
         {loading && (
           <View style={styles.loadingOverlay}>
@@ -724,6 +713,8 @@ const styles = StyleSheet.create({
     color: ORANGE,
     fontSize: 17,
     fontWeight: "900",
+    // next to the clock like in English, not pushed against the badge in Arabic
+    textAlign: "left",
   },
 
   hoursSubtitle: {
@@ -753,40 +744,52 @@ const styles = StyleSheet.create({
 
   openText: {
     color: TEAL,
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.7,
   },
 
   hoursDivider: {
     height: 1,
-    backgroundColor: WHITE,
-    marginVertical: 16,
+    backgroundColor: "rgba(255,255,255,0.35)",
+    marginTop: 16,
+    marginBottom: 6,
   },
 
   dayRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 7,
+    gap: 10,
+    paddingVertical: 10,
   },
 
-  lastDayRow: {
-    paddingBottom: 0,
+  dayRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.15)",
   },
 
+  // always on the left like the English layout, whatever the language
   day: {
-    color: WHITE,
-    fontSize: 12,
-    fontWeight: "600",
     flex: 1,
+    minWidth: 0,
+    color: WHITE,
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "left",
+  },
+
+  timePill: {
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 11,
   },
 
   time: {
     color: WHITE,
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: "800",
-    textAlign: "right",
   },
 
   /* ================================================= */
