@@ -118,6 +118,7 @@ export default function RestaurantGallery() {
             </View>
           )
         }
+        ListFooterComponentStyle={{ marginTop: "auto" }}
         ListFooterComponent={
           <>
             {loadingMore ? <ActivityIndicator color={ORANGE} style={{ margin: 20 }} /> : null}
@@ -171,6 +172,7 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    flexGrow: 1,
     paddingBottom: 120,
   },
 

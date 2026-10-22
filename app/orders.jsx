@@ -269,6 +269,7 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    flexGrow: 1,
     // clears the status bar + back button
     paddingTop: 100,
     paddingHorizontal: 20,

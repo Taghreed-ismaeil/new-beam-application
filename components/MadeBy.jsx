@@ -6,7 +6,8 @@ import { Text } from "@/lib/arabic-font";
 /**
  * Small "Created by Virelix Solution" credit at the very end of a page's
  * scroll content — the same line the home page's footer shows. Pass `light`
- * on dark backgrounds.
+ * on dark backgrounds. Sits at the bottom of the screen even when the page is
+ * short, as long as the scroll content has `flexGrow: 1`.
  */
 export default function MadeBy({ light = false, style }) {
   const { t, dir } = useAppLang();
@@ -26,6 +27,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
+    marginTop: "auto",
     paddingVertical: 18,
     paddingHorizontal: 24,
   },

@@ -10,6 +10,8 @@ export const STRINGS = {
     "بدك نعرف إشي؟ مثلاً بدون مخلل",
   ],
   itemAddToCart: ["Add to cart", "أضف للسلة"],
+  itemAddNote: ["Add a note", "أضف ملاحظة"],
+  itemMoreLikeThis: ["More like this", "من نفس الصنف"],
   itemSaveChanges: ["Save changes", "احفظ التعديل"],
   itemNotFound: ["This item isn't available right now", "هالصنف مش متوفر هلأ"],
   cancel: ["Cancel", "إلغاء"],
@@ -713,6 +715,37 @@ export const STRINGS = {
   trackYourOrder: ["Your order", "طلبك"],
   trackTotal: ["Total", "المجموع"],
   trackBackHome: ["Back to home", "رجوع للرئيسية"],
+
+  /* ================= TABLE BOOKINGS ================= */
+  resEyebrow: ["TABLE BOOKINGS", "حجز الطاولات"],
+  resTitle: ["My bookings", "حجوزاتي"],
+  resNew: ["Book a table", "احجز طاولة"],
+  resEmptyTitle: ["No bookings yet", "ما عندك حجوزات لسا"],
+  resEmptyText: [
+    "Book a table and we'll have it ready for you",
+    "احجز طاولة وإحنا بنجهزلك ياها",
+  ],
+  resPending: ["Awaiting confirmation", "بانتظار التأكيد"],
+  resConfirmed: ["Confirmed", "مؤكد"],
+  resSeated: ["Seated", "على الطاولة"],
+  resCompleted: ["Completed", "انتهى"],
+  resCancelled: ["Cancelled", "ملغي"],
+  resNoShow: ["No show", "ما حضرت"],
+  resNewSub: [
+    "Pick a day and time, we'll confirm it shortly",
+    "اختار اليوم والساعة وبنأكدلك بأقرب وقت",
+  ],
+  resPartySize: ["How many people?", "كم شخص؟"],
+  resDay: ["Day", "اليوم"],
+  resTime: ["Time", "الساعة"],
+  resNotes: ["Notes (optional)", "ملاحظات (اختياري)"],
+  resNotesPlaceholder: ["e.g. a birthday, a high chair", "مثلاً عيد ميلاد، كرسي أطفال"],
+  resConfirm: ["Confirm booking", "أكّد الحجز"],
+  resPickTime: ["Pick a time first", "اختار الساعة أول"],
+  resSent: ["Booking sent ✅ We'll confirm it shortly", "انبعت الحجز ✅ رح نأكدلك بأقرب وقت"],
+  resFailed: ["Something went wrong, try again", "صار في مشكلة، جرّب كمان مرة"],
+  resToday: ["Today", "اليوم"],
+  resTomorrow: ["Tomorrow", "بكرا"],
 } as const satisfies Record<string, readonly [string, string]>;
 
 export type StringKey = keyof typeof STRINGS;

@@ -120,7 +120,7 @@ export default function CheckoutScreen() {
   return (
     <View style={{ flex: 1 }}>
       <BackButton />
-      <ScrollView style={styles.screen} contentContainerStyle={{ padding: 20 }}>
+      <ScrollView style={styles.screen} contentContainerStyle={{ flexGrow: 1, padding: 20 }}>
         <Text style={styles.title}>Checkout</Text>
 
         <Text style={styles.sectionTitle}>Order type</Text>

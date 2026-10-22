@@ -182,6 +182,7 @@ export default function MediaHub() {
             </View>
           )
         }
+        ListFooterComponentStyle={{ marginTop: "auto" }}
         ListFooterComponent={
           <>
             {loadingMore ? <ActivityIndicator color={TEAL} style={styles.more} /> : null}
@@ -236,6 +237,7 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    flexGrow: 1,
     paddingBottom: 120,
   },
 

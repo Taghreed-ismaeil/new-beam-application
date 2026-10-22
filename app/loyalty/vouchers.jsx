@@ -401,6 +401,7 @@ const styles = StyleSheet.create({
   },
 
   scroll: {
+    flexGrow: 1,
     paddingBottom: 110,
   },
 

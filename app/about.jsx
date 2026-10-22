@@ -394,6 +394,7 @@ const baseStyles = {
   },
 
   scrollContent: {
+    flexGrow: 1,
     paddingBottom: 110,
   },
 

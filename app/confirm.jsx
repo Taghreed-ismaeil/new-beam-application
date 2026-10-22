@@ -437,6 +437,7 @@ const styles = StyleSheet.create({
   },
 
   scroll: {
+    flexGrow: 1,
     // clears the absolutely-positioned bottom tab bar
     paddingBottom: 100,
   },

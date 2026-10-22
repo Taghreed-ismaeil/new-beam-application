@@ -1,4 +1,3 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
@@ -12,7 +11,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import Animated from "react-native-reanimated";
+import { Ionicons } from "@expo/vector-icons";
+import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
@@ -22,26 +22,23 @@ import { apiRequestCached, imageUrl, isUsableImagePath } from "@/lib/api-client"
 import { useAppLang } from "@/lib/app-lang";
 import { findMenuCategory } from "@/lib/menu-category";
 import { allMenuItems, categoryItems, getMenuSections } from "@/lib/menu-sections";
-import { enterDown, enterPop, enterUp } from "@/lib/motion";
+import { enterDown, enterUp } from "@/lib/motion";
 import { Text, TextInput } from "@/lib/arabic-font";
 
 /* =========================================================
    ITEM DETAILS
-   Opens from a food card inside the menu. The screen takes the
-   color of that card's ADD button (orange / teal), with the
-   photo centered on the colored top. Below:
-   the full name and ingredients, the restaurant's extras
-   (the "إضافاتنا" category) to add on the side, and a note for
-   the kitchen. The bar at the bottom adds it all to the cart.
+   Opens from a food card inside the menu: the photo on a teal
+   top, the name, a teal card with one tag per ingredient and the
+   price, the restaurant's extras (the "إضافاتنا" category), a
+   tap-to-open note for the kitchen, and more items of the same
+   kind. The orange bar at the bottom adds it all to the cart.
 ========================================================= */
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";
 
-// Same softened colors as the menu cards / category headers
-const SOFT_ORANGE = "#FC6E43";
+// Same softened teal as the menu cards / category headers
 const SOFT_TEAL = "#337974";
-const FADE_ORANGE = "252,110,67";
 const FADE_TEAL = "51,121,116";
 
 const LIGHT_ORANGE = "#FFF0EA";
@@ -60,8 +57,29 @@ const imageSource = (item, fallback) =>
   isUsableImagePath(item?.imageUrl) ? { uri: imageUrl(item.imageUrl) } : fallback;
 
 const money = (n) => Number(n).toFixed(2);
+
+const asCartItem = (i) => ({
+  id: i.id,
+  name: i.nameEn || i.name,
+  nameAr: i.name,
+  nameEn: i.nameEn,
+  price: Number(i.price),
+  imageUrl: i.imageUrl,
+});
+
+// "خبز، لحمة، جبنة" → ["خبز", "لحمة", "جبنة"] — one tag per ingredient
+const splitIngredients = (text) =>
+  (text ?? "")
+    .split(/[,،\n•]|\s[-–]\s/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+// Each ingredient tag pops toward the viewer, overshoots, then settles —
+// one after another. (A 3D perspective version got stuck mid-air on web.)
+const popTag = (index) => ZoomIn.delay(250 + index * 80).springify().damping(9).stiffness(180);
+
 export default function ItemDetails() {
-  const { id, tone, button, fromCart } = useLocalSearchParams();
+  const { id, fromCart } = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const cart = useCart();
@@ -93,35 +111,38 @@ export default function ItemDetails() {
     return categoryItems(category).filter((e) => String(e.id) !== String(id));
   }, [menu, id]);
 
-  // Where the item sits on the menu decides its color, the same way its card
-  // is colored: food cards alternate their ADD button orange / teal by the
-  // item's position inside its section.
-  const place = useMemo(() => {
-    const categories = menu ?? [];
-    for (const c of categories) {
+  // "More from the same kind": the other items of the item's own sub-section
+  // (burgers → the other burgers); an item alone in its sub-section falls back
+  // to the rest of its whole category.
+  const sameKind = useMemo(() => {
+    for (const c of menu ?? []) {
       const lists = (getMenuSections(c) ?? [{ items: c.items ?? [] }]).map((s) => s.items);
-      for (const list of lists) {
-        const pos = list.findIndex((i) => String(i.id) === String(id));
-        if (pos !== -1) return { itemIndex: pos };
-      }
+      const list = lists.find((l) => l.some((i) => String(i.id) === String(id)));
+      if (!list) continue;
+      const pool = list.length > 1 ? list : categoryItems(c);
+      return pool.filter((i) => String(i.id) !== String(id));
     }
-    return null;
+    return [];
   }, [menu, id]);
 
-  // The whole screen — top, photo backdrop, price and add-to-cart bar — takes
-  // the color of the ADD button on the item's card.
-  const buttonColor = place
-    ? place.itemIndex % 2 === 0
-      ? ORANGE
-      : TEAL
-    : (button ?? tone) === "teal"
-      ? TEAL
-      : ORANGE;
-  const isOrange = buttonColor === ORANGE;
-  const headerColor = isOrange ? SOFT_ORANGE : SOFT_TEAL;
-  const fade = isOrange ? FADE_ORANGE : FADE_TEAL;
+  // Every item page looks the same: teal on top (photo backdrop + the
+  // ingredients card), orange at the bottom (quantity + add to cart).
+  const buttonColor = ORANGE;
+  const headerColor = SOFT_TEAL;
+  const fade = FADE_TEAL;
 
-  const photoSize = Math.min(width * 0.66, 290);
+  // From the cart with a note already written: start with the note box open
+  const [noteOpen, setNoteOpen] = useState(() => !!cartLine?.notes);
+  // the "+" on a same-kind card flips to ✓ for a moment after adding
+  const [justAdded, setJustAdded] = useState(null);
+
+  function quickAdd(i) {
+    cart.addMany(asCartItem(i), 1);
+    setJustAdded(i.id);
+    setTimeout(() => setJustAdded((cur) => (cur === i.id ? null : cur)), 1200);
+  }
+
+  const heroHeight = Math.min(Math.round(width * 0.95), 440);
 
   const extrasTotal = extraItems.reduce(
     (sum, e) => sum + Number(e.price) * (extras[e.id] ?? 0),
@@ -138,14 +159,6 @@ export default function ItemDetails() {
 
   function addToCart() {
     if (!item) return;
-    const asCartItem = (i) => ({
-      id: i.id,
-      name: i.nameEn || i.name,
-      nameAr: i.name,
-      nameEn: i.nameEn,
-      price: Number(i.price),
-      imageUrl: i.imageUrl,
-    });
     if (cartLine) cart.updateLine(item.id, quantity, notes);
     else cart.addMany(asCartItem(item), quantity, notes);
     for (const e of extraItems) {
@@ -173,7 +186,7 @@ export default function ItemDetails() {
     );
   }
 
-  const description = pickDesc(item);
+  const ingredients = splitIngredients(pickDesc(item));
 
   return (
     <KeyboardAvoidingView
@@ -185,37 +198,44 @@ export default function ItemDetails() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 130 + insets.bottom }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 130 + insets.bottom }}
       >
-        {/* ================= COLORED TOP + PHOTO ================= */}
+        {/* ================= PHOTO ================= */}
 
-        {/* Floating 3D glass card (see components/FoodPhotoHero) */}
-        <View style={[styles.top, { backgroundColor: headerColor }]}>
-          <Animated.View entering={enterPop(1)}>
-            <FoodPhotoHero source={imageSource(item, FALLBACK_IMAGE)} size={photoSize} />
+        {/* Full-width photo with a slow zoom (see components/FoodPhotoHero) */}
+        <FoodPhotoHero source={imageSource(item, FALLBACK_IMAGE)} width={width} height={heroHeight} />
+
+        {/* ================= SHEET: NAME + INGREDIENTS + PRICE ================= */}
+
+        {/* Cream sheet with rounded top corners rising over the photo */}
+        <View style={styles.sheet}>
+          <View style={[styles.handle, { backgroundColor: headerColor }]} />
+
+          <Animated.View entering={enterUp(1)}>
+            <Text style={styles.name}>{pick(item)}</Text>
           </Animated.View>
-        </View>
-        <LinearGradient
-          pointerEvents="none"
-          colors={[headerColor, `rgba(${fade},0.45)`, `rgba(${fade},0)`]}
-          style={styles.topFade}
-        />
 
-        {/* ================= NAME + INGREDIENTS ================= */}
-
-        <Animated.View entering={enterUp(2)} style={styles.info}>
-          <Text style={styles.name}>{pick(item)}</Text>
-
-          {!!description && <Text style={styles.description}>{description}</Text>}
-
-          <View
-            style={[styles.pricePill, { backgroundColor: buttonColor === TEAL ? LIGHT_TEAL : LIGHT_ORANGE }]}
-          >
-            <Text style={[styles.priceText, { color: buttonColor }]}>
+          {/* 3D teal card: one white-framed tag per ingredient, then the price */}
+          <Animated.View entering={enterUp(2)} style={styles.ingCard}>
+            <View pointerEvents="none" style={styles.cardBubbleBig} />
+            <View pointerEvents="none" style={styles.cardBubbleSmall} />
+            {ingredients.length > 0 && (
+              <>
+                <View style={styles.ingList}>
+                  {ingredients.map((ing, i) => (
+                    <Animated.View key={`${ing}-${i}`} entering={popTag(i)} style={styles.ingTag}>
+                      <Text style={styles.ingText}>{ing}</Text>
+                    </Animated.View>
+                  ))}
+                </View>
+                <View style={styles.ingDivider} />
+              </>
+            )}
+            <Text style={styles.ingPrice}>
               {money(item.price)} {t("jd")}
             </Text>
-          </View>
-        </Animated.View>
+          </Animated.View>
+        </View>
 
         {/* ================= EXTRAS ================= */}
 
@@ -287,18 +307,78 @@ export default function ItemDetails() {
 
         {/* ================= NOTES ================= */}
 
+        {/* collapsed to a dashed "add a note" button until tapped */}
         <Animated.View entering={enterUp(4)} style={styles.block}>
-          <Text style={[styles.blockTitle, dir.text]}>{t("itemNotes")}</Text>
-          <TextInput
-            value={notes}
-            onChangeText={setNotes}
-            placeholder={t("itemNotesPlaceholder")}
-            placeholderTextColor="#A4A4A4"
-            multiline
-            maxLength={200}
-            style={[styles.notes, dir.text, { borderColor: `rgba(${fade},0.35)` }]}
-          />
+          {noteOpen ? (
+            <Animated.View entering={FadeInDown.springify().damping(16)}>
+              <Text style={[styles.blockTitle, dir.text]}>{t("itemNotes")}</Text>
+              <TextInput
+                value={notes}
+                onChangeText={setNotes}
+                placeholder={t("itemNotesPlaceholder")}
+                placeholderTextColor="#A4A4A4"
+                multiline
+                autoFocus={!cartLine?.notes}
+                maxLength={200}
+                style={[styles.notes, dir.text, { borderColor: `rgba(${fade},0.35)` }]}
+              />
+            </Animated.View>
+          ) : (
+            <Pressable
+              onPress={() => setNoteOpen(true)}
+              style={({ pressed }) => [styles.addNote, dir.row, pressed && styles.pressed]}
+            >
+              <View style={styles.addNoteIcon}>
+                <Ionicons name="pencil" size={15} color={WHITE} />
+              </View>
+              <Text style={[styles.addNoteText, dir.text]}>{t("itemAddNote")}</Text>
+              <Ionicons name="add" size={20} color={TEAL} />
+            </Pressable>
+          )}
         </Animated.View>
+
+        {/* ================= MORE FROM THE SAME KIND ================= */}
+
+        {sameKind.length > 0 && (
+          <Animated.View entering={enterUp(5)} style={styles.moreBlock}>
+            <Text style={[styles.blockTitle, styles.moreTitle, dir.text]}>{t("itemMoreLikeThis")}</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.moreRow}
+            >
+              {sameKind.map((i) => (
+                <Pressable
+                  key={i.id}
+                  onPress={() => router.push({ pathname: "/item/[id]", params: { id: String(i.id) } })}
+                  style={({ pressed }) => [styles.moreCard, pressed && styles.pressed]}
+                >
+                  <Image
+                    source={imageSource(i, FALLBACK_IMAGE)}
+                    cachePolicy="memory-disk"
+                    contentFit="cover"
+                    style={styles.moreImage}
+                  />
+                  <Text style={[styles.moreName, dir.text]} numberOfLines={2}>
+                    {pick(i)}
+                  </Text>
+                  <View style={[styles.moreBottom, dir.row]}>
+                    <Text style={styles.morePrice}>
+                      {money(i.price)} {t("jd")}
+                    </Text>
+                    <Pressable
+                      onPress={() => quickAdd(i)}
+                      hitSlop={8}
+                      style={[styles.morePlus, justAdded === i.id && styles.morePlusDone]}
+                    >
+                      <Ionicons name={justAdded === i.id ? "checkmark" : "add"} size={16} color={WHITE} />
+                    </Pressable>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        )}
         <MadeBy />
       </ScrollView>
 
@@ -364,26 +444,25 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  /* ================= TOP ================= */
+  /* ================= SHEET ================= */
 
-  // Clears the status bar + back button, then frames the photo
-  top: {
-    paddingTop: 100,
-    paddingBottom: 30,
+  // rises over the bottom of the photo
+  sheet: {
+    marginTop: -30,
+    backgroundColor: CREAM,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingTop: 10,
+    paddingHorizontal: 16,
     alignItems: "center",
   },
 
-  topFade: {
-    height: 56,
-    marginTop: -1,
-  },
-
-  /* ================= INFO ================= */
-
-  info: {
-    alignItems: "center",
-    paddingHorizontal: 24,
-    marginTop: -6,
+  handle: {
+    width: 42,
+    height: 5,
+    borderRadius: 3,
+    opacity: 0.7,
+    marginBottom: 14,
   },
 
   name: {
@@ -393,25 +472,86 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Full ingredients — never cut off
-  description: {
-    color: MUTED,
-    fontSize: 14,
-    lineHeight: 22,
-    fontWeight: "600",
-    textAlign: "center",
-    marginTop: 8,
+  /* ================= INGREDIENTS CARD ================= */
+
+  // solid teal, thick darker bottom edge = 3D
+  ingCard: {
+    alignSelf: "stretch",
+    marginTop: 16,
+    paddingTop: 20,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    borderRadius: 26,
+    borderBottomWidth: 6,
+    borderBottomColor: "#003B37",
+    backgroundColor: TEAL,
+    alignItems: "center",
+    overflow: "hidden",
+    shadowColor: "#17201F",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 8,
   },
 
-  pricePill: {
-    marginTop: 14,
+  // soft see-through circles for depth in the corners
+  cardBubbleBig: {
+    position: "absolute",
+    top: -60,
+    right: -50,
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+
+  cardBubbleSmall: {
+    position: "absolute",
+    bottom: -40,
+    left: -30,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+
+  // Tags centered, wrapping onto new lines with room between rows
+  ingList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    rowGap: 10,
+    columnGap: 9,
+  },
+
+  // see-through tag with a white frame
+  ingTag: {
+    borderWidth: 1.5,
+    borderColor: WHITE,
     borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 15,
+    backgroundColor: "rgba(255,255,255,0.1)",
   },
 
-  priceText: {
-    fontSize: 18,
+  ingText: {
+    color: WHITE,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  ingDivider: {
+    alignSelf: "stretch",
+    marginTop: 18,
+    marginBottom: 14,
+    borderTopWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: "rgba(255,255,255,0.45)",
+  },
+
+  ingPrice: {
+    color: WHITE,
+    fontSize: 24,
     fontWeight: "900",
   },
 
@@ -553,6 +693,106 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: DARK,
     textAlignVertical: "top",
+  },
+
+  // dashed teal "add a note" button: pencil square · text · plus
+  addNote: {
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: TEAL,
+    backgroundColor: WHITE,
+  },
+
+  addNoteIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: TEAL,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  addNoteText: {
+    flex: 1,
+    color: TEAL,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  /* ================= MORE FROM THE SAME KIND ================= */
+
+  moreBlock: {
+    marginTop: 26,
+  },
+
+  moreTitle: {
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+
+  moreRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+    gap: 12,
+  },
+
+  moreCard: {
+    width: 140,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    shadowColor: "#17201F",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+
+  moreImage: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 14,
+    backgroundColor: "#F4F1ED",
+  },
+
+  moreName: {
+    color: DARK,
+    fontSize: 13,
+    fontWeight: "800",
+    marginTop: 8,
+    minHeight: 34,
+  },
+
+  moreBottom: {
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+
+  morePrice: {
+    color: ORANGE,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  morePlus: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: ORANGE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  morePlusDone: {
+    backgroundColor: TEAL,
   },
 
   /* ================= BOTTOM BAR ================= */

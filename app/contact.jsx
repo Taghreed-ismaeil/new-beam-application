@@ -448,6 +448,7 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    flexGrow: 1,
     paddingTop: 70,
     position: "relative",
   },

@@ -146,7 +146,7 @@ export default function CommunityFeed() {
         onEndReached={loadMore}
         onEndReachedThreshold={0.6}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={TEAL} />}
-        contentContainerStyle={{ paddingBottom: 140 + insets.bottom }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 140 + insets.bottom }}
         ListHeaderComponent={header}
         ListEmptyComponent={
           posts === null ? (
@@ -158,6 +158,7 @@ export default function CommunityFeed() {
             </View>
           )
         }
+        ListFooterComponentStyle={{ marginTop: "auto" }}
         ListFooterComponent={
           <>
             {loadingMore ? <ActivityIndicator color={TEAL} style={{ margin: 20 }} /> : null}
