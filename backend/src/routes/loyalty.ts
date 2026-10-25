@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireUser, requireStaff } from '../middleware/auth';
 import { env } from '../config/env';
-import { versionedUrl } from '../lib/images';
+import { PUZZLE_PIECES, versionedUrl } from '../lib/images';
 
 function genVoucherCode(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -91,7 +91,7 @@ loyaltyRouter.get('/progress', async (req, res) => {
       grayImage: versionedUrl(w.item.grayImage, w.item.updatedAt),
       updatedAt: w.item.updatedAt.getTime(),
       layers: w.layers,
-      total: w.layers.length,
+      total: PUZZLE_PIECES,
       revealedCount: w.revealedCount,
       completed: w.completed,
       rewardType: w.item.rewardType,
@@ -277,7 +277,7 @@ loyaltyRouter.post('/scan', async (req, res) => {
   }
 
   const layers = item.layers as any[];
-  const total = layers.length;
+  const total = PUZZLE_PIECES;
 
   let progress = await prisma.loyaltyProgress.findUnique({
     where: { userId_menuItemId: { userId, menuItemId: item.id } },
@@ -423,7 +423,7 @@ loyaltyRouter.post('/gift-scan', async (req, res) => {
   }
 
   const layers = item.layers as any[];
-  const total = layers.length;
+  const total = PUZZLE_PIECES;
   const newRevealed = Math.min(progress.revealedCount + reveals, total);
   const completedNow = newRevealed >= total;
 
@@ -634,7 +634,7 @@ adminLoyaltyRouter.get('/stats', requireStaff('admin', 'manager'), async (_req, 
     rows.find((r) => r.menuItemId === id)?._count ?? 0;
 
   const items = cards.map((c) => {
-    const pieces = Array.isArray(c.layers) ? (c.layers as unknown[]).length || 1 : 1;
+    const pieces = PUZZLE_PIECES;
     const mine = progress.filter((p) => p.menuItemId === c.id && p.consumedCount > 0);
     const avg = mine.length ? mine.reduce((s, p) => s + Math.min(p.revealedCount / pieces, 1), 0) / mine.length : 0;
     return {

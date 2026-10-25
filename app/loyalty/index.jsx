@@ -148,9 +148,8 @@ export default function LoyaltyCollectionsScreen() {
               <TileImage
                 itemId={item.id}
                 grayImage={item.grayImage}
-                layers={item.layers}
                 revealedCount={item.revealedCount}
-                updatedAt={item.updatedAt}
+                completed={item.completed}
                 size={140}
               />
 

@@ -35,12 +35,12 @@ let started = false;
 export const loyaltyProgressKey = (userId: number) => `/api/loyalty/progress#${userId}`;
 export const loyaltyVouchersKey = (userId: number) => `/api/loyalty/vouchers#${userId}`;
 
-/** Every image a gift tile shows: the grey base plus each revealed colour piece. */
+/** Every image a gift tile shows: the grey base, plus the colour photo once a piece is revealed. */
 export function loyaltyTileUrls(item: any): string[] {
-  const version = item.updatedAt ? `?v=${item.updatedAt}` : "";
-  const urls = item.grayImage ? [imageUrl(item.grayImage)] : [];
-  for (let i = 0; i < (item.revealedCount ?? 0); i++) {
-    urls.push(imageUrl(`/images/${item.id}/layer_${i}.png${version}`));
+  if (!item.grayImage) return [];
+  const urls = [imageUrl(item.grayImage)];
+  if ((item.revealedCount ?? 0) > 0 || item.completed) {
+    urls.push(imageUrl(item.grayImage.replace("gray.png", "color.png")));
   }
   return urls;
 }

@@ -3,6 +3,10 @@ import { uploadBuffer } from './r2';
 
 const SIZE = 480;
 
+// Every gift is collected as a 12-piece jigsaw (the app draws the pieces over the photo),
+// whatever layers were uploaded for it. Must match PUZZLE_PIECES in the app's lib/puzzle.js.
+export const PUZZLE_PIECES = 12;
+
 // Appends the row's updatedAt as a cache-busting query param — without this, a photo
 // re-upload keeps the same URL and browsers/CDNs/native Image caches keep serving the old bytes.
 export function versionedUrl(path: string | null | undefined, updatedAt: Date | null | undefined): string | null {

@@ -651,9 +651,7 @@ export default function RarityCelebration({ tier, itemName, apiResult, onContinu
                 <TileImage
                   itemId={item.id}
                   grayImage={item.grayImage}
-                  layers={item.layers}
                   revealedCount={apiResult.revealedCount ?? 0}
-                  updatedAt={item.updatedAt}
                   size={140}
                 />
               )}

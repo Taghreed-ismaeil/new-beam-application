@@ -585,9 +585,7 @@ export default function LoyaltyScanScreen() {
                   <TileImage
                     itemId={result.item.id}
                     grayImage={result.item.grayImage}
-                    layers={result.item.layers}
                     revealedCount={result.revealedCount ?? 0}
-                    updatedAt={result.item.updatedAt}
                     size={280}
                   />
                 </View>
