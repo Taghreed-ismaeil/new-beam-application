@@ -1,7 +1,9 @@
 import MadeBy from "@/components/MadeBy";
 import GiftsBackdrop from "@/components/GiftsBackdrop";
+import PolicySheet from "@/components/PolicySheet";
 import { useAuth } from "@/context/AuthContext";
 import { apiRequest } from "@/lib/api-client";
+import { POLICY_VERSION } from "@/lib/policies";
 import { useAppLang } from "@/lib/app-lang";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -54,6 +56,34 @@ function useAndroidKeyboardHeight() {
   return height;
 }
 
+const POLICY_LINKS = [
+  ["terms", "policyShortTerms"],
+  ["privacy", "policyShortPrivacy"],
+  ["gifts", "policyShortGifts"],
+  ["content", "policyShortContent"],
+  ["refunds", "policyShortRefunds"],
+];
+
+// Square tick box with its label beside it — the whole row toggles it.
+function CheckRow({ checked, onToggle, children }) {
+  const { dir } = useAppLang();
+
+  return (
+    <TouchableOpacity
+      style={[styles.checkRow, dir.row]}
+      onPress={onToggle}
+      activeOpacity={0.8}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+    >
+      <View style={[styles.checkBox, checked && styles.checkBoxOn]}>
+        {checked && <Ionicons name="checkmark" size={16} color={WHITE} />}
+      </View>
+      <View style={styles.checkLabel}>{children}</View>
+    </TouchableOpacity>
+  );
+}
+
 // Eye button at the end of a password field — shows/hides what was typed.
 function PasswordToggle({ visible, onToggle }) {
   const { t } = useAppLang();
@@ -93,10 +123,21 @@ export default function Login() {
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+  const [offersOptIn, setOffersOptIn] = useState(false);
+  const [openPolicy, setOpenPolicy] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // Registering needs the terms ticked; logging in doesn't show the boxes at all.
+  const submitDisabled = busy || (isRegister && !agreed);
+
   async function submitForm() {
+    if (isRegister && !agreed) {
+      setError(t("loginErrAgree"));
+      return;
+    }
+
     if (!phone.trim() || !password) {
       setError(t("loginErrPhonePassword"));
       return;
@@ -182,6 +223,8 @@ export default function Login() {
           code,
           name: name.trim() || undefined,
           password,
+          acceptedPolicyVersion: POLICY_VERSION,
+          marketingOptIn: offersOptIn,
         },
       });
 
@@ -376,13 +419,40 @@ export default function Login() {
               <PasswordToggle visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
             </View>
 
+            {/* Terms + offers — only when creating an account */}
+            {isRegister && (
+              <View style={styles.consents}>
+                <CheckRow checked={agreed} onToggle={() => setAgreed((v) => !v)}>
+                  <Text style={[styles.checkText, dir.text]}>
+                    {t("loginAgreePrefix")}
+                    {POLICY_LINKS.map(([id, key], i) => (
+                      <Text key={id}>
+                        {i === 0
+                          ? ""
+                          : i === POLICY_LINKS.length - 1
+                            ? t("loginAgreeAnd")
+                            : t("loginAgreeComma")}
+                        <Text style={styles.policyLink} onPress={() => setOpenPolicy(id)}>
+                          {t(key)}
+                        </Text>
+                      </Text>
+                    ))}
+                  </Text>
+                </CheckRow>
+
+                <CheckRow checked={offersOptIn} onToggle={() => setOffersOptIn((v) => !v)}>
+                  <Text style={[styles.checkText, dir.text]}>{t("loginOffersOptIn")}</Text>
+                </CheckRow>
+              </View>
+            )}
+
             {!!error && <Text style={styles.error}>{error}</Text>}
 
             {/* Button */}
             <TouchableOpacity
-              style={styles.button}
+              style={[styles.button, submitDisabled && !busy && styles.buttonDisabled]}
               onPress={submitForm}
-              disabled={busy}
+              disabled={submitDisabled}
             >
               {busy ? (
                 <ActivityIndicator color={ORANGE} />
@@ -564,6 +634,7 @@ export default function Login() {
       </View>
         <MadeBy />
       </ScrollView>
+      <PolicySheet policyId={openPolicy} onClose={() => setOpenPolicy(null)} />
     </View>
   );
 }
@@ -689,6 +760,57 @@ const styles = StyleSheet.create({
     color: ORANGE,
     fontSize: 16,
     fontWeight: "800",
+  },
+
+  buttonDisabled: {
+    opacity: 0.35,
+  },
+
+  /* =====================================================
+     CONSENTS
+  ====================================================== */
+
+  consents: {
+    gap: 14,
+    marginTop: -6,
+    marginBottom: 6,
+  },
+
+  checkRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+
+  checkBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: ORANGE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+
+  checkBoxOn: {
+    backgroundColor: ORANGE,
+  },
+
+  checkLabel: {
+    flex: 1,
+  },
+
+  checkText: {
+    color: "#17201F",
+    fontSize: 13,
+    lineHeight: 21,
+  },
+
+  policyLink: {
+    color: TEAL,
+    fontWeight: "800",
+    textDecorationLine: "underline",
   },
 
   /* =====================================================

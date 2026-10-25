@@ -3,7 +3,7 @@ export const STRINGS = {
   jd: ["JD", "د.أ"],
   add: ["ADD", "أضف"],
   itemExtras: ["Extras", "الإضافات"],
-  itemExtrasHint: ["Add what you like on the side", "زيد على طلبك اللي بتحبه"],
+  itemExtrasHint: ["     ", " "],
   itemNotes: ["Notes", "ملاحظات"],
   itemNotesPlaceholder: [
     "Anything we should know? e.g. no pickles",
@@ -94,14 +94,26 @@ export const STRINGS = {
     "لسا ما في تعليقات… احكي إشي!",
   ],
   mediaAddComment: ["Add a comment...", "اكتب تعليق..."],
-  mediaMineEmpty: ["Photos you share will show up here", "الصور اللي بتشاركها رح تبيّن هون"],
-  mediaMineSub: ["Tap a photo to archive or delete it", "اكبس على صورة لتأرشفها أو تحذفها"],
+  mediaMineEmpty: [
+    "Photos you share will show up here",
+    "الصور اللي بتشاركها رح تبيّن هون",
+  ],
+  mediaMineSub: [
+    "Tap a photo to archive or delete it",
+    "اكبس على صورة لتأرشفها أو تحذفها",
+  ],
   mediaLive: ["Live", "منشورة"],
   mediaArchived: ["Archived", "مؤرشفة"],
   mediaArchive: ["Archive", "أرشفة"],
   mediaUnarchive: ["Show again", "رجّعها"],
-  mediaArchiveHint: ["Archived photos are hidden from everyone but you — you can bring them back anytime", "الصور المؤرشفة ما بيشوفها غيرك، وبتقدر ترجّعها أي وقت"],
-  mediaDeleteConfirm: ["Delete this photo for good?", "أكيد بدك تحذف الصورة نهائياً؟"],
+  mediaArchiveHint: [
+    "Archived photos are hidden from everyone but you — you can bring them back anytime",
+    "الصور المؤرشفة ما بيشوفها غيرك، وبتقدر ترجّعها أي وقت",
+  ],
+  mediaDeleteConfirm: [
+    "Delete this photo for good?",
+    "أكيد بدك تحذف الصورة نهائياً؟",
+  ],
   mediaDeleteYes: ["Yes, delete", "إيه، احذفها"],
   mediaContactUs: ["Contact us", "تواصل معنا"],
   tabGifts: ["Gifts", "الهدايا"],
@@ -111,10 +123,7 @@ export const STRINGS = {
   contactPhoneText: ["Let's talk.", "يلا نحكي"],
   contactBadge: ["GET IN TOUCH", "تواصل معنا"],
   contactCardTitle: ["We’re here for you", "إحنا هون عشانك"],
-  contactCardSub: [
-    "Reach us anytime through one of the options below.",
-    "تواصل معنا بأي وقت    .",
-  ],
+  contactCardSub: ["", " "],
   contactPhone: ["PHONE", "الهاتف"],
   contactLocation: ["LOCATION", "الموقع"],
   contactEmail: ["EMAIL", "الإيميل"],
@@ -129,7 +138,7 @@ export const STRINGS = {
   contactTime3: ["12:00 PM – 10:00 PM", "12:00 م – 10:00 م"],
   contactFollow: ["FOLLOW ALONG", "تابعنا"],
   contactSocialTitle: ["Find us on social", "لاقينا على السوشال ميديا"],
-  contactSocialSub: ["Stay hungry. Stay connected.", "خليك جوعان. وخليك قريب."],
+  contactSocialSub: ["", ""],
   contactBottom: ["WE CAN’T WAIT TO HEAR FROM YOU", "مستنيين نسمع منك"],
 
   /* ================= ABOUT PAGE ================= */
@@ -204,7 +213,7 @@ export const STRINGS = {
   loyTitle: ["Collect & Win", "اجمع واربح"],
   loySubtitle: [
     "Collect your stamps and unlock delicious rewards.",
-    "اجمع قطعك وافتح جوائز لذيذة.",
+    "اجمع قطعك وافتح جوائز مميزة.",
   ],
   loyMyRewards: ["My Rewards", "الجوائز"],
   // special prize of the month (top of the Gifts page)
@@ -610,6 +619,26 @@ export const STRINGS = {
   loginBack: ["← Back", "رجوع →"],
   loginShowPassword: ["Show password", "إظهار كلمة السر"],
   loginHidePassword: ["Hide password", "إخفاء كلمة السر"],
+  loginAgreePrefix: ["I have read and agree to the ", "قرأت وبوافق على "],
+  loginAgreeAnd: [" and ", " و"],
+  loginAgreeComma: [", ", "، "],
+  loginOffersOptIn: [
+    "Send me notifications about offers and new items",
+    "بدي توصلني إشعارات بالعروض والأصناف الجديدة",
+  ],
+  loginErrAgree: [
+    "Please agree to the terms and policies to create your account",
+    "لازم توافق على الشروط والسياسات عشان تنشئ حساب",
+  ],
+  policyClose: ["Close", "إغلاق"],
+  policyDocRestaurant: ["Beam Restaurant", "مطعم بيم"],
+  policyDocTitle: ["Policies & Terms", "السياسات والشروط"],
+  policyDocContains: ["This document contains:", "تحتوي هذه الوثيقة على:"],
+  policyShortTerms: ["Terms & Conditions", "الشروط والأحكام"],
+  policyShortPrivacy: ["Privacy Policy", "سياسة الخصوصية"],
+  policyShortGifts: ["Gifts Terms", "شروط الهدايا"],
+  policyShortContent: ["Content Policy", "سياسة المحتوى"],
+  policyShortRefunds: ["Refund Policy", "سياسة الإلغاء والاسترجاع"],
   loginErrPhonePassword: [
     "Please enter your phone number and password",
     "دخّل رقم موبايلك وكلمة السر",
@@ -717,7 +746,7 @@ export const STRINGS = {
   trackBackHome: ["Back to home", "رجوع للرئيسية"],
 
   /* ================= TABLE BOOKINGS ================= */
-  resEyebrow: ["TABLE BOOKINGS", "حجز الطاولات"],
+  resEyebrow: [" ", " "],
   resTitle: ["My bookings", "حجوزاتي"],
   resNew: ["Book a table", "احجز طاولة"],
   resEmptyTitle: ["No bookings yet", "ما عندك حجوزات لسا"],
@@ -739,10 +768,16 @@ export const STRINGS = {
   resDay: ["Day", "اليوم"],
   resTime: ["Time", "الساعة"],
   resNotes: ["Notes (optional)", "ملاحظات (اختياري)"],
-  resNotesPlaceholder: ["e.g. a birthday, a high chair", "مثلاً عيد ميلاد، كرسي أطفال"],
+  resNotesPlaceholder: [
+    "e.g. a birthday, a high chair",
+    "مثلاً عيد ميلاد، كرسي أطفال",
+  ],
   resConfirm: ["Confirm booking", "أكّد الحجز"],
   resPickTime: ["Pick a time first", "اختار الساعة أول"],
-  resSent: ["Booking sent ✅ We'll confirm it shortly", "انبعت الحجز ✅ رح نأكدلك بأقرب وقت"],
+  resSent: [
+    "Booking sent ✅ We'll confirm it shortly",
+    "انبعت الحجز ✅ رح نأكدلك بأقرب وقت",
+  ],
   resFailed: ["Something went wrong, try again", "صار في مشكلة، جرّب كمان مرة"],
   resToday: ["Today", "اليوم"],
   resTomorrow: ["Tomorrow", "بكرا"],
