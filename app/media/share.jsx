@@ -235,6 +235,19 @@ export default function SharePhoto() {
 
         {!!error && <Text style={styles.error}>{error}</Text>}
 
+        {/* what posting allows, said right before the button (Content Policy, section 5) */}
+        <Text
+          style={styles.consent}
+          onPress={() =>
+            router.push({
+              pathname: "/policies/[doc]",
+              params: { doc: "content" },
+            })
+          }
+        >
+          {t("mediaShareConsent")}
+        </Text>
+
         <Pressable
           onPress={send}
           disabled={!asset || sending}
@@ -359,6 +372,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 12,
     textAlign: "center",
+  },
+
+  consent: {
+    alignSelf: "stretch",
+    marginTop: 14,
+    color: MUTED,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "600",
+    textAlign: "center",
+    textDecorationLine: "underline",
   },
 
   primary: {
