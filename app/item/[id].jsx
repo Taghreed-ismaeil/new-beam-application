@@ -1,4 +1,25 @@
-import { LinearGradient } from "expo-linear-gradient";
+import BackButton from "@/components/BackButton";
+import CartIcon from "@/components/CartIcon";
+import FoodPhotoHero from "@/components/FoodPhotoHero";
+import MadeBy from "@/components/MadeBy";
+import { OfferCountdownChip } from "@/components/OfferCountdown";
+import { useCart } from "@/context/CartContext";
+import {
+  apiRequestCached,
+  imageUrl,
+  isUsableImagePath,
+} from "@/lib/api-client";
+import { useAppLang } from "@/lib/app-lang";
+import { Text, TextInput } from "@/lib/arabic-font";
+import { findMenuCategory } from "@/lib/menu-category";
+import {
+  allMenuItems,
+  categoryItems,
+  getMenuSections,
+} from "@/lib/menu-sections";
+import { enterDown, enterUp } from "@/lib/motion";
+import { checkoutOfferFor, useOffers } from "@/lib/offers";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
@@ -12,35 +33,23 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import Animated from "react-native-reanimated";
+import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import BackButton from "@/components/BackButton";
-import FoodPhotoHero from "@/components/FoodPhotoHero";
-import { useCart } from "@/context/CartContext";
-import { apiRequestCached, imageUrl, isUsableImagePath } from "@/lib/api-client";
-import { useAppLang } from "@/lib/app-lang";
-import { findMenuCategory } from "@/lib/menu-category";
-import { allMenuItems, categoryItems, getMenuSections } from "@/lib/menu-sections";
-import { enterDown, enterPop, enterUp } from "@/lib/motion";
-import { Text, TextInput } from "@/lib/arabic-font";
 
 /* =========================================================
    ITEM DETAILS
-   Opens from a food card inside the menu. The screen takes the
-   color of that card's ADD button (orange / teal), with the
-   photo centered on the colored top. Below:
-   the full name and ingredients, the restaurant's extras
-   (the "إضافاتنا" category) to add on the side, and a note for
-   the kitchen. The bar at the bottom adds it all to the cart.
+   Opens from a food card inside the menu: the photo on a teal
+   top, the name, a teal card with one tag per ingredient and the
+   price, the restaurant's extras (the "إضافاتنا" category), a
+   tap-to-open note for the kitchen, and more items of the same
+   kind. The orange bar at the bottom adds it all to the cart.
 ========================================================= */
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";
 
-// Same softened colors as the menu cards / category headers
-const SOFT_ORANGE = "#FC6E43";
+// Same softened teal as the menu cards / category headers
 const SOFT_TEAL = "#337974";
-const FADE_ORANGE = "252,110,67";
 const FADE_TEAL = "51,121,116";
 
 const LIGHT_ORANGE = "#FFF0EA";
@@ -56,20 +65,57 @@ const FALLBACK_IMAGE = require("../../assets/img/menu-5.jpg");
 const EXTRAS_IMAGE = require("../../assets/img/about/menu-img/extras.jpg");
 
 const imageSource = (item, fallback) =>
-  isUsableImagePath(item?.imageUrl) ? { uri: imageUrl(item.imageUrl) } : fallback;
+  isUsableImagePath(item?.imageUrl)
+    ? { uri: imageUrl(item.imageUrl) }
+    : fallback;
 
 const money = (n) => Number(n).toFixed(2);
+
+const asCartItem = (i) => ({
+  id: i.id,
+  name: i.nameEn || i.name,
+  nameAr: i.name,
+  nameEn: i.nameEn,
+  price: Number(i.price),
+  imageUrl: i.imageUrl,
+});
+
+// "خبز، لحمة، جبنة" → ["خبز", "لحمة", "جبنة"] — one tag per ingredient
+const splitIngredients = (text) =>
+  (text ?? "")
+    .split(/[,،\n•]|\s[-–]\s/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+// Each ingredient tag pops toward the viewer, overshoots, then settles —
+// one after another. (A 3D perspective version got stuck mid-air on web.)
+const popTag = (index) =>
+  ZoomIn.delay(120 + Math.min(index * 45, 360))
+    .springify()
+    .damping(9)
+    .stiffness(180);
+
 export default function ItemDetails() {
-  const { id, tone, button } = useLocalSearchParams();
+  const { id, fromCart } = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const cart = useCart();
   const { t, pick, pickDesc, dir } = useAppLang();
 
   const [menu, setMenu] = useState(null);
-  const [quantity, setQuantity] = useState(1);
-  const [extras, setExtras] = useState({}); // extra item id → quantity
-  const [notes, setNotes] = useState("");
+  // Opened from a cart line: start from what is in the cart, and saving updates it
+  const cartLine = fromCart
+    ? cart.lines.find((l) => String(l.menuItemId) === String(id))
+    : null;
+  const [quantity, setQuantity] = useState(() => cartLine?.quantity ?? 1);
+  // extra item id → quantity; from the cart, start with the extras already in it
+  const [extras, setExtras] = useState(() =>
+    fromCart
+      ? Object.fromEntries(cart.lines.map((l) => [l.menuItemId, l.quantity]))
+      : {},
+  );
+  const [notes, setNotes] = useState(() => cartLine?.notes ?? "");
+  const offers = useOffers();
 
   useEffect(() => {
     apiRequestCached("/api/menu", (data) => setMenu(data.categories ?? []));
@@ -80,48 +126,69 @@ export default function ItemDetails() {
     [menu, id],
   );
 
-  // The extras on offer are the "إضافاتنا" category — minus the item itself
-  // if it happens to be one of them.
+  // The extras on offer are the ones the admin picked for this item (`extraIds`)
+  // out of the "إضافاتنا" category. A server that doesn't send `extraIds` yet
+  // still gets the whole category, minus the item itself.
   const extraItems = useMemo(() => {
     const category = findMenuCategory(menu, "extras");
-    return categoryItems(category).filter((e) => String(e.id) !== String(id));
-  }, [menu, id]);
+    const allowed = item?.extraIds;
+    return categoryItems(category).filter(
+      (e) =>
+        String(e.id) !== String(id) &&
+        (!Array.isArray(allowed) || allowed.includes(e.id)),
+    );
+  }, [menu, id, item]);
 
-  // Where the item sits on the menu decides its color, the same way its card
-  // is colored: food cards alternate their ADD button orange / teal by the
-  // item's position inside its section.
-  const place = useMemo(() => {
-    const categories = menu ?? [];
-    for (const c of categories) {
-      const lists = (getMenuSections(c) ?? [{ items: c.items ?? [] }]).map((s) => s.items);
-      for (const list of lists) {
-        const pos = list.findIndex((i) => String(i.id) === String(id));
-        if (pos !== -1) return { itemIndex: pos };
-      }
+  // "More from the same kind": the other items of the item's own sub-section
+  // (burgers → the other burgers); an item alone in its sub-section falls back
+  // to the rest of its whole category.
+  const sameKind = useMemo(() => {
+    for (const c of menu ?? []) {
+      const lists = (getMenuSections(c) ?? [{ items: c.items ?? [] }]).map(
+        (s) => s.items,
+      );
+      const list = lists.find((l) =>
+        l.some((i) => String(i.id) === String(id)),
+      );
+      if (!list) continue;
+      const pool = list.length > 1 ? list : categoryItems(c);
+      return pool.filter((i) => String(i.id) !== String(id));
     }
-    return null;
+    return [];
   }, [menu, id]);
 
-  // The whole screen — top, photo backdrop, price and add-to-cart bar — takes
-  // the color of the ADD button on the item's card.
-  const buttonColor = place
-    ? place.itemIndex % 2 === 0
-      ? ORANGE
-      : TEAL
-    : (button ?? tone) === "teal"
-      ? TEAL
-      : ORANGE;
-  const isOrange = buttonColor === ORANGE;
-  const headerColor = isOrange ? SOFT_ORANGE : SOFT_TEAL;
-  const fade = isOrange ? FADE_ORANGE : FADE_TEAL;
+  // Every item page looks the same: teal on top (photo backdrop + the
+  // ingredients card), orange at the bottom (quantity + add to cart).
+  const buttonColor = ORANGE;
+  const headerColor = SOFT_TEAL;
+  const fade = FADE_TEAL;
 
-  const photoSize = Math.min(width * 0.66, 290);
+  // From the cart with a note already written: start with the note box open
+  const [noteOpen, setNoteOpen] = useState(() => !!cartLine?.notes);
+  // the "+" on a same-kind card flips to ✓ for a moment after adding
+  const [justAdded, setJustAdded] = useState(null);
+
+  function quickAdd(i) {
+    cart.addMany(asCartItem(i), 1);
+    setJustAdded(i.id);
+    setTimeout(() => setJustAdded((cur) => (cur === i.id ? null : cur)), 1200);
+  }
+
+  const heroHeight = Math.min(Math.round(width * 0.95), 440);
 
   const extrasTotal = extraItems.reduce(
     (sum, e) => sum + Number(e.price) * (extras[e.id] ?? 0),
     0,
   );
-  const total = item ? Number(item.price) * quantity + extrasTotal : 0;
+  // a live timed offer on this item: its price while the countdown runs
+  const deal = item
+    ? checkoutOfferFor(item.id, offers, Number(item.price))
+    : null;
+  const unitPrice = deal ? deal.price : Number(item?.price ?? 0);
+  const total = item ? unitPrice * quantity + extrasTotal : 0;
+  const cartCount = cart.lines.reduce((n, l) => n + l.quantity, 0);
+  // small phones: a slimmer quantity pill so "add to cart" + price + cart all fit on one line
+  const narrow = width < 400;
 
   function changeExtra(extraId, delta) {
     setExtras((prev) => {
@@ -132,20 +199,17 @@ export default function ItemDetails() {
 
   function addToCart() {
     if (!item) return;
-    const asCartItem = (i) => ({
-      id: i.id,
-      name: i.nameEn || i.name,
-      nameAr: i.name,
-      nameEn: i.nameEn,
-      price: Number(i.price),
-      imageUrl: i.imageUrl,
-    });
-    cart.addMany(asCartItem(item), quantity, notes);
+    if (cartLine) cart.updateLine(item.id, quantity, notes);
+    else cart.addMany(asCartItem(item), quantity, notes);
     for (const e of extraItems) {
-      if (extras[e.id]) cart.addMany(asCartItem(e), extras[e.id]);
+      const inCart = cartLine && cart.lines.find((l) => l.menuItemId === e.id);
+      // editing from the cart sets the extras to what is chosen here
+      if (inCart)
+        cart.updateLine(e.id, extras[e.id] ?? 0, inCart.notes ?? undefined);
+      else if (extras[e.id]) cart.addMany(asCartItem(e), extras[e.id]);
     }
     if (router.canGoBack()) router.back();
-    else router.replace("/menu");
+    else router.replace(cartLine ? "/cart" : "/menu");
   }
 
   /* ================= LOADING / MISSING ================= */
@@ -163,7 +227,7 @@ export default function ItemDetails() {
     );
   }
 
-  const description = pickDesc(item);
+  const ingredients = splitIngredients(pickDesc(item));
 
   return (
     <KeyboardAvoidingView
@@ -175,44 +239,74 @@ export default function ItemDetails() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 130 + insets.bottom }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingBottom: 130 + insets.bottom,
+        }}
       >
-        {/* ================= COLORED TOP + PHOTO ================= */}
+        {/* ================= PHOTO ================= */}
 
-        {/* Floating 3D glass card (see components/FoodPhotoHero) */}
-        <View style={[styles.top, { backgroundColor: headerColor }]}>
-          <Animated.View entering={enterPop(1)}>
-            <FoodPhotoHero source={imageSource(item, FALLBACK_IMAGE)} size={photoSize} />
-          </Animated.View>
-        </View>
-        <LinearGradient
-          pointerEvents="none"
-          colors={[headerColor, `rgba(${fade},0.45)`, `rgba(${fade},0)`]}
-          style={styles.topFade}
+        {/* Full-width photo with a slow zoom (see components/FoodPhotoHero) */}
+        <FoodPhotoHero
+          source={imageSource(item, FALLBACK_IMAGE)}
+          width={width}
+          height={heroHeight}
         />
 
-        {/* ================= NAME + INGREDIENTS ================= */}
+        {/* ================= SHEET: NAME + INGREDIENTS + PRICE ================= */}
 
-        <Animated.View entering={enterUp(2)} style={styles.info}>
-          <Text style={styles.name}>{pick(item)}</Text>
+        {/* Cream sheet with rounded top corners rising over the photo */}
+        <View style={styles.sheet}>
+          <View style={[styles.handle, { backgroundColor: headerColor }]} />
 
-          {!!description && <Text style={styles.description}>{description}</Text>}
+          <Animated.View entering={enterUp(1)}>
+            <Text style={styles.name}>{pick(item)}</Text>
+          </Animated.View>
 
-          <View
-            style={[styles.pricePill, { backgroundColor: buttonColor === TEAL ? LIGHT_TEAL : LIGHT_ORANGE }]}
-          >
-            <Text style={[styles.priceText, { color: buttonColor }]}>
-              {money(item.price)} {t("jd")}
+          {/* 3D teal card: one white-framed tag per ingredient, then the price */}
+          <Animated.View entering={enterUp(2)} style={styles.ingCard}>
+            <View pointerEvents="none" style={styles.cardBubbleBig} />
+            <View pointerEvents="none" style={styles.cardBubbleSmall} />
+            {ingredients.length > 0 && (
+              <>
+                <View style={styles.ingList}>
+                  {ingredients.map((ing, i) => (
+                    <Animated.View
+                      key={`${ing}-${i}`}
+                      entering={popTag(i)}
+                      style={styles.ingTag}
+                    >
+                      <Text style={styles.ingText}>{ing}</Text>
+                    </Animated.View>
+                  ))}
+                </View>
+                <View style={styles.ingDivider} />
+              </>
+            )}
+            <Text style={styles.ingPrice}>
+              {money(unitPrice)} {t("jd")}
             </Text>
-          </View>
-        </Animated.View>
+            {!!deal && (
+              <View style={[styles.dealRow, dir.row]}>
+                <Text style={styles.dealOld}>
+                  {money(item.price)} {t("jd")}
+                </Text>
+                {!!deal.offer.expiresAt && (
+                  <OfferCountdownChip endsAt={deal.offer.expiresAt} light />
+                )}
+              </View>
+            )}
+          </Animated.View>
+        </View>
 
         {/* ================= EXTRAS ================= */}
 
         {extraItems.length > 0 && (
           <Animated.View entering={enterUp(3)} style={styles.block}>
             <Text style={[styles.blockTitle, dir.text]}>{t("itemExtras")}</Text>
-            <Text style={[styles.blockHint, dir.text]}>{t("itemExtrasHint")}</Text>
+            <Text style={[styles.blockHint, dir.text]}>
+              {t("itemExtrasHint")}
+            </Text>
 
             <View style={styles.extrasCard}>
               {extraItems.map((e, i) => {
@@ -223,7 +317,11 @@ export default function ItemDetails() {
                 return (
                   <View
                     key={e.id}
-                    style={[styles.extraRow, dir.row, i > 0 && styles.extraDivider]}
+                    style={[
+                      styles.extraRow,
+                      dir.row,
+                      i > 0 && styles.extraDivider,
+                    ]}
                   >
                     <Image
                       source={imageSource(e, EXTRAS_IMAGE)}
@@ -233,10 +331,19 @@ export default function ItemDetails() {
                     />
 
                     <View style={styles.extraInfo}>
-                      <Text style={[styles.extraName, dir.text]} numberOfLines={2}>
+                      <Text
+                        style={[styles.extraName, dir.text]}
+                        numberOfLines={2}
+                      >
                         {pick(e)}
                       </Text>
-                      <Text style={[styles.extraPrice, dir.text, { color: rowColor }]}>
+                      <Text
+                        style={[
+                          styles.extraPrice,
+                          dir.text,
+                          { color: rowColor },
+                        ]}
+                      >
                         +{money(e.price)} {t("jd")}
                       </Text>
                     </View>
@@ -254,15 +361,32 @@ export default function ItemDetails() {
                         <Text style={styles.plusText}>+</Text>
                       </Pressable>
                     ) : (
-                      <View style={[styles.stepper, dir.row, { backgroundColor: rowSoft, borderColor: rowColor }]}>
-                        <Pressable onPress={() => changeExtra(e.id, -1)} hitSlop={6} style={styles.stepBtn}>
-                          <Text style={[styles.stepMinus, { color: rowColor }]}>−</Text>
+                      <View
+                        style={[
+                          styles.stepper,
+                          dir.row,
+                          { backgroundColor: rowSoft, borderColor: rowColor },
+                        ]}
+                      >
+                        <Pressable
+                          onPress={() => changeExtra(e.id, -1)}
+                          hitSlop={6}
+                          style={styles.stepBtn}
+                        >
+                          <Text style={[styles.stepMinus, { color: rowColor }]}>
+                            −
+                          </Text>
                         </Pressable>
-                        <Text style={[styles.stepCount, { color: rowColor }]}>{count}</Text>
+                        <Text style={[styles.stepCount, { color: rowColor }]}>
+                          {count}
+                        </Text>
                         <Pressable
                           onPress={() => changeExtra(e.id, 1)}
                           hitSlop={6}
-                          style={[styles.stepBtn, { backgroundColor: rowColor }]}
+                          style={[
+                            styles.stepBtn,
+                            { backgroundColor: rowColor },
+                          ]}
                         >
                           <Text style={styles.stepPlus}>+</Text>
                         </Pressable>
@@ -277,18 +401,120 @@ export default function ItemDetails() {
 
         {/* ================= NOTES ================= */}
 
+        {/* collapsed to a dashed "add a note" button until tapped */}
         <Animated.View entering={enterUp(4)} style={styles.block}>
-          <Text style={[styles.blockTitle, dir.text]}>{t("itemNotes")}</Text>
-          <TextInput
-            value={notes}
-            onChangeText={setNotes}
-            placeholder={t("itemNotesPlaceholder")}
-            placeholderTextColor="#A4A4A4"
-            multiline
-            maxLength={200}
-            style={[styles.notes, dir.text, { borderColor: `rgba(${fade},0.35)` }]}
-          />
+          {/* the button toggles the box; a written note is kept when it closes */}
+          <Pressable
+            onPress={() => setNoteOpen((open) => !open)}
+            style={({ pressed }) => [
+              styles.addNote,
+              dir.row,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={styles.addNoteIcon}>
+              <Ionicons name="pencil" size={15} color={WHITE} />
+            </View>
+            <View style={styles.addNoteBody}>
+              <Text style={[styles.addNoteText, dir.text]}>
+                {t("itemAddNote")}
+              </Text>
+              {!noteOpen && !!notes.trim() && (
+                <Text
+                  style={[styles.addNotePreview, dir.text]}
+                  numberOfLines={1}
+                >
+                  {notes.trim()}
+                </Text>
+              )}
+            </View>
+            <Ionicons
+              name={noteOpen ? "chevron-up" : "add"}
+              size={20}
+              color={TEAL}
+            />
+          </Pressable>
+
+          {noteOpen && (
+            <Animated.View entering={FadeInDown.springify().damping(16)}>
+              <TextInput
+                value={notes}
+                onChangeText={setNotes}
+                placeholder={t("itemNotesPlaceholder")}
+                placeholderTextColor="#A4A4A4"
+                multiline
+                autoFocus={!notes}
+                maxLength={200}
+                style={[
+                  styles.notes,
+                  dir.text,
+                  { borderColor: `rgba(${fade},0.35)` },
+                ]}
+              />
+            </Animated.View>
+          )}
         </Animated.View>
+
+        {/* ================= MORE FROM THE SAME KIND ================= */}
+
+        {sameKind.length > 0 && (
+          <Animated.View entering={enterUp(5)} style={styles.moreBlock}>
+            <Text style={[styles.blockTitle, styles.moreTitle, dir.text]}>
+              {t("itemMoreLikeThis")}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.moreRow}
+            >
+              {sameKind.map((i) => (
+                <Pressable
+                  key={i.id}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/item/[id]",
+                      params: { id: String(i.id) },
+                    })
+                  }
+                  style={({ pressed }) => [
+                    styles.moreCard,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Image
+                    source={imageSource(i, FALLBACK_IMAGE)}
+                    cachePolicy="memory-disk"
+                    contentFit="cover"
+                    style={styles.moreImage}
+                  />
+                  <Text style={[styles.moreName, dir.text]} numberOfLines={2}>
+                    {pick(i)}
+                  </Text>
+                  <View style={[styles.moreBottom, dir.row]}>
+                    <Text style={styles.morePrice}>
+                      {money(i.price)} {t("jd")}
+                    </Text>
+                    <Pressable
+                      onPress={() => quickAdd(i)}
+                      hitSlop={8}
+                      style={[
+                        styles.morePlus,
+                        justAdded === i.id && styles.morePlusDone,
+                      ]}
+                    >
+                      <Ionicons
+                        name={justAdded === i.id ? "checkmark" : "add"}
+                        size={16}
+                        color={WHITE}
+                      />
+                    </Pressable>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        )}
+        <MadeBy />
       </ScrollView>
 
       {/* ================= BOTTOM BAR ================= */}
@@ -297,19 +523,32 @@ export default function ItemDetails() {
         entering={enterDown(0)}
         style={[styles.bar, dir.row, { paddingBottom: 14 + insets.bottom }]}
       >
-        <View style={[styles.qty, dir.row, { borderColor: buttonColor }]}>
+        <View
+          style={[
+            styles.qty,
+            narrow && styles.qtyNarrow,
+            dir.row,
+            { borderColor: buttonColor },
+          ]}
+        >
           <Pressable
             onPress={() => setQuantity((q) => Math.max(q - 1, 1))}
             hitSlop={6}
-            style={styles.qtyBtn}
+            style={[styles.qtyBtn, narrow && styles.qtyBtnNarrow]}
           >
             <Text style={[styles.qtyMinus, { color: buttonColor }]}>−</Text>
           </Pressable>
-          <Text style={[styles.qtyCount, { color: buttonColor }]}>{quantity}</Text>
+          <Text style={[styles.qtyCount, { color: buttonColor }]}>
+            {quantity}
+          </Text>
           <Pressable
             onPress={() => setQuantity((q) => q + 1)}
             hitSlop={6}
-            style={[styles.qtyBtn, { backgroundColor: buttonColor }]}
+            style={[
+              styles.qtyBtn,
+              narrow && styles.qtyBtnNarrow,
+              { backgroundColor: buttonColor },
+            ]}
           >
             <Text style={styles.qtyPlus}>+</Text>
           </Pressable>
@@ -324,10 +563,43 @@ export default function ItemDetails() {
             pressed && styles.pressed,
           ]}
         >
-          <Text style={[styles.addText, dir.noSpacing]}>{t("itemAddToCart")}</Text>
-          <Text style={styles.addTotal}>
+          <Text
+            style={[
+              styles.addText,
+              narrow && styles.addTextNarrow,
+              dir.noSpacing,
+            ]}
+            numberOfLines={1}
+          >
+            {t(cartLine ? "itemSaveChanges" : "itemAddToCart")}
+          </Text>
+          <Text
+            style={[styles.addTotal, narrow && styles.addTextNarrow]}
+            numberOfLines={1}
+          >
             {money(total)} {t("jd")}
           </Text>
+        </Pressable>
+
+        {/* straight to the cart from any item, with how many things are in it */}
+        <Pressable
+          onPress={() => router.push("/cart")}
+          accessibilityRole="button"
+          accessibilityLabel={t("cartTitle")}
+          style={({ pressed }) => [
+            styles.cartBox,
+            { borderColor: buttonColor },
+            pressed && styles.pressed,
+          ]}
+        >
+          <CartIcon size={30} />
+          {cartCount > 0 && (
+            <View style={[styles.cartBadge, { backgroundColor: buttonColor }]}>
+              <Text style={styles.cartBadgeText}>
+                {cartCount > 99 ? "99+" : cartCount}
+              </Text>
+            </View>
+          )}
         </Pressable>
       </Animated.View>
     </KeyboardAvoidingView>
@@ -353,26 +625,25 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  /* ================= TOP ================= */
+  /* ================= SHEET ================= */
 
-  // Clears the status bar + back button, then frames the photo
-  top: {
-    paddingTop: 100,
-    paddingBottom: 30,
+  // rises over the bottom of the photo
+  sheet: {
+    marginTop: -30,
+    backgroundColor: CREAM,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingTop: 10,
+    paddingHorizontal: 16,
     alignItems: "center",
   },
 
-  topFade: {
-    height: 56,
-    marginTop: -1,
-  },
-
-  /* ================= INFO ================= */
-
-  info: {
-    alignItems: "center",
-    paddingHorizontal: 24,
-    marginTop: -6,
+  handle: {
+    width: 42,
+    height: 5,
+    borderRadius: 3,
+    opacity: 0.7,
+    marginBottom: 14,
   },
 
   name: {
@@ -382,25 +653,86 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Full ingredients — never cut off
-  description: {
-    color: MUTED,
-    fontSize: 14,
-    lineHeight: 22,
-    fontWeight: "600",
-    textAlign: "center",
-    marginTop: 8,
+  /* ================= INGREDIENTS CARD ================= */
+
+  // solid teal, thick darker bottom edge = 3D
+  ingCard: {
+    alignSelf: "stretch",
+    marginTop: 16,
+    paddingTop: 20,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    borderRadius: 26,
+    borderBottomWidth: 6,
+    borderBottomColor: "#003B37",
+    backgroundColor: TEAL,
+    alignItems: "center",
+    overflow: "hidden",
+    shadowColor: "#17201F",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 8,
   },
 
-  pricePill: {
-    marginTop: 14,
+  // soft see-through circles for depth in the corners
+  cardBubbleBig: {
+    position: "absolute",
+    top: -60,
+    right: -50,
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+
+  cardBubbleSmall: {
+    position: "absolute",
+    bottom: -40,
+    left: -30,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+
+  // Tags centered, wrapping onto new lines with room between rows
+  ingList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    rowGap: 10,
+    columnGap: 9,
+  },
+
+  // see-through tag with a white frame
+  ingTag: {
+    borderWidth: 1.5,
+    borderColor: WHITE,
     borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 15,
+    backgroundColor: "rgba(255,255,255,0.1)",
   },
 
-  priceText: {
-    fontSize: 18,
+  ingText: {
+    color: WHITE,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  ingDivider: {
+    alignSelf: "stretch",
+    marginTop: 18,
+    marginBottom: 14,
+    borderTopWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: "rgba(255,255,255,0.45)",
+  },
+
+  ingPrice: {
+    color: WHITE,
+    fontSize: 24,
     fontWeight: "900",
   },
 
@@ -544,6 +876,118 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
 
+  // dashed teal "add a note" button: pencil square · text · plus
+  addNote: {
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: TEAL,
+    backgroundColor: WHITE,
+  },
+
+  addNoteIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: TEAL,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  addNoteBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  addNoteText: {
+    color: TEAL,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  // the closed box still shows what was written
+  addNotePreview: {
+    color: MUTED,
+    fontSize: 12.5,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
+  /* ================= MORE FROM THE SAME KIND ================= */
+
+  moreBlock: {
+    marginTop: 26,
+  },
+
+  moreTitle: {
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+
+  moreRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+    gap: 12,
+  },
+
+  moreCard: {
+    width: 140,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    shadowColor: "#17201F",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+
+  moreImage: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 14,
+    backgroundColor: "#F4F1ED",
+  },
+
+  moreName: {
+    color: DARK,
+    fontSize: 13,
+    fontWeight: "800",
+    marginTop: 8,
+    minHeight: 34,
+  },
+
+  moreBottom: {
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+
+  morePrice: {
+    color: ORANGE,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  morePlus: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: ORANGE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  morePlusDone: {
+    backgroundColor: TEAL,
+  },
+
   /* ================= BOTTOM BAR ================= */
 
   bar: {
@@ -553,8 +997,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
+    gap: 8,
+    paddingHorizontal: 14,
     paddingTop: 14,
     backgroundColor: WHITE,
     borderTopLeftRadius: 26,
@@ -573,6 +1017,21 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     padding: 4,
     gap: 10,
+  },
+
+  qtyNarrow: {
+    gap: 4,
+    padding: 3,
+  },
+
+  qtyBtnNarrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+
+  addTextNarrow: {
+    fontSize: 13.5,
   },
 
   qtyBtn: {
@@ -608,12 +1067,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
     borderRadius: 999,
     paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
 
   addText: {
+    flexShrink: 1,
     color: WHITE,
     fontSize: 15,
     fontWeight: "900",
@@ -622,6 +1083,51 @@ const styles = StyleSheet.create({
   addTotal: {
     color: WHITE,
     fontSize: 15,
+    fontWeight: "900",
+  },
+
+  dealRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 4,
+  },
+
+  dealOld: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 13,
+    fontWeight: "800",
+    textDecorationLine: "line-through",
+  },
+
+  cartBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    backgroundColor: WHITE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  cartBadge: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    minWidth: 21,
+    height: 21,
+    paddingHorizontal: 4,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: WHITE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  cartBadgeText: {
+    color: WHITE,
+    fontSize: 10.5,
     fontWeight: "900",
   },
 

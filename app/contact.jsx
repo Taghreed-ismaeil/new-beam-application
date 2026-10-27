@@ -10,13 +10,16 @@ import {
   View,
 } from "react-native";
 
+import { LinearGradient } from "expo-linear-gradient";
 import Animated from "react-native-reanimated";
 
 import BackButton from "@/components/BackButton";
-import { enterDown, enterUp } from "@/lib/motion";
-import { apiRequest } from "@/lib/api-client";
+import MadeBy from "@/components/MadeBy";
+import { apiRequestCached } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { Text } from "@/lib/arabic-font";
+import { enterDown, enterUp } from "@/lib/motion";
+import { RESTAURANT_MAPS_URL } from "@/lib/restaurant-location";
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";
@@ -40,14 +43,14 @@ export default function ContactScreen() {
   const isSmall = width < 360;
 
   useEffect(() => {
-    apiRequest("/api/restaurant")
-      .then((d) => {
+    apiRequestCached(
+      "/api/restaurant",
+      (d) => {
         setRestaurant(d.restaurant);
-      })
-      .catch(() => {})
-      .finally(() => {
         setLoading(false);
-      });
+      },
+      () => setLoading(false),
+    );
   }, []);
 
   const phone = restaurant?.phone ?? "+962 7X XXX XXXX";
@@ -77,14 +80,8 @@ export default function ContactScreen() {
   };
 
   const handleLocation = async () => {
-    if (!address) return;
-
-    const query = encodeURIComponent(address);
-
     try {
-      await Linking.openURL(
-        `https://www.google.com/maps/search/?api=1&query=${query}`,
-      );
+      await Linking.openURL(RESTAURANT_MAPS_URL);
     } catch (error) {
       console.log("Could not open location:", error);
     }
@@ -311,56 +308,56 @@ export default function ContactScreen() {
               <Ionicons name="arrow-forward" size={17} color={LIGHT_TEAL} />
             </View>
           </Pressable>
-
-
         </Animated.View>
 
         {/* ================================================= */}
         {/*                   OPENING HOURS                   */}
         {/* ================================================= */}
 
-        <Animated.View entering={enterUp(2)} style={styles.hoursCard}>
-          <View style={styles.hoursHeader}>
-            <View style={styles.hoursIcon}>
-              <Ionicons name="time-outline" size={22} color={ORANGE} />
-            </View>
+        <Animated.View entering={enterUp(2)} style={styles.hoursWrap}>
+          {/* 3D slab: a darker base shows as a thick edge under the gradient face */}
+          <View style={styles.hoursBase}>
+            <LinearGradient
+              colors={["#0B7A71", TEAL, "#003F3A"]}
+              locations={[0, 0.55, 1]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.hoursFace}
+            >
+              {/* soft light blobs for depth */}
+              <View style={[styles.hoursGlow, styles.hoursGlowTop]} />
+              <View style={[styles.hoursGlow, styles.hoursGlowBottom]} />
 
-            <View style={styles.hoursTitleWrap}>
-              <Text style={styles.hoursTitle}>{t("contactHours")}</Text>
-              {/*
-              <Text style={styles.hoursSubtitle}>
-                Come hungry, leave happy.
-              </Text>
-              */}
-            </View>
+              <Text style={[styles.hoursTitle, dir.noSpacing]}>{t("contactHours")}</Text>
+              <Text style={styles.hoursSubtitle}>{t("contactHoursSub")}</Text>
 
-            <View style={styles.openBadge}>
-              <View style={styles.openDot} />
+              {/* opening and closing time, centred; they follow the reading
+                  direction so Arabic reads الافتتاح first */}
+              <View style={[styles.hoursTimes, { flexDirection: dir.isRTL ? "row-reverse" : "row" }]}>
+                <View style={styles.hoursSlot}>
+                  <Text style={[styles.hoursLabel, dir.noSpacing]}>{t("contactOpensLabel")}</Text>
+                  <Text style={styles.hoursClock}>8:00</Text>
+                  <Text style={styles.hoursPeriod}>{t("contactOpenPeriod")}</Text>
+                </View>
 
-              <Text style={[styles.openText, dir.noSpacing]}>
-                {t("contactOpen")}
-              </Text>
-            </View>
+                <View style={styles.hoursSplit}>
+                  <View style={styles.hoursSplitLine} />
+                  <View style={styles.hoursSplitDot} />
+                  <View style={styles.hoursSplitLine} />
+                </View>
+
+                <View style={styles.hoursSlot}>
+                  <Text style={[styles.hoursLabel, dir.noSpacing]}>{t("contactClosesLabel")}</Text>
+                  <Text style={styles.hoursClock}>2:00</Text>
+                  <Text style={styles.hoursPeriod}>{t("contactClosePeriod")}</Text>
+                </View>
+              </View>
+            </LinearGradient>
           </View>
 
-          <View style={styles.hoursDivider} />
-
-          <View style={styles.dayRow}>
-            <Text style={styles.day}>{t("contactMonThu")}</Text>
-
-            <Text style={styles.time}>{t("contactTime1")}</Text>
-          </View>
-
-          <View style={styles.dayRow}>
-            <Text style={styles.day}>{t("contactFriSat")}</Text>
-
-            <Text style={styles.time}>{t("contactTime2")}</Text>
-          </View>
-
-          <View style={[styles.dayRow, styles.lastDayRow]}>
-            <Text style={styles.day}>{t("contactSun")}</Text>
-
-            <Text style={styles.time}>{t("contactTime3")}</Text>
+          {/* clock badge floating on the top edge */}
+          <View style={styles.hoursBadge}>
+            <Ionicons name="time" size={26} color={ORANGE} />
           </View>
         </Animated.View>
 
@@ -414,21 +411,12 @@ export default function ContactScreen() {
         {/*                      BOTTOM                       */}
         {/* ================================================= */}
 
-        <Animated.View entering={enterUp(4)} style={styles.bottomTextContainer}>
-          <View style={styles.line} />
-
-          <Text style={[styles.bottomText, dir.noSpacing]}>
-            {t("contactBottom")}
-          </Text>
-
-          <View style={styles.line} />
-        </Animated.View>
-
         {loading && (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="small" color={ORANGE} />
           </View>
         )}
+        <MadeBy />
       </ScrollView>
     </View>
   );
@@ -446,6 +434,7 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    flexGrow: 1,
     paddingTop: 70,
     position: "relative",
   },
@@ -687,103 +676,140 @@ const styles = StyleSheet.create({
   /*                 OPENING HOURS                    */
   /* ================================================= */
 
-  hoursCard: {
-    backgroundColor: TEAL,
-    borderRadius: 27,
-    padding: 19,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: "#FDE0D7",
+  hoursWrap: {
+    marginTop: 26,
+    marginBottom: 24,
     zIndex: 2,
   },
 
-  hoursHeader: {
-    flexDirection: "row",
-    alignItems: "center",
+  // the darker slab peeking out below the face is what reads as "3D"
+  hoursBase: {
+    backgroundColor: "#00302C",
+    borderRadius: 28,
+    paddingBottom: 7,
+    shadowColor: "#00302C",
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 14,
   },
 
-  hoursIcon: {
-    width: 45,
-    height: 45,
-    borderRadius: 15,
+  hoursFace: {
+    borderRadius: 28,
+    overflow: "hidden",
+    alignItems: "center",
+    paddingTop: 40,
+    paddingBottom: 24,
+    paddingHorizontal: 18,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.28)",
+  },
+
+  hoursGlow: {
+    position: "absolute",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.07)",
+  },
+
+  hoursGlowTop: { width: 190, height: 190, top: -95, right: -50 },
+
+  hoursGlowBottom: { width: 150, height: 150, bottom: -80, left: -40 },
+
+  hoursBadge: {
+    position: "absolute",
+    top: -26,
+    alignSelf: "center",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: WHITE,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
-  },
-
-  hoursTitleWrap: {
-    flex: 1,
-    minWidth: 0,
+    borderWidth: 3,
+    borderColor: LIGHT_ORANGE,
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
   },
 
   hoursTitle: {
-    color: ORANGE,
-    fontSize: 17,
+    color: WHITE,
+    fontSize: 19,
     fontWeight: "900",
+    letterSpacing: 0.4,
+    textAlign: "center",
   },
 
   hoursSubtitle: {
-    color: DARK,
-    fontSize: 11,
-    marginTop: 3,
-    fontWeight: "500",
-  },
-
-  openBadge: {
-    marginLeft: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: WHITE,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 14,
-  },
-
-  openDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: TEAL,
-    marginRight: 5,
-  },
-
-  openText: {
-    color: TEAL,
-    fontSize: 8,
-    fontWeight: "900",
-    letterSpacing: 0.7,
-  },
-
-  hoursDivider: {
-    height: 1,
-    backgroundColor: WHITE,
-    marginVertical: 16,
-  },
-
-  dayRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 7,
-  },
-
-  lastDayRow: {
-    paddingBottom: 0,
-  },
-
-  day: {
-    color: WHITE,
+    color: "rgba(255,255,255,0.7)",
     fontSize: 12,
     fontWeight: "600",
-    flex: 1,
+    marginTop: 4,
+    textAlign: "center",
   },
 
-  time: {
+  hoursTimes: {
+    marginTop: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.16)",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignSelf: "stretch",
+  },
+
+  hoursSlot: {
+    flex: 1,
+    alignItems: "center",
+  },
+
+  hoursLabel: {
+    color: "#FFB59E",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1.6,
+  },
+
+  hoursClock: {
     color: WHITE,
+    fontSize: 34,
+    fontWeight: "900",
+    marginTop: 2,
+    textShadowColor: "rgba(0,0,0,0.25)",
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 6,
+  },
+
+  hoursPeriod: {
+    color: "rgba(255,255,255,0.75)",
     fontSize: 12,
-    fontWeight: "800",
-    textAlign: "right",
+    fontWeight: "700",
+    marginTop: -2,
+  },
+
+  hoursSplit: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    paddingVertical: 4,
+  },
+
+  hoursSplitLine: {
+    flex: 1,
+    width: 1,
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+
+  hoursSplitDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: ORANGE,
+    marginVertical: 6,
   },
 
   /* ================================================= */

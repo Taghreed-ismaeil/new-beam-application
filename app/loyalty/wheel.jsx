@@ -307,9 +307,9 @@ export default function WheelScreen() {
       index = SEGMENTS.findIndex((s) => s.key === res.key);
       if (index < 0) index = res.index ?? 0;
       voucher = res.voucher;
-    } catch {
+    } catch (e) {
       setSpinning(false);
-      setError(t("loyErrGeneric"));
+      setError(e?.data?.error === "no_spin" ? t("loyErrNoSpin") : t("loyErrGeneric"));
       return;
     }
 

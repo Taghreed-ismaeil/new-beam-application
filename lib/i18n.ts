@@ -1,5 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 export type Lang = "ar" | "en";
 
@@ -18,7 +25,13 @@ function interpolate(str: string, params?: Params): string {
 /** Arabic count-form picker: zero / one / two / few (3-10) / many (11+). */
 function arForm(
   n: number,
-  forms: { zero?: string; one: string; two?: string; few?: string; many?: string },
+  forms: {
+    zero?: string;
+    one: string;
+    two?: string;
+    few?: string;
+    many?: string;
+  },
 ) {
   if (n === 0 && forms.zero) return forms.zero;
   if (n === 1) return forms.one;
@@ -51,8 +64,10 @@ const en: Record<string, string> = {
   errSaveFailed: "Something went wrong. Please try again.",
   errRouteMissing: "This feature isn't available yet.",
   errOfferForbidden: "Your account doesn't have permission to change offers.",
-  errOfferInvalid: "Some offer details are invalid — check the value and dates.",
-  errOfferNetwork: "Couldn't reach the server. Check your internet and try again.",
+  errOfferInvalid:
+    "Some offer details are invalid — check the value and dates.",
+  errOfferNetwork:
+    "Couldn't reach the server. Check your internet and try again.",
   errNameRequired: "Please enter a name.",
   errDeleteFailed: "Couldn't delete. Please try again.",
   errLoadFailed: "Couldn't load this. Please try again.",
@@ -124,6 +139,28 @@ const en: Record<string, string> = {
   navRewardsText: "Loyalty collectibles and vouchers",
   navMediaTitle: "Media",
   navMediaText: "Restaurant photos and customers' shared photos",
+  navFeedbackTitle: "Ratings & complaints",
+  navFeedbackText: "What customers tell you from the app",
+  feedbackAdminTitle: "Ratings & complaints",
+  feedbackAdminSubtitle:
+    "Star ratings and complaints sent from the app's Account page",
+  feedbackTabComplaints: "Complaints",
+  feedbackTabRatings: "Ratings",
+  feedbackTabAll: "All",
+  feedbackAverage: "Average rating",
+  feedbackRatingsCount: "ratings",
+  feedbackNewComplaints: "New complaints",
+  feedbackStatusNew: "New",
+  feedbackStatusSeen: "Seen",
+  feedbackStatusResolved: "Resolved",
+  feedbackMarkSeen: "Mark seen",
+  feedbackMarkResolved: "Resolved",
+  feedbackReopen: "Reopen",
+  feedbackCall: "Call",
+  feedbackKindRating: "Rating",
+  feedbackKindComplaint: "Complaint",
+  feedbackNoMessage: "No note",
+  feedbackEmpty: "Nothing here yet",
   mediaAdminTitle: "Media",
   mediaAdminSubtitle: "Approve customers' photos and post the restaurant's own",
   mediaTabPending: "To review",
@@ -243,7 +280,8 @@ const en: Record<string, string> = {
   table_free: "Free",
   table_reserved: "Reserved",
   table_occupied: "Occupied",
-  floorHint: "Tap a table to mark it occupied or free. Reserved tables are managed from a booking.",
+  floorHint:
+    "Tap a table to mark it occupied or free. Reserved tables are managed from a booking.",
   newBooking: "New Booking",
   tabBook: "Bookings",
   tabFloor: "Floor",
@@ -332,8 +370,12 @@ const en: Record<string, string> = {
   fieldDescAr: "Description (Arabic)",
   fieldCategory: "Category",
   visibleToCustomers: "Visible to customers",
+  itemExtrasTitle: "Extras on this item's page",
+  itemExtrasHint:
+    "Tap the extras customers can add to this item. Only these show on its page.",
   recipeTitle: "Recipe",
-  recipeHint: "How much of each ingredient one portion uses — in grams (or ml). It's deducted from stock automatically with every order.",
+  recipeHint:
+    "How much of each ingredient one portion uses — in grams (or ml). It's deducted from stock automatically with every order.",
   recipePerItem: "per item",
   recipeInStock: "{quantity} {unit} in stock",
   confirmDeleteItem: "Delete this item?",
@@ -342,7 +384,8 @@ const en: Record<string, string> = {
   errItemInUse: "This item is used in an active order and can't be deleted.",
   errCategoryName: "Please enter a category name.",
   confirmDeleteCategory: "Delete this category?",
-  confirmDeleteCategoryFull: "This category has {count}. They'll also be deleted.",
+  confirmDeleteCategoryFull:
+    "This category has {count}. They'll also be deleted.",
   confirmDeleteCategoryEmpty: "This category is empty.",
   deleteCategory: "Delete Category",
   errCategoryInUse: "This category is linked to an offer and can't be deleted.",
@@ -383,6 +426,12 @@ const en: Record<string, string> = {
   fieldStartDate: "Start date",
   dateFieldHint: "Optional — e.g. 2026-09-29 or 29/9/2026",
   fieldEndDate: "End date",
+  fieldOfferDuration: "Time per customer (minutes)",
+  offerDurationHint:
+    "Optional — makes it a timed offer: each customer gets this long from the moment they open the app (30 = half an hour), then it's gone for them. Leave empty for a normal offer.",
+  offerTimedBadge: "⏱ {minutes} min per customer",
+  errOfferDurationInvalid:
+    "Time per customer must be a whole number of minutes (1 – 10080).",
   offerActiveLabel: "Active",
   confirmDeleteOffer: "Delete this offer?",
   confirmDeleteOfferText: "This can't be undone.",
@@ -407,7 +456,8 @@ const en: Record<string, string> = {
   confirmDeleteIngredient: "Delete this ingredient?",
   confirmDeleteIngredientText: "This can't be undone.",
   deleteIngredient: "Delete Ingredient",
-  errIngredientInUse: "This ingredient is used in a recipe and can't be deleted.",
+  errIngredientInUse:
+    "This ingredient is used in a recipe and can't be deleted.",
   noIngredients: "No ingredients yet",
   noIngredientsHint: "Add the ingredients you track stock for.",
   stockOut: "Out of stock",
@@ -538,6 +588,12 @@ const en: Record<string, string> = {
   voucherExpiredErr: "This voucher has expired.",
   roleCannotRedeem: "Your role can't redeem vouchers.",
   redeemBoxTitle: "Redeem a Voucher",
+  redeemOkTitle: "Prize handed over",
+  redeemOkAt: "Redeemed now — {when}",
+  redeemUsedTitle: "This prize was already received",
+  redeemUsedAt: "Received on {when}",
+  redeemUsedWarn:
+    "Don't hand it over again — each prize can be received only once.",
   redeemPlaceholder: "Enter voucher code",
   redeem: "Redeem",
   voucherSearchPlaceholder: "Search by code, name or phone",
@@ -559,7 +615,8 @@ const en: Record<string, string> = {
   statByTier: "By Tier",
   statByItem: "By Reward",
   statCompletionsShort: "{count} completed",
-  statItemDetail: "{collectors} collectors · {scans} scans · {redeemed} redeemed",
+  statItemDetail:
+    "{collectors} collectors · {scans} scans · {redeemed} redeemed",
 
   // expenses
   expensesTitle: "Expenses",
@@ -603,7 +660,8 @@ const en: Record<string, string> = {
   suppliersSubtitle: "Contacts and purchase orders",
   suppliersTab_suppliers: "Suppliers",
   suppliersTab_orders: "Orders",
-  errSupplierInUse: "This supplier is linked to a purchase order and can't be deleted.",
+  errSupplierInUse:
+    "This supplier is linked to a purchase order and can't be deleted.",
   noSuppliers: "No suppliers yet",
   noSuppliersHint: "Add the suppliers you order from.",
   newSupplier: "New Supplier",
@@ -612,6 +670,8 @@ const en: Record<string, string> = {
   fieldAddress: "Address",
   fieldSuppliedIngredients: "Ingredients supplied",
   deleteSupplier: "Delete Supplier",
+  confirmDeleteSupplier: "Delete this supplier?",
+  confirmDeleteSupplierText: "This can't be undone.",
   errSupplierRequired: "Choose a supplier.",
   errOrderItemsRequired: "Add at least one item.",
   errOrderReceived: "This order was already received and can't be deleted.",
@@ -752,6 +812,28 @@ const ar: Record<string, string> = {
   navRewardsText: "بطاقات الولاء وقسائم المكافآت",
   navMediaTitle: "الميديا",
   navMediaText: "صور المطعم وصور الزبائن",
+  navFeedbackTitle: "التقييمات والشكاوي",
+  navFeedbackText: "شو بيحكوا الزبائن من التطبيق",
+  feedbackAdminTitle: "التقييمات والشكاوي",
+  feedbackAdminSubtitle:
+    "تقييمات النجوم والشكاوي اللي بتوصل من صفحة الحساب بالتطبيق",
+  feedbackTabComplaints: "الشكاوي",
+  feedbackTabRatings: "التقييمات",
+  feedbackTabAll: "الكل",
+  feedbackAverage: "معدل التقييم",
+  feedbackRatingsCount: "تقييم",
+  feedbackNewComplaints: "شكاوي جديدة",
+  feedbackStatusNew: "جديدة",
+  feedbackStatusSeen: "انشافت",
+  feedbackStatusResolved: "انحلّت",
+  feedbackMarkSeen: "شفتها",
+  feedbackMarkResolved: "انحلّت",
+  feedbackReopen: "إعادة فتح",
+  feedbackCall: "اتصال",
+  feedbackKindRating: "تقييم",
+  feedbackKindComplaint: "شكوى",
+  feedbackNoMessage: "بدون ملاحظة",
+  feedbackEmpty: "ما في إشي لهلأ",
   mediaAdminTitle: "الميديا",
   mediaAdminSubtitle: "وافق على صور الزبائن وانشر صور المطعم",
   mediaTabPending: "للمراجعة",
@@ -869,7 +951,8 @@ const ar: Record<string, string> = {
   table_free: "شاغرة",
   table_reserved: "محجوزة",
   table_occupied: "مشغولة",
-  floorHint: "اضغط على طاولة لتعيينها كمشغولة أو شاغرة. الطاولات المحجوزة تُدار من الحجز.",
+  floorHint:
+    "اضغط على طاولة لتعيينها كمشغولة أو شاغرة. الطاولات المحجوزة تُدار من الحجز.",
   newBooking: "حجز جديد",
   tabBook: "الحجوزات",
   tabFloor: "الصالة",
@@ -956,8 +1039,12 @@ const ar: Record<string, string> = {
   fieldDescAr: "الوصف (عربي)",
   fieldCategory: "التصنيف",
   visibleToCustomers: "مرئي للعملاء",
+  itemExtrasTitle: "الإضافات بصفحة هالأكلة",
+  itemExtrasHint:
+    "اختار الإضافات اللي بيقدر الزبون يزيدها على هالأكلة. بس هدول بيطلعوا بصفحتها.",
   recipeTitle: "المكوّنات",
-  recipeHint: "كمية كل مكوّن بالحبة الواحدة — بالغرام (أو المل). بتنخصم من المخزون تلقائياً مع كل طلب.",
+  recipeHint:
+    "كمية كل مكوّن بالحبة الواحدة — بالغرام (أو المل). بتنخصم من المخزون تلقائياً مع كل طلب.",
   recipePerItem: "للحبة",
   recipeInStock: "متوفر {quantity} {unit}",
   confirmDeleteItem: "حذف هذا الصنف؟",
@@ -1006,6 +1093,12 @@ const ar: Record<string, string> = {
   fieldStartDate: "تاريخ البداية",
   dateFieldHint: "اختياري — مثال: 2026/9/29 أو 29/9/2026",
   fieldEndDate: "تاريخ النهاية",
+  fieldOfferDuration: "مدة العرض لكل زبون (بالدقائق)",
+  offerDurationHint:
+    "اختياري — بيخلّيه عرض بوقت محدد: كل زبون بياخد هالمدة من لحظة ما يفتح التطبيق (30 = نص ساعة)، وبعدها العرض بروح عليه. اتركها فاضية لعرض عادي.",
+  offerTimedBadge: "⏱ {minutes} دقيقة لكل زبون",
+  errOfferDurationInvalid:
+    "مدة العرض لازم تكون عدد دقائق صحيح (من 1 لـ 10080).",
   offerActiveLabel: "مفعّل",
   confirmDeleteOffer: "حذف هذا العرض؟",
   confirmDeleteOfferText: "لا يمكن التراجع عن هذا الإجراء.",
@@ -1158,6 +1251,11 @@ const ar: Record<string, string> = {
   voucherExpiredErr: "انتهت صلاحية هذه القسيمة.",
   roleCannotRedeem: "لا تملك صلاحية استبدال القسائم.",
   redeemBoxTitle: "استبدال قسيمة",
+  redeemOkTitle: "تم تسليم الجائزة",
+  redeemOkAt: "انخصمت هلأ — {when}",
+  redeemUsedTitle: "هاي الجائزة مستلمة من قبل",
+  redeemUsedAt: "انستلمت بتاريخ {when}",
+  redeemUsedWarn: "لا تسلّمها مرة ثانية — كل جائزة بتنستلم مرة وحدة بس.",
   redeemPlaceholder: "أدخل رمز القسيمة",
   redeem: "استبدال",
   voucherSearchPlaceholder: "ابحث بالرمز أو الاسم أو رقم الهاتف",
@@ -1230,6 +1328,8 @@ const ar: Record<string, string> = {
   fieldAddress: "العنوان",
   fieldSuppliedIngredients: "المكوّنات الموردة",
   deleteSupplier: "حذف المورّد",
+  confirmDeleteSupplier: "حذف هذا المورّد؟",
+  confirmDeleteSupplierText: "لا يمكن التراجع عن هذا الإجراء.",
   errSupplierRequired: "اختر مورّدًا.",
   errOrderItemsRequired: "أضف صنفًا واحدًا على الأقل.",
   errOrderReceived: "تم استلام هذا الطلب ولا يمكن حذفه.",
@@ -1285,10 +1385,13 @@ const ar: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 const pluralsEn: Record<string, PluralFn> = {
-  supplierOrdersCount: (n) => (n === 1 ? "1 purchase order" : `${n} purchase orders`),
+  supplierOrdersCount: (n) =>
+    n === 1 ? "1 purchase order" : `${n} purchase orders`,
   orderItemsCount: (n) => (n === 1 ? "1 item" : `${n} items`),
-  layersUploaded: (n) => (n === 1 ? "1 layer uploaded" : `${n} layers uploaded`),
-  revealsPerScan: (n) => (n === 1 ? "Reveals 1 piece per scan" : `Reveals ${n} pieces per scan`),
+  layersUploaded: (n) =>
+    n === 1 ? "1 layer uploaded" : `${n} layers uploaded`,
+  revealsPerScan: (n) =>
+    n === 1 ? "Reveals 1 piece per scan" : `Reveals ${n} pieces per scan`,
   wonCount: (n) => (n === 1 ? "1 won" : `${n} won`),
   peopleCount: (n) => (n === 1 ? "1 person" : `${n} people`),
   seatsCount: (n) => (n === 1 ? "1 seat" : `${n} seats`),
@@ -1300,7 +1403,10 @@ const pluralsEn: Record<string, PluralFn> = {
   newOrdersBanner: (n) => (n === 1 ? "1 new order" : `${n} new orders`),
   ordersCount: (n) => (n === 1 ? "1 order" : `${n} orders`),
   soldCount: (n) => (n === 1 ? "1 sold" : `${n} sold`),
-  customersMatches: (n, p) => (n === 1 ? `1 match for "${p?.query ?? ""}"` : `${n} matches for "${p?.query ?? ""}"`),
+  customersMatches: (n, p) =>
+    n === 1
+      ? `1 match for "${p?.query ?? ""}"`
+      : `${n} matches for "${p?.query ?? ""}"`,
   customersCount: (n) => (n === 1 ? "1 customer" : `${n} customers`),
   loadMore: (n) => `Load ${n} more`,
 };
@@ -1315,7 +1421,13 @@ const pluralsAr: Record<string, PluralFn> = {
       many: `${n} طلب شراء`,
     }),
   orderItemsCount: (n) =>
-    arForm(n, { zero: "لا أصناف", one: "صنف واحد", two: "صنفان", few: `${n} أصناف`, many: `${n} صنفًا` }),
+    arForm(n, {
+      zero: "لا أصناف",
+      one: "صنف واحد",
+      two: "صنفان",
+      few: `${n} أصناف`,
+      many: `${n} صنفًا`,
+    }),
   layersUploaded: (n) =>
     arForm(n, {
       zero: "لا صور مرفوعة",
@@ -1325,23 +1437,94 @@ const pluralsAr: Record<string, PluralFn> = {
       many: `تم رفع ${n} صورة`,
     }),
   revealsPerScan: (n) =>
-    arForm(n, { one: "يكشف قطعة واحدة لكل مسح", two: "يكشف قطعتين لكل مسح", few: `يكشف ${n} قطع لكل مسح`, many: `يكشف ${n} قطعة لكل مسح` }),
-  wonCount: (n) => arForm(n, { one: "فوز واحد", two: "فوزان", few: `${n} حالات فوز`, many: `${n} فوزًا` }),
-  peopleCount: (n) => arForm(n, { one: "شخص واحد", two: "شخصان", few: `${n} أشخاص`, many: `${n} شخصًا` }),
-  seatsCount: (n) => arForm(n, { one: "مقعد واحد", two: "مقعدان", few: `${n} مقاعد`, many: `${n} مقعدًا` }),
+    arForm(n, {
+      one: "يكشف قطعة واحدة لكل مسح",
+      two: "يكشف قطعتين لكل مسح",
+      few: `يكشف ${n} قطع لكل مسح`,
+      many: `يكشف ${n} قطعة لكل مسح`,
+    }),
+  wonCount: (n) =>
+    arForm(n, {
+      one: "فوز واحد",
+      two: "فوزان",
+      few: `${n} حالات فوز`,
+      many: `${n} فوزًا`,
+    }),
+  peopleCount: (n) =>
+    arForm(n, {
+      one: "شخص واحد",
+      two: "شخصان",
+      few: `${n} أشخاص`,
+      many: `${n} شخصًا`,
+    }),
+  seatsCount: (n) =>
+    arForm(n, {
+      one: "مقعد واحد",
+      two: "مقعدان",
+      few: `${n} مقاعد`,
+      many: `${n} مقعدًا`,
+    }),
   ordersFound: (n) =>
-    arForm(n, { zero: "لا طلبات", one: "طلب واحد", two: "طلبان", few: `${n} طلبات`, many: `${n} طلبًا` }),
-  itemsCount: (n) => arForm(n, { zero: "لا أصناف", one: "صنف واحد", two: "صنفان", few: `${n} أصناف`, many: `${n} صنفًا` }),
+    arForm(n, {
+      zero: "لا طلبات",
+      one: "طلب واحد",
+      two: "طلبان",
+      few: `${n} طلبات`,
+      many: `${n} طلبًا`,
+    }),
+  itemsCount: (n) =>
+    arForm(n, {
+      zero: "لا أصناف",
+      one: "صنف واحد",
+      two: "صنفان",
+      few: `${n} أصناف`,
+      many: `${n} صنفًا`,
+    }),
   categoriesCount: (n) =>
-    arForm(n, { zero: "لا تصنيفات", one: "تصنيف واحد", two: "تصنيفان", few: `${n} تصنيفات`, many: `${n} تصنيفًا` }),
-  itemsPill: (n) => arForm(n, { zero: "لا أصناف", one: "صنف واحد", two: "صنفان", few: `${n} أصناف`, many: `${n} صنفًا` }),
+    arForm(n, {
+      zero: "لا تصنيفات",
+      one: "تصنيف واحد",
+      two: "تصنيفان",
+      few: `${n} تصنيفات`,
+      many: `${n} تصنيفًا`,
+    }),
+  itemsPill: (n) =>
+    arForm(n, {
+      zero: "لا أصناف",
+      one: "صنف واحد",
+      two: "صنفان",
+      few: `${n} أصناف`,
+      many: `${n} صنفًا`,
+    }),
   usedByDishes: (n) =>
-    arForm(n, { one: "مستخدم في طبق واحد", two: "مستخدم في طبقين", few: `مستخدم في ${n} أطباق`, many: `مستخدم في ${n} طبقًا` }),
+    arForm(n, {
+      one: "مستخدم في طبق واحد",
+      two: "مستخدم في طبقين",
+      few: `مستخدم في ${n} أطباق`,
+      many: `مستخدم في ${n} طبقًا`,
+    }),
   newOrdersBanner: (n) =>
-    arForm(n, { one: "طلب جديد واحد", two: "طلبان جديدان", few: `${n} طلبات جديدة`, many: `${n} طلبًا جديدًا` }),
+    arForm(n, {
+      one: "طلب جديد واحد",
+      two: "طلبان جديدان",
+      few: `${n} طلبات جديدة`,
+      many: `${n} طلبًا جديدًا`,
+    }),
   ordersCount: (n) =>
-    arForm(n, { zero: "لا طلبات", one: "طلب واحد", two: "طلبان", few: `${n} طلبات`, many: `${n} طلبًا` }),
-  soldCount: (n) => arForm(n, { one: "بيعت قطعة واحدة", two: "بيعت قطعتان", few: `بيعت ${n} قطع`, many: `بيعت ${n} قطعة` }),
+    arForm(n, {
+      zero: "لا طلبات",
+      one: "طلب واحد",
+      two: "طلبان",
+      few: `${n} طلبات`,
+      many: `${n} طلبًا`,
+    }),
+  soldCount: (n) =>
+    arForm(n, {
+      one: "بيعت قطعة واحدة",
+      two: "بيعت قطعتان",
+      few: `بيعت ${n} قطع`,
+      many: `بيعت ${n} قطعة`,
+    }),
   customersMatches: (n, p) => {
     const q = p?.query ?? "";
     return arForm(n, {
@@ -1353,18 +1536,31 @@ const pluralsAr: Record<string, PluralFn> = {
     });
   },
   customersCount: (n) =>
-    arForm(n, { zero: "لا عملاء", one: "عميل واحد", two: "عميلان", few: `${n} عملاء`, many: `${n} عميلاً` }),
-  loadMore: (n) => (n === 1 ? "تحميل عنصر إضافي واحد" : `تحميل ${n} عناصر إضافية`),
+    arForm(n, {
+      zero: "لا عملاء",
+      one: "عميل واحد",
+      two: "عميلان",
+      few: `${n} عملاء`,
+      many: `${n} عميلاً`,
+    }),
+  loadMore: (n) =>
+    n === 1 ? "تحميل عنصر إضافي واحد" : `تحميل ${n} عناصر إضافية`,
 };
 
 const STRINGS: Record<Lang, Record<string, string>> = { ar, en };
-const PLURALS: Record<Lang, Record<string, PluralFn>> = { ar: pluralsAr, en: pluralsEn };
+const PLURALS: Record<Lang, Record<string, PluralFn>> = {
+  ar: pluralsAr,
+  en: pluralsEn,
+};
 
 // ---------------------------------------------------------------------------
 // Context / hooks
 // ---------------------------------------------------------------------------
 
-type NamePickable = { name?: string | null; nameEn?: string | null } | null | undefined;
+type NamePickable =
+  | { name?: string | null; nameEn?: string | null }
+  | null
+  | undefined;
 
 type I18nContextValue = {
   lang: Lang;
@@ -1454,7 +1650,9 @@ export function useDirection() {
   return useMemo(
     () => ({
       isRTL,
-      row: { flexDirection: isRTL ? ("row-reverse" as const) : ("row" as const) },
+      row: {
+        flexDirection: isRTL ? ("row-reverse" as const) : ("row" as const),
+      },
       text: {
         textAlign: isRTL ? ("right" as const) : ("left" as const),
         writingDirection: isRTL ? ("rtl" as const) : ("ltr" as const),

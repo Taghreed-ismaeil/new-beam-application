@@ -1,37 +1,57 @@
+import { useId, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
-import { Image } from "expo-image";
+import Svg, { ClipPath, Defs, Image as SvgImage, Path } from "react-native-svg";
 import { imageUrl } from "@/lib/api-client";
+import { PUZZLE_PIECES, puzzlePaths, revealOrder } from "@/lib/puzzle";
 
-export default function TileImage({ itemId, grayImage, layers, revealedCount, updatedAt, size = 220 }) {
-  const version = updatedAt ? `?v=${updatedAt}` : "";
+// Gift tile drawn as a jigsaw: the grey photo underneath, and the colour photo
+// showing through only the pieces this customer has revealed so far.
+export default function TileImage({ itemId, grayImage, revealedCount, completed, size = 220 }) {
+  const clipId = `pz${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const paths = useMemo(() => puzzlePaths(size), [size]);
+  const order = useMemo(() => revealOrder(itemId), [itemId]);
+
+  const shown = completed ? PUZZLE_PIECES : Math.min(revealedCount ?? 0, PUZZLE_PIECES);
+  const revealed = order.slice(0, shown);
+  // grayImage already carries the ?v= cache-buster, so the colour URL inherits it.
+  const colorImage = grayImage?.replace("gray.png", "color.png");
+  const stroke = Math.max(1, size / 150);
+
   return (
     <View style={[styles.box, { width: size, height: size }]}>
-      <Image source={{ uri: imageUrl(grayImage) }} cachePolicy="memory-disk" transition={120} style={styles.base} />
-      {layers.slice(0, revealedCount).map((layer, idx) => {
-        const x0 = layer.x0 ?? 0;
-        const x1 = layer.x1 ?? 1;
-        return (
-          <Image
-            key={idx}
-            source={{ uri: imageUrl(`/images/${itemId}/layer_${idx}.png${version}`) }}
-            cachePolicy="memory-disk"
-            transition={120}
-            style={{
-              position: "absolute",
-              left: `${x0 * 100}%`,
-              top: `${layer.y0 * 100}%`,
-              width: `${(x1 - x0) * 100}%`,
-              height: `${(layer.y1 - layer.y0) * 100}%`,
-            }}
-            contentFit="cover"
-          />
-        );
-      })}
+      <Svg width={size} height={size}>
+        <SvgImage href={{ uri: imageUrl(grayImage) }} width={size} height={size} preserveAspectRatio="xMidYMid slice" />
+
+        {revealed.length > 0 && (
+          <>
+            <Defs>
+              <ClipPath id={clipId}>
+                {revealed.map((i) => (
+                  <Path key={i} d={paths[i]} />
+                ))}
+              </ClipPath>
+            </Defs>
+            <SvgImage
+              href={{ uri: imageUrl(colorImage) }}
+              width={size}
+              height={size}
+              preserveAspectRatio="xMidYMid slice"
+              clipPath={`url(#${clipId})`}
+            />
+          </>
+        )}
+
+        {paths.map((d, i) => (
+          <Path key={`s${i}`} d={d} fill="none" stroke="rgba(23,32,31,0.28)" strokeWidth={stroke * 2.2} />
+        ))}
+        {paths.map((d, i) => (
+          <Path key={`h${i}`} d={d} fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth={stroke} />
+        ))}
+      </Svg>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   box: { borderRadius: 16, overflow: "hidden", backgroundColor: "#eee" },
-  base: { width: "100%", height: "100%" },
 });

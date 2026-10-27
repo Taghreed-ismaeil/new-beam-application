@@ -1,8 +1,9 @@
 import BackButton from "@/components/BackButton";
-import Reanimated from "react-native-reanimated";
-import { enterDown, enterFromLeft, enterPop, enterUp } from "@/lib/motion";
+import MadeBy from "@/components/MadeBy";
 import { API_BASE, apiRequest } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
+import { Text } from "@/lib/arabic-font";
+import { enterDown, enterFromLeft, enterPop, enterUp } from "@/lib/motion";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -17,8 +18,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Reanimated from "react-native-reanimated";
 import { io } from "socket.io-client";
-import { Text } from "@/lib/arabic-font";
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";
@@ -32,35 +33,70 @@ const RED = "#C0392B";
 const WHITE = "#FFFFFF";
 
 // Each order type goes through its own set of steps — only delivery has
-// "On the way", and the wording of the last two steps depends on the type.
+// "On the way", and the wording of the last step depends on the type.
+// The customer's timeline ends at "ready" (or "on the way"): handing the order
+// over is confirmed on the restaurant's side — later by the driver, with a code
+// the customer shows them — so there is no "picked up" step here.
 function stepsFor(orderType, t) {
   const common = [
-    { key: "pending", label: t("trackStepReceived"), hint: t("trackStepReceivedHint"), icon: "receipt-outline" },
-    { key: "accepted", label: t("trackStepAccepted"), hint: t("trackStepAcceptedHint"), icon: "checkmark-done-outline" },
-    { key: "preparing", label: t("trackStepPreparing"), hint: t("trackStepPreparingHint"), icon: "flame-outline" },
+    {
+      key: "pending",
+      label: t("trackStepReceived"),
+      hint: t("trackStepReceivedHint"),
+      icon: "receipt-outline",
+    },
+    {
+      key: "accepted",
+      label: t("trackStepAccepted"),
+      hint: t("trackStepAcceptedHint"),
+      icon: "checkmark-done-outline",
+    },
+    {
+      key: "preparing",
+      label: t("trackStepPreparing"),
+      hint: t("trackStepPreparingHint"),
+      icon: "flame-outline",
+    },
   ];
 
   if (orderType === "delivery") {
     return [
       ...common,
-      { key: "ready", label: t("trackStepReady"), hint: t("trackStepReadyDriverHint"), icon: "bag-check-outline" },
-      { key: "out_for_delivery", label: t("trackStepOnTheWay"), hint: t("trackStepOnTheWayHint"), icon: "bicycle-outline" },
-      { key: "completed", label: t("trackStepDelivered"), hint: t("trackEnjoy"), icon: "happy-outline" },
+      {
+        key: "ready",
+        label: t("trackStepReady"),
+        hint: t("trackStepReadyDriverHint"),
+        icon: "bag-check-outline",
+      },
+      {
+        key: "out_for_delivery",
+        label: t("trackStepOnTheWay"),
+        hint: t("trackStepOnTheWayHint"),
+        icon: "bicycle-outline",
+      },
     ];
   }
 
   if (orderType === "dine_in") {
     return [
       ...common,
-      { key: "ready", label: t("trackStepReady"), hint: t("trackStepReadyTableHint"), icon: "restaurant-outline" },
-      { key: "completed", label: t("trackStepServed"), hint: t("trackEnjoy"), icon: "happy-outline" },
+      {
+        key: "ready",
+        label: t("trackStepReady"),
+        hint: t("trackStepReadyTableHint"),
+        icon: "restaurant-outline",
+      },
     ];
   }
 
   return [
     ...common,
-    { key: "ready", label: t("trackStepReadyPickup"), hint: t("trackStepReadyPickupHint"), icon: "bag-check-outline" },
-    { key: "completed", label: t("trackStepPickedUp"), hint: t("trackEnjoy"), icon: "happy-outline" },
+    {
+      key: "ready",
+      label: t("trackStepReadyPickup"),
+      hint: t("trackStepReadyPickupHint"),
+      icon: "bag-check-outline",
+    },
   ];
 }
 
@@ -73,7 +109,10 @@ const TYPE_LABEL_KEY = {
 
 function formatTime(iso) {
   if (!iso) return "";
-  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 // Soft pulsing ring behind the current step's icon.
@@ -82,7 +121,12 @@ function Pulse({ color }) {
 
   useEffect(() => {
     const loop = Animated.loop(
-      Animated.timing(v, { toValue: 1, duration: 1400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(v, {
+        toValue: 1,
+        duration: 1400,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
     );
     loop.start();
     return () => loop.stop();
@@ -95,8 +139,18 @@ function Pulse({ color }) {
         enStyles.pulse,
         {
           backgroundColor: color,
-          opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] }),
-          transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 1.9] }) }],
+          opacity: v.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.45, 0],
+          }),
+          transform: [
+            {
+              scale: v.interpolate({
+                inputRange: [0, 1],
+                outputRange: [1, 1.9],
+              }),
+            },
+          ],
         },
       ]}
     />
@@ -128,7 +182,10 @@ export default function OrderTrackingScreen() {
         const logs = prev.statusLogs ?? [];
         const statusLogs =
           updated.status !== prev.status
-            ? [...logs, { status: updated.status, changedAt: new Date().toISOString() }]
+            ? [
+                ...logs,
+                { status: updated.status, changedAt: new Date().toISOString() },
+              ]
             : logs;
         return { ...prev, ...updated, statusLogs };
       });
@@ -154,9 +211,15 @@ export default function OrderTrackingScreen() {
 
   const steps = stepsFor(order.orderType, t);
   const cancelled = order.status === "cancelled";
-  const stepIndex = Math.max(0, steps.findIndex((s) => s.key === order.status));
-  const current = steps[stepIndex];
   const done = order.status === "completed";
+  // a completed order has every step behind it (completed itself isn't a step)
+  const stepIndex = done
+    ? steps.length - 1
+    : Math.max(
+        0,
+        steps.findIndex((s) => s.key === order.status),
+      );
+  const current = steps[stepIndex];
 
   const logTime = {};
   for (const l of order.statusLogs ?? []) logTime[l.status] = l.changedAt;
@@ -182,7 +245,10 @@ export default function OrderTrackingScreen() {
       <StatusBar style="light" />
       <BackButton />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+      >
         {/* =====================================================
             HEADER + CURRENT STATUS
         ====================================================== */}
@@ -193,7 +259,11 @@ export default function OrderTrackingScreen() {
 
           <Reanimated.View entering={enterPop(1)} style={styles.headerChips}>
             <View style={styles.chip}>
-              <Text style={styles.chipText}>{TYPE_LABEL_KEY[order.orderType] ? t(TYPE_LABEL_KEY[order.orderType]) : order.orderType}</Text>
+              <Text style={styles.chipText}>
+                {TYPE_LABEL_KEY[order.orderType]
+                  ? t(TYPE_LABEL_KEY[order.orderType])
+                  : order.orderType}
+              </Text>
             </View>
             <View style={styles.chip}>
               <Text style={styles.chipText}>{itemCountLabel}</Text>
@@ -203,10 +273,14 @@ export default function OrderTrackingScreen() {
           <Reanimated.View entering={enterUp(2)} style={styles.statusCard}>
             {cancelled ? (
               <>
-                <View style={[styles.statusIcon, { backgroundColor: "#FDECEA" }]}>
+                <View
+                  style={[styles.statusIcon, { backgroundColor: "#FDECEA" }]}
+                >
                   <Ionicons name="close-circle-outline" size={34} color={RED} />
                 </View>
-                <Text style={[styles.statusTitle, { color: RED }]}>{t("trackCancelled")}</Text>
+                <Text style={[styles.statusTitle, { color: RED }]}>
+                  {t("trackCancelled")}
+                </Text>
                 <Text style={styles.statusHint}>
                   {order.cancelReason || t("trackCancelledHint")}
                 </Text>
@@ -215,12 +289,23 @@ export default function OrderTrackingScreen() {
               <>
                 <View style={styles.statusIconWrap}>
                   {!done && <Pulse color={ORANGE} />}
-                  <View style={[styles.statusIcon, done && { backgroundColor: LIGHT_TEAL }]}>
-                    <Ionicons name={current.icon} size={32} color={done ? TEAL : ORANGE} />
+                  <View
+                    style={[
+                      styles.statusIcon,
+                      done && { backgroundColor: LIGHT_TEAL },
+                    ]}
+                  >
+                    <Ionicons
+                      name={current.icon}
+                      size={32}
+                      color={done ? TEAL : ORANGE}
+                    />
                   </View>
                 </View>
                 <Text style={styles.statusTitle}>{current.label}</Text>
-                <Text style={styles.statusHint}>{current.hint}</Text>
+                <Text style={styles.statusHint}>
+                  {done ? t("trackEnjoy") : current.hint}
+                </Text>
 
                 {/* progress bar */}
                 <View style={styles.progressTrack}>
@@ -233,7 +318,10 @@ export default function OrderTrackingScreen() {
                   />
                 </View>
                 <Text style={styles.progressText}>
-                  {t("trackStepOf", { step: stepIndex + 1, total: steps.length })}
+                  {t("trackStepOf", {
+                    step: stepIndex + 1,
+                    total: steps.length,
+                  })}
                 </Text>
               </>
             )}
@@ -244,50 +332,67 @@ export default function OrderTrackingScreen() {
           {/* =====================================================
               CLIQ PAYMENT PENDING
           ====================================================== */}
-          {order.paymentMethod === "cliq" && order.paymentStatus !== "paid" && !cancelled && (
-            <View style={styles.noteBox}>
-              <Ionicons name="time-outline" size={18} color={ORANGE} />
-              <Text style={[styles.noteText, dir.text]}>{t("trackCliqWaiting")}</Text>
-            </View>
-          )}
+          {order.paymentMethod === "cliq" &&
+            order.paymentStatus !== "paid" &&
+            !cancelled && (
+              <View style={styles.noteBox}>
+                <Ionicons name="time-outline" size={18} color={ORANGE} />
+                <Text style={[styles.noteText, dir.text]}>
+                  {t("trackCliqWaiting")}
+                </Text>
+              </View>
+            )}
 
           {/* =====================================================
               DRIVER
           ====================================================== */}
-          {order.orderType === "delivery" && order.driver && !cancelled && !done && (
-            <View style={styles.driverCard}>
-              <View style={styles.driverAvatar}>
-                <Ionicons name="bicycle" size={22} color={WHITE} />
+          {order.orderType === "delivery" &&
+            order.driver &&
+            !cancelled &&
+            !done && (
+              <View style={styles.driverCard}>
+                <View style={styles.driverAvatar}>
+                  <Ionicons name="bicycle" size={22} color={WHITE} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={[styles.detailLabel, dir.text]}>
+                    {t("trackYourDriver")}
+                  </Text>
+                  <Text style={[styles.detailValue, dir.text]}>
+                    {order.driver.name}
+                  </Text>
+                </View>
+                {!!order.driver.phone && (
+                  <TouchableOpacity
+                    style={styles.callBtn}
+                    onPress={() => Linking.openURL(`tel:${order.driver.phone}`)}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="call" size={18} color={WHITE} />
+                  </TouchableOpacity>
+                )}
               </View>
-              <View style={styles.flex}>
-                <Text style={[styles.detailLabel, dir.text]}>{t("trackYourDriver")}</Text>
-                <Text style={[styles.detailValue, dir.text]}>{order.driver.name}</Text>
-              </View>
-              {!!order.driver.phone && (
-                <TouchableOpacity
-                  style={styles.callBtn}
-                  onPress={() => Linking.openURL(`tel:${order.driver.phone}`)}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="call" size={18} color={WHITE} />
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+            )}
 
           {/* =====================================================
               TIMELINE
           ====================================================== */}
           {!cancelled && (
             <>
-              <Text style={[styles.sectionTitle, dir.text, dir.noSpacing]}>{t("trackProgress")}</Text>
+              <Text style={[styles.sectionTitle, dir.text, dir.noSpacing]}>
+                {t("trackProgress")}
+              </Text>
               <Reanimated.View entering={enterUp(3)} style={styles.card}>
                 {steps.map((s, i) => {
                   const isDone = i < stepIndex || done;
                   const isCurrent = i === stepIndex && !done;
                   const isLast = i === steps.length - 1;
                   return (
-                    <Reanimated.View entering={enterFromLeft(i + 3)} key={s.key} style={styles.stepRow}>
+                    <Reanimated.View
+                      entering={enterFromLeft(i + 3)}
+                      key={s.key}
+                      style={styles.stepRow}
+                    >
                       <View style={styles.stepRail}>
                         <View
                           style={[
@@ -297,15 +402,35 @@ export default function OrderTrackingScreen() {
                           ]}
                         >
                           {isDone ? (
-                            <Ionicons name="checkmark" size={14} color={WHITE} />
+                            <Ionicons
+                              name="checkmark"
+                              size={14}
+                              color={WHITE}
+                            />
                           ) : (
-                            <Ionicons name={s.icon} size={13} color={isCurrent ? WHITE : "#B9BFBC"} />
+                            <Ionicons
+                              name={s.icon}
+                              size={13}
+                              color={isCurrent ? WHITE : "#B9BFBC"}
+                            />
                           )}
                         </View>
-                        {!isLast && <View style={[styles.stepLine, i < stepIndex && styles.stepLineDone]} />}
+                        {!isLast && (
+                          <View
+                            style={[
+                              styles.stepLine,
+                              i < stepIndex && styles.stepLineDone,
+                            ]}
+                          />
+                        )}
                       </View>
 
-                      <View style={[styles.stepTextWrap, !isLast && { paddingBottom: 18 }]}>
+                      <View
+                        style={[
+                          styles.stepTextWrap,
+                          !isLast && { paddingBottom: 18 },
+                        ]}
+                      >
                         <View style={styles.stepTitleRow}>
                           <Text
                             style={[
@@ -317,10 +442,16 @@ export default function OrderTrackingScreen() {
                             {s.label}
                           </Text>
                           {(isDone || isCurrent) && !!logTime[s.key] && (
-                            <Text style={styles.stepTime}>{formatTime(logTime[s.key])}</Text>
+                            <Text style={styles.stepTime}>
+                              {formatTime(logTime[s.key])}
+                            </Text>
                           )}
                         </View>
-                        {isCurrent && <Text style={[styles.stepHint, dir.text]}>{s.hint}</Text>}
+                        {isCurrent && (
+                          <Text style={[styles.stepHint, dir.text]}>
+                            {s.hint}
+                          </Text>
+                        )}
                       </View>
                     </Reanimated.View>
                   );
@@ -332,14 +463,20 @@ export default function OrderTrackingScreen() {
           {/* =====================================================
               DETAILS
           ====================================================== */}
-          <Text style={[styles.sectionTitle, dir.text, dir.noSpacing]}>{t("trackDetails")}</Text>
+          <Text style={[styles.sectionTitle, dir.text, dir.noSpacing]}>
+            {t("trackDetails")}
+          </Text>
           <Reanimated.View entering={enterUp(4)} style={styles.card}>
             {order.orderType === "delivery" && (
               <View style={styles.detailRow}>
                 <Ionicons name="location-outline" size={18} color={TEAL} />
                 <View style={styles.flex}>
-                  <Text style={[styles.detailLabel, dir.text]}>{t("trackDeliveringTo")}</Text>
-                  <Text style={[styles.detailValue, dir.text]}>{order.deliveryAddress || t("trackLocationOnMap")}</Text>
+                  <Text style={[styles.detailLabel, dir.text]}>
+                    {t("trackDeliveringTo")}
+                  </Text>
+                  <Text style={[styles.detailValue, dir.text]}>
+                    {order.deliveryAddress || t("trackLocationOnMap")}
+                  </Text>
                 </View>
               </View>
             )}
@@ -348,8 +485,12 @@ export default function OrderTrackingScreen() {
               <View style={styles.detailRow}>
                 <Ionicons name="restaurant-outline" size={18} color={TEAL} />
                 <View style={styles.flex}>
-                  <Text style={[styles.detailLabel, dir.text]}>{t("trackTable")}</Text>
-                  <Text style={[styles.detailValue, dir.text]}>{t("trackTableNo", { n: order.table.tableNumber })}</Text>
+                  <Text style={[styles.detailLabel, dir.text]}>
+                    {t("trackTable")}
+                  </Text>
+                  <Text style={[styles.detailValue, dir.text]}>
+                    {t("trackTableNo", { n: order.table.tableNumber })}
+                  </Text>
                 </View>
               </View>
             )}
@@ -358,20 +499,30 @@ export default function OrderTrackingScreen() {
               <View style={styles.detailRow}>
                 <Ionicons name="storefront-outline" size={18} color={TEAL} />
                 <View style={styles.flex}>
-                  <Text style={[styles.detailLabel, dir.text]}>{t("trackPickup")}</Text>
-                  <Text style={[styles.detailValue, dir.text]}>{t("trackFromCounter")}</Text>
+                  <Text style={[styles.detailLabel, dir.text]}>
+                    {t("trackPickup")}
+                  </Text>
+                  <Text style={[styles.detailValue, dir.text]}>
+                    {t("trackFromCounter")}
+                  </Text>
                 </View>
               </View>
             )}
 
             <View style={[styles.detailRow, styles.divider]}>
               <Ionicons
-                name={order.paymentMethod === "cliq" ? "phone-portrait-outline" : "cash-outline"}
+                name={
+                  order.paymentMethod === "cliq"
+                    ? "phone-portrait-outline"
+                    : "cash-outline"
+                }
                 size={18}
                 color={TEAL}
               />
               <View style={styles.flex}>
-                <Text style={[styles.detailLabel, dir.text]}>{t("trackPayment")}</Text>
+                <Text style={[styles.detailLabel, dir.text]}>
+                  {t("trackPayment")}
+                </Text>
                 <Text style={[styles.detailValue, dir.text]}>
                   {order.paymentMethod === "cliq" ? "CliQ" : t("trackCash")}
                   {order.paymentStatus === "paid" ? t("trackPaid") : ""}
@@ -383,32 +534,47 @@ export default function OrderTrackingScreen() {
           {/* =====================================================
               ITEMS
           ====================================================== */}
-          <Text style={[styles.sectionTitle, dir.text, dir.noSpacing]}>{t("trackYourOrder")}</Text>
+          <Text style={[styles.sectionTitle, dir.text, dir.noSpacing]}>
+            {t("trackYourOrder")}
+          </Text>
           <Reanimated.View entering={enterUp(5)} style={styles.card}>
             {(order.items ?? []).map((it, i) => (
-              <View key={it.id} style={[styles.itemRow, i > 0 && styles.divider]}>
+              <View
+                key={it.id}
+                style={[styles.itemRow, i > 0 && styles.divider]}
+              >
                 <View style={styles.qtyBadge}>
                   <Text style={styles.qtyText}>{it.quantity}×</Text>
                 </View>
                 <Text style={[styles.itemName, dir.text]} numberOfLines={2}>
-                  {isAr ? it.nameSnapshot || it.nameEnSnapshot : it.nameEnSnapshot || it.nameSnapshot}
+                  {isAr
+                    ? it.nameSnapshot || it.nameEnSnapshot
+                    : it.nameEnSnapshot || it.nameSnapshot}
                 </Text>
                 <Text style={styles.itemPrice}>
-                  {(Number(it.unitPriceSnapshot) * it.quantity).toFixed(2)} {t("jd")}
+                  {(Number(it.unitPriceSnapshot) * it.quantity).toFixed(2)}{" "}
+                  {t("jd")}
                 </Text>
               </View>
             ))}
 
             <View style={[styles.totalRow, styles.divider]}>
               <Text style={styles.totalLabel}>{t("trackTotal")}</Text>
-              <Text style={styles.totalValue}>{Number(order.total).toFixed(2)} {t("jd")}</Text>
+              <Text style={styles.totalValue}>
+                {Number(order.total).toFixed(2)} {t("jd")}
+              </Text>
             </View>
           </Reanimated.View>
 
-          <TouchableOpacity style={styles.homeBtn} onPress={() => router.dismissTo("/")} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={styles.homeBtn}
+            onPress={() => router.dismissTo("/")}
+            activeOpacity={0.85}
+          >
             <Text style={styles.homeBtnText}>{t("trackBackHome")}</Text>
           </TouchableOpacity>
         </View>
+        <MadeBy />
       </ScrollView>
     </View>
   );
@@ -433,6 +599,7 @@ const baseStyles = {
   },
 
   scroll: {
+    flexGrow: 1,
     // clears the absolutely-positioned bottom tab bar
     paddingBottom: 110,
   },
@@ -839,6 +1006,6 @@ const arStyles = StyleSheet.create(
     Object.entries(baseStyles).map(([key, style]) => [
       key,
       { ...style, ...AR_TEXT[key] },
-    ])
-  )
+    ]),
+  ),
 );

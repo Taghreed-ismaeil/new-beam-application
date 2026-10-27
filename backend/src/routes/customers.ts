@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireStaff } from '../middleware/auth';
+import { PUZZLE_PIECES } from '../lib/images';
 
 // Customer directory for app/admin/customers.jsx. Cashiers and waiters can look customers up
 // (read-only, same as the app's permission table); only admins/managers can block.
@@ -93,7 +94,7 @@ adminCustomersRouter.get('/:id', requireStaff('admin', 'manager', 'cashier', 'wa
         name: p.menuItem.name,
         nameEn: p.menuItem.nameEn,
         revealedCount: p.revealedCount,
-        requiredPieces: (p.menuItem.layers as unknown[]).length || 1,
+        requiredPieces: PUZZLE_PIECES,
         completed: !!p.completedAt,
       })),
     vouchers: vouchers.map((v) => ({

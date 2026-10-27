@@ -1,22 +1,28 @@
 import { Ionicons } from "@expo/vector-icons";
 
 import BackButton from "@/components/BackButton";
+import MadeBy from "@/components/MadeBy";
+import { OfferCountdownChip } from "@/components/OfferCountdown";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { Image } from "expo-image";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
-import { Image } from "expo-image";
 
 import { apiRequest, apiRequestCached, imageUrl } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
-import { allMenuItems } from "@/lib/menu-sections";
 import { Text } from "@/lib/arabic-font";
+import { allMenuItems } from "@/lib/menu-sections";
+import { refreshOffers } from "@/lib/offers";
 
 const FALLBACK_IMAGE = require("../assets/img/menu-5.jpg");
 
@@ -28,13 +34,37 @@ const DARK = "#17201F";
 const MUTED = "#68706E";
 const WHITE = "#FFFFFF";
 
+// Status label keys in lib/app-strings.ts (same as the orders screen)
+const STATUS_LABEL = {
+  pending: "statusPending",
+  accepted: "statusAccepted",
+  preparing: "statusPreparing",
+  ready: "statusReady",
+  out_for_delivery: "statusOnTheWay",
+  completed: "statusCompleted",
+  cancelled: "statusCancelled",
+};
+
 export default function CartScreen() {
-  const { lines, setQuantity, remove, total, editing, startEditing, clear } = useCart();
+  const {
+    lines,
+    setQuantity,
+    remove,
+    total,
+    editing,
+    startEditing,
+    startAdding,
+    clear,
+  } = useCart();
   const { t, pick, dir } = useAppLang();
   const { user, loading: authLoading } = useAuth();
 
+  // Items added before the cart stored images: look their image up in the menu
+  const [menuImages, setMenuImages] = useState({});
+
   // Opened from the WhatsApp receipt's "edit" link (beemres://cart?editOrder=12):
-  // load that order into the cart. Only a still-pending order can change.
+  // load that order into the cart. The server says what's still allowed (order.can):
+  // full edit until the kitchen starts, then only adding items, then nothing.
   const { editOrder } = useLocalSearchParams();
   const [editNotice, setEditNotice] = useState("");
   const loadedEdit = useRef(null);
@@ -49,19 +79,122 @@ export default function CartScreen() {
     loadedEdit.current = id;
     apiRequest(`/api/orders/${id}`)
       .then(({ order }) => {
-        if (order.status !== "pending") {
+        if (order.can?.edit) startEditing(order, menuImages);
+        else if (order.can?.add) startAdding(order);
+        else {
           setEditNotice(t("cartEditLocked", { id }));
           return;
         }
-        startEditing(order, menuImages);
         setEditNotice("");
       })
       .catch(() => setEditNotice(t("cartEditMissing")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editOrder, user, authLoading]);
 
-  // Items added before the cart stored images: look their image up in the menu
-  const [menuImages, setMenuImages] = useState({});
+  // The customer's latest order that isn't finished yet, refreshed whenever the
+  // cart is opened, so the right button shows as the restaurant moves it along.
+  const [activeOrder, setActiveOrder] = useState(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) {
+        setActiveOrder(null);
+        return;
+      }
+      let alive = true;
+      apiRequest("/api/orders/mine")
+        .then(({ orders }) => {
+          if (!alive) return;
+          const open = (orders ?? []).find(
+            (o) => o.status !== "completed" && o.status !== "cancelled",
+          );
+          setActiveOrder(open ?? null);
+          // The kitchen moved on while this order was open for editing: drop to
+          // "add only" (or out entirely) so confirming can't be refused.
+          const mine =
+            editing && (orders ?? []).find((o) => o.id === editing.orderId);
+          if (mine && editing.mode !== "add" && !mine.can?.edit) {
+            if (mine.can?.add) {
+              startAdding(mine);
+              setEditNotice(t("cartNowAddOnly", { id: mine.id }));
+            } else {
+              clear();
+              setEditNotice(t("cartEditLocked", { id: mine.id }));
+            }
+          }
+        })
+        .catch(() => {});
+      return () => {
+        alive = false;
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user, editing?.orderId, editing?.mode]),
+  );
+
+  // Asks before throwing away items already in the cart (web has no Alert buttons)
+  function confirmReplace(run) {
+    const unrelated = lines.length > 0 && editing?.orderId !== activeOrder?.id;
+    if (!unrelated) return run();
+    if (Platform.OS === "web") {
+      if (window.confirm(t("cartReplaceConfirm"))) run();
+      return;
+    }
+    Alert.alert(t("cartReplaceConfirm"), "", [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("cartReplaceOk"), style: "destructive", onPress: run },
+    ]);
+  }
+
+  function editActive() {
+    confirmReplace(() =>
+      apiRequest(`/api/orders/${activeOrder.id}`)
+        .then(({ order }) => {
+          setActiveOrder(order);
+          if (order.can?.edit) startEditing(order, menuImages);
+          else if (order.can?.add) startAdding(order);
+        })
+        .catch(() => setEditNotice(t("cartEditMissing"))),
+    );
+  }
+
+  function addToActive() {
+    confirmReplace(() => startAdding(activeOrder));
+  }
+
+  // Add mode: append the cart's lines to the order instead of placing a new one
+  const [adding, setAdding] = useState(false);
+
+  async function submitAddition() {
+    if (adding || !editing) return;
+    setAdding(true);
+    setEditNotice("");
+    try {
+      const id = editing.orderId;
+      await apiRequest(`/api/orders/${id}/items`, {
+        method: "POST",
+        body: {
+          items: lines.map((l) => ({
+            menuItemId: l.menuItemId,
+            quantity: l.quantity,
+            ...(l.notes ? { notes: l.notes } : {}),
+          })),
+        },
+      });
+      clear();
+      refreshOffers();
+      router.replace(`/order-tracking/${id}`);
+    } catch (e) {
+      setEditNotice(
+        e?.status === 409 ? t("cartAddClosed") : t("cartAddFailed"),
+      );
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  const addMode = editing?.mode === "add";
+  // the order box hides while that same order is already open in the cart
+  const showActive = activeOrder && editing?.orderId !== activeOrder.id;
 
   useEffect(() => {
     apiRequestCached("/api/menu", (data) => {
@@ -109,15 +242,92 @@ export default function CartScreen() {
           CART ITEMS
       ====================================================== */}
 
-      {(editing || editNotice) && (
-        <View style={[styles.editBanner, editNotice && !editing && styles.editBannerLocked]}>
+      {(!!editing || !!editNotice) && (
+        <View
+          style={[
+            styles.editBanner,
+            !!editNotice && !editing && styles.editBannerLocked,
+          ]}
+        >
           <Text style={styles.editBannerText}>
-            {editing ? t("cartEditing", { id: editing.orderId }) : editNotice}
+            {editing
+              ? t(addMode ? "cartAdding" : "cartEditing", {
+                  id: editing.orderId,
+                })
+              : editNotice}
           </Text>
           {editing && (
             <TouchableOpacity onPress={clear} hitSlop={8}>
               <Text style={styles.editBannerCancel}>{t("cartEditCancel")}</Text>
             </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {editing && addMode && (
+        <Text style={[styles.addHint, dir.text]}>
+          {editNotice ||
+            // chose "add" while a full edit was still possible vs. the kitchen already started
+            t(
+              activeOrder?.id === editing.orderId && activeOrder?.can?.edit
+                ? "cartAddHint"
+                : "cartAddOnlyHint",
+            )}
+        </Text>
+      )}
+
+      {showActive && (
+        <View style={styles.activeBox}>
+          {/* "Order #28 · waiting"  ...  [Track] */}
+          <View style={[styles.activeTop, dir.row]}>
+            <View style={styles.activeInfo}>
+              <Text style={[styles.activeTitle, dir.text]} numberOfLines={1}>
+                {t("cartActiveOrder", { id: activeOrder.id })}
+              </Text>
+              <View style={[styles.activeStatusRow, dir.row]}>
+                <Ionicons name="time-outline" size={13} color={TEAL} />
+                <Text style={styles.activeStatus}>
+                  {t(STATUS_LABEL[activeOrder.status] ?? "statusPending")}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.trackPill}
+              onPress={() => router.push(`/order-tracking/${activeOrder.id}`)}
+              activeOpacity={0.8}
+              hitSlop={6}
+            >
+              <Text style={styles.trackPillText}>{t("cartTrackOrder")}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* before the kitchen starts: change the order or add to it; after: add only */}
+          {(activeOrder.can?.edit || activeOrder.can?.add) && (
+            <View style={[styles.activeActions, dir.row]}>
+              {activeOrder.can?.edit && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnLight]}
+                  onPress={editActive}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="create-outline" size={16} color={ORANGE} />
+                  <Text style={[styles.actionBtnText, { color: ORANGE }]}>
+                    {t("cartChooseEdit")}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnTeal]}
+                onPress={addToActive}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add" size={17} color={WHITE} />
+                <Text style={[styles.actionBtnText, { color: WHITE }]}>
+                  {t("cartChooseAdd")}
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       )}
@@ -134,39 +344,63 @@ export default function CartScreen() {
 
             <Text style={styles.emptyTitle}>{t("cartEmpty")}</Text>
 
-            <Text style={styles.emptyText}>
-              {t("cartEmptyText")}
-            </Text>
+            <Text style={styles.emptyText}>{t("cartEmptyText")}</Text>
           </View>
         ) : (
           lines.map((l) => (
             <View key={l.menuItemId} style={[styles.row, dir.row]}>
-              <Image
-                source={(() => {
-                  const path = l.imageUrl || menuImages[l.menuItemId];
+              {/* photo + name open the item's full page to change it */}
+              <TouchableOpacity
+                style={[styles.lineOpen, dir.row]}
+                activeOpacity={0.7}
+                onPress={() =>
+                  router.push({
+                    pathname: "/item/[id]",
+                    params: { id: String(l.menuItemId), fromCart: "1" },
+                  })
+                }
+              >
+                <Image
+                  source={(() => {
+                    const path = l.imageUrl || menuImages[l.menuItemId];
 
-                  return path ? { uri: imageUrl(path) } : FALLBACK_IMAGE;
-                })()}
-                cachePolicy="memory-disk"
-                transition={120}
-                style={styles.thumb}
-              />
+                    return path ? { uri: imageUrl(path) } : FALLBACK_IMAGE;
+                  })()}
+                  cachePolicy="memory-disk"
+                  transition={120}
+                  style={styles.thumb}
+                />
 
-              <View style={styles.itemInfo}>
-                <Text style={[styles.name, dir.text]} numberOfLines={1}>
-                  {pick({ name: l.nameAr || l.name, nameEn: l.nameEn || l.name })}
-                </Text>
-
-                {!!l.notes && (
-                  <Text style={[styles.lineNote, dir.text]} numberOfLines={2}>
-                    {l.notes}
+                <View style={styles.itemInfo}>
+                  <Text style={[styles.name, dir.text]} numberOfLines={1}>
+                    {pick({
+                      name: l.nameAr || l.name,
+                      nameEn: l.nameEn || l.name,
+                    })}
                   </Text>
-                )}
 
-                <Text style={[styles.price, dir.text]}>
-                  {l.price.toFixed(2)} {t("jd")}
-                </Text>
-              </View>
+                  {!!l.notes && (
+                    <Text style={[styles.lineNote, dir.text]} numberOfLines={2}>
+                      {l.notes}
+                    </Text>
+                  )}
+
+                  <View style={[styles.priceRow, dir.row]}>
+                    <Text style={[styles.price, dir.text]}>
+                      {l.price.toFixed(2)} {t("jd")}
+                    </Text>
+                    {/* a live offer: the menu price struck through, and its countdown */}
+                    {l.basePrice > l.price && (
+                      <Text style={styles.oldPrice}>
+                        {l.basePrice.toFixed(2)}
+                      </Text>
+                    )}
+                    {!!l.offerEndsAt && (
+                      <OfferCountdownChip endsAt={l.offerEndsAt} />
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
 
               <View style={[styles.stepper, dir.row]}>
                 <TouchableOpacity
@@ -202,6 +436,7 @@ export default function CartScreen() {
             </View>
           ))
         )}
+        <MadeBy />
       </ScrollView>
 
       {/* =====================================================
@@ -209,30 +444,38 @@ export default function CartScreen() {
 ====================================================== */}
 
       {lines.length > 0 && (
-      <View style={styles.footer}>
-        <View style={[styles.totalRow, dir.row]}>
-          <Text style={styles.totalLabel}>{t("cartTotal")}</Text>
+        <View style={styles.footer}>
+          <View style={[styles.totalRow, dir.row]}>
+            <Text style={styles.totalLabel}>{t("cartTotal")}</Text>
 
-          <Text style={styles.total}>
-            {total.toFixed(2)} {t("jd")}
-          </Text>
+            <Text style={styles.total}>
+              {total.toFixed(2)} {t("jd")}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.confirmBtn, adding && { opacity: 0.7 }]}
+            disabled={adding}
+            onPress={() =>
+              addMode
+                ? submitAddition()
+                : router.push({
+                    pathname: "/confirm",
+                    params: { from: "cart" },
+                  })
+            }
+            activeOpacity={0.8}
+          >
+            {adding ? (
+              <ActivityIndicator color={WHITE} />
+            ) : (
+              <Text style={styles.confirmBtnText}>
+                {addMode ? t("cartAddConfirm") : t("cartConfirm")}
+              </Text>
+            )}
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={styles.confirmBtn}
-          onPress={() =>
-            router.push({
-              pathname: "/confirm",
-              params: { from: "cart" },
-            })
-          }
-          activeOpacity={0.8}
-        >
-          <Text style={styles.confirmBtnText}>{t("cartConfirm")}</Text>
-        </TouchableOpacity>
-      </View>
       )}
-
     </View>
   );
 }
@@ -263,6 +506,84 @@ const styles = StyleSheet.create({
     color: DARK,
     fontSize: 13.5,
     fontWeight: "700",
+  },
+  lineOpen: {
+    flex: 1,
+    alignItems: "center",
+    gap: 12,
+  },
+  addHint: {
+    marginHorizontal: 20,
+    marginBottom: 4,
+    color: MUTED,
+    fontSize: 12.5,
+  },
+  // design A: light-teal strip, "Order #28 · waiting  [Track]", two buttons under it
+  activeBox: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: LIGHT_TEAL,
+    zIndex: 2,
+  },
+  activeTop: {
+    alignItems: "center",
+    gap: 10,
+  },
+  activeInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  activeTitle: {
+    color: DARK,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  activeStatusRow: {
+    alignItems: "center",
+    gap: 4,
+    marginTop: 3,
+  },
+  activeStatus: {
+    color: TEAL,
+    fontSize: 12.5,
+    fontWeight: "700",
+  },
+  trackPill: {
+    backgroundColor: WHITE,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+  },
+  trackPillText: {
+    color: TEAL,
+    fontSize: 12.5,
+    fontWeight: "800",
+  },
+  activeActions: {
+    gap: 10,
+    marginTop: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 14,
+  },
+  actionBtnLight: {
+    backgroundColor: WHITE,
+  },
+  actionBtnTeal: {
+    backgroundColor: TEAL,
+  },
+  actionBtnText: {
+    fontSize: 13.5,
+    fontWeight: "800",
   },
   editBannerCancel: {
     color: ORANGE,
@@ -351,12 +672,12 @@ const styles = StyleSheet.create({
     marginTop: 25,
   },
 
-
   /* =====================================================
      CONTENT
   ====================================================== */
 
   content: {
+    flexGrow: 1,
     paddingHorizontal: 18,
     paddingTop: 5,
     paddingBottom: 120,
@@ -464,6 +785,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontStyle: "italic",
     color: "#68706E",
+  },
+
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+
+  oldPrice: {
+    color: "#A4A4A4",
+    fontSize: 12,
+    fontWeight: "700",
+    textDecorationLine: "line-through",
   },
 
   price: {

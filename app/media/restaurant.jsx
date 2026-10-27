@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import MediaViewer from "@/components/MediaViewer";
 import { imageUrl } from "@/lib/api-client";
@@ -117,7 +118,13 @@ export default function RestaurantGallery() {
             </View>
           )
         }
-        ListFooterComponent={loadingMore ? <ActivityIndicator color={ORANGE} style={{ margin: 20 }} /> : null}
+        ListFooterComponentStyle={{ marginTop: "auto" }}
+        ListFooterComponent={
+          <>
+            {loadingMore ? <ActivityIndicator color={ORANGE} style={{ margin: 20 }} /> : null}
+            {posts !== null && <MadeBy />}
+          </>
+        }
         renderItem={({ item: row }) => (
           <View style={[styles.row, dir.row]}>
             {row.map((p) => {
@@ -165,6 +172,7 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    flexGrow: 1,
     paddingBottom: 120,
   },
 

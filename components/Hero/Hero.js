@@ -1,16 +1,11 @@
+import CartIcon from "@/components/CartIcon";
 import WaveText from "@/components/WaveText/WaveText";
-import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback } from "react";
-import {
-  Pressable,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from "react-native";
-import { Image } from "expo-image";
+import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 
 import { useAppLang } from "@/lib/app-lang";
 import { Text } from "@/lib/arabic-font";
@@ -34,16 +29,15 @@ export default function Hero() {
 
   const heroHeight = Math.max(350, Math.min(height * 0.55, 500));
 
-  const buttonFont = Math.max(13, Math.min(width * 0.035, 16));
+  const buttonFont = Math.max(14, Math.min(width * 0.04, 18));
 
-  const iconSize = Math.max(20, Math.min(width * 0.055, 28));
+  const iconSize = Math.max(25, Math.min(width * 0.07, 34));
 
   // The logo box is centered; "contain" scales the image to fit the box and
   // centers it inside — from that we know where the S and the E land on screen.
   const logoBoxW = width * 0.5;
   const logoBoxH = 100;
   const logoScale = Math.min(logoBoxW / LOGO_IMG_W, logoBoxH / LOGO_IMG_H);
-  const logoSLeft = (width - LOGO_IMG_W * logoScale) / 2 + LOGO_S_X * logoScale;
   const logoTextWidth = (LOGO_E_X - LOGO_S_X) * logoScale;
 
   const player = useVideoPlayer(heroVideo, (p) => {
@@ -56,8 +50,20 @@ export default function Hero() {
   // underneath other screens it steals CPU/GPU and makes animations stutter.
   useFocusEffect(
     useCallback(() => {
-      player.play();
-      return () => player.pause();
+      try {
+        player.play();
+      } catch {
+        // player already released
+      }
+      // When the screen closes, useVideoPlayer may free the native player before
+      // this cleanup runs — pausing it then throws, so ignore that case.
+      return () => {
+        try {
+          player.pause();
+        } catch {
+          // already released
+        }
+      };
     }, [player]),
   );
 
@@ -112,11 +118,12 @@ export default function Hero() {
           <View
             style={[
               styles.actionsRow,
-              { marginLeft: logoSLeft, width: logoTextWidth },
+              // centered under the logo, at least as wide as its lettering
+              { alignSelf: "center", minWidth: logoTextWidth },
               dir.row,
-              // "تصفّح المنيو" is shorter, so space-between left the cart
-              // stranded at the far edge — keep it next to the button.
-              dir.isRTL && styles.actionsRowAr,
+              // button + cart side by side with a gap (the bigger button no
+              // longer fits between the S and the E in English)
+              styles.actionsRowAr,
             ]}
           >
             <Pressable
@@ -130,11 +137,7 @@ export default function Hero() {
 
             <Pressable onPress={() => router.push("/cart")} hitSlop={6}>
               {({ pressed }) => (
-                <Ionicons
-                  name="bag"
-                  size={iconSize}
-                  color={pressed ? "#C94320" : "#FC4A14"}
-                />
+                <CartIcon size={Math.round(iconSize * 1.2)} pressed={pressed} />
               )}
             </Pressable>
           </View>
@@ -216,8 +219,8 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 2,
     borderColor: "#FC4A14",
-    paddingVertical: 8,
-    paddingHorizontal: 12, // button + cart must fit between S and E
+    paddingVertical: 10,
+    paddingHorizontal: 16, // button + cart must fit between S and E
   },
 
   buttonText: {

@@ -1,7 +1,8 @@
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import QrScanner from "@/components/QrScanner";
 import { useCart } from "@/context/CartContext";
-import { apiRequest } from "@/lib/api-client";
+import { apiRequest, apiRequestCached } from "@/lib/api-client";
 import { takePendingDeliveryLocation } from "@/lib/pendingLocation";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
@@ -28,9 +29,11 @@ export default function CheckoutScreen() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    apiRequest("/api/restaurant")
-      .then((d) => setCliqAlias(d.restaurant?.cliqAlias ?? null))
-      .catch(() => {});
+    apiRequestCached(
+      "/api/restaurant",
+      (d) => setCliqAlias(d.restaurant?.cliqAlias ?? null),
+      () => {},
+    );
   }, []);
 
   useFocusEffect(
@@ -119,7 +122,7 @@ export default function CheckoutScreen() {
   return (
     <View style={{ flex: 1 }}>
       <BackButton />
-      <ScrollView style={styles.screen} contentContainerStyle={{ padding: 20 }}>
+      <ScrollView style={styles.screen} contentContainerStyle={{ flexGrow: 1, padding: 20 }}>
         <Text style={styles.title}>Checkout</Text>
 
         <Text style={styles.sectionTitle}>Order type</Text>
@@ -239,6 +242,7 @@ export default function CheckoutScreen() {
             <Text style={styles.submitBtnText}>Confirm order</Text>
           )}
         </TouchableOpacity>
+        <MadeBy />
       </ScrollView>
     </View>
   );

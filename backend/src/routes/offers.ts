@@ -35,6 +35,8 @@ const offerSchema = z.object({
   menuItemIds: z.string().optional(), // JSON array string
   startsAt: z.string().optional(),
   endsAt: z.string().optional(),
+  // multipart/JSON text, like the PUT route: only "false" switches it off
+  active: z.string().optional(),
 });
 
 adminOffersRouter.post('/', upload.single('image'), async (req, res) => {
@@ -50,6 +52,7 @@ adminOffersRouter.post('/', upload.single('image'), async (req, res) => {
       menuItemIds: parsed.data.menuItemIds ? JSON.parse(parsed.data.menuItemIds) : [],
       startsAt: parsed.data.startsAt ? new Date(parsed.data.startsAt) : undefined,
       endsAt: parsed.data.endsAt ? new Date(parsed.data.endsAt) : undefined,
+      active: parsed.data.active !== 'false',
       imageUrl: req.file ? await uploadedFileUrl(req.file) : undefined,
     },
   });

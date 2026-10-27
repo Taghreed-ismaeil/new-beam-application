@@ -1,16 +1,17 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
   View,
 } from "react-native";
-import { Image } from "expo-image";
 
 import Animated, {
   useAnimatedStyle,
@@ -21,15 +22,22 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+import CartIcon from "@/components/CartIcon";
 import FoodCard from "@/components/FoodCard";
+import MadeBy from "@/components/MadeBy";
 import QuickCategoryPills from "@/components/QuickCategoryPills";
 import { useCart } from "@/context/CartContext";
-import { apiRequestCached, imageUrl, isUsableImagePath } from "@/lib/api-client";
+import {
+  apiRequestCached,
+  imageUrl,
+  isUsableImagePath,
+  refreshCached,
+} from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
+import { Text, TextInput } from "@/lib/arabic-font";
 import { findMenuCategory } from "@/lib/menu-category";
 import { categoryItems } from "@/lib/menu-sections";
 import { enterDown, enterFromLeft, enterFromRight } from "@/lib/motion";
-import { Text, TextInput } from "@/lib/arabic-font";
 
 // White logo made for the teal background (same one as the home hero)
 const LOGO = require("../assets/img/remove_beam_logoo.jpg");
@@ -105,7 +113,17 @@ const CATEGORY_META = {
 
 // Same name matching as the category pages (lib/menu-category), so a tap on a pill, a card and
 // the page it opens always agree on which category is which — whatever spelling the admin used.
-const CATEGORY_KEYS = ["breakfast", "snaks", "burger", "shawerma", "sandwiches", "drinks", "salad", "fattah", "extras"];
+const CATEGORY_KEYS = [
+  "breakfast",
+  "snaks",
+  "burger",
+  "shawerma",
+  "sandwiches",
+  "drinks",
+  "salad",
+  "fattah",
+  "extras",
+];
 
 const getCategoryKey = (item) =>
   CATEGORY_KEYS.find((key) => findMenuCategory([item], key)) ?? null;
@@ -194,6 +212,7 @@ export default function Menu() {
   const [query, setQuery] = useState("");
 
   const cart = useCart();
+  const cartCount = cart.lines.reduce((n, l) => n + l.quantity, 0);
 
   const scrollRef = useRef(null);
 
@@ -208,12 +227,30 @@ export default function Menu() {
   // Search results: two cards per row
   const cardWidth = (width - gutter * 2 - 12) / 2;
 
-  useEffect(() => {
-    apiRequestCached("/api/menu", (data) => {
+  // Re-read on every visit (the cache spares the network within 30s), so menu
+  // changes made in the admin panel show up without restarting the app.
+  useFocusEffect(
+    useCallback(() => {
+      apiRequestCached("/api/menu", (data) => {
+        setCategories(data.categories ?? []);
+        setLoading(false);
+      });
+    }, []),
+  );
+
+  // Pull down to refresh
+  const [refreshing, setRefreshing] = useState(false);
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      const data = await refreshCached("/api/menu");
       setCategories(data.categories ?? []);
-      setLoading(false);
-    });
-  }, []);
+    } catch {
+      // keep what's on screen
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   const allCategories = categories.map((item, index) => {
     const meta = CATEGORY_META[getCategoryKey(item)] || {};
@@ -311,7 +348,6 @@ export default function Menu() {
   if (loading) {
     return (
       <View style={styles.loadingScreen}>
-
         <View style={styles.loadingIcon}>
           <MaterialCommunityIcons
             name="silverware-fork-knife"
@@ -329,12 +365,19 @@ export default function Menu() {
 
   return (
     <View style={styles.screen}>
-
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={TEAL}
+            colors={[TEAL]}
+          />
+        }
         contentContainerStyle={[
           styles.content,
           {
@@ -371,26 +414,61 @@ export default function Menu() {
 
           {/* ================= SEARCH ================= */}
 
+          {/* search + the cart on its right, with how many items it holds */}
           <Animated.View
             entering={enterDown(3)}
-            style={[styles.searchBox, dir.row, { marginHorizontal: gutter }]}
+            style={[styles.searchRow, { marginHorizontal: gutter }]}
           >
-            <Ionicons name="search" size={20} color={ORANGE} />
+            <View style={[styles.searchBox, dir.row]}>
+              <Ionicons name="search" size={20} color={ORANGE} />
 
-            <TextInput
-              style={[styles.searchInput, dir.text]}
-              placeholder={t("searchPlaceholder")}
-              placeholderTextColor="#A4A4A4"
-              value={query}
-              onChangeText={setQuery}
-              returnKeyType="search"
-            />
+              {/* The hint is drawn as plain text over the field: Android measures a
+                placeholder in its own font and then cuts off the wider Arabic face */}
+              <View style={styles.searchField}>
+                {!query && (
+                  <Text
+                    pointerEvents="none"
+                    numberOfLines={1}
+                    style={[styles.searchHint, dir.text]}
+                  >
+                    {t("searchPlaceholder")}
+                  </Text>
+                )}
+                <TextInput
+                  style={[styles.searchInput, dir.text]}
+                  accessibilityLabel={t("searchPlaceholder")}
+                  value={query}
+                  onChangeText={setQuery}
+                  returnKeyType="search"
+                />
+              </View>
 
-            {!!query && (
-              <Pressable onPress={() => setQuery("")} hitSlop={10}>
-                <Ionicons name="close-circle" size={21} color="#C8C8C8" />
-              </Pressable>
-            )}
+              {!!query && (
+                <Pressable onPress={() => setQuery("")} hitSlop={10}>
+                  <Ionicons name="close-circle" size={21} color="#C8C8C8" />
+                </Pressable>
+              )}
+            </View>
+
+            <Pressable
+              onPress={() => router.push("/cart")}
+              accessibilityRole="button"
+              accessibilityLabel={t("cartTitle")}
+              style={({ pressed }) => [
+                styles.cartBox,
+                pressed && styles.cartBoxPressed,
+              ]}
+            >
+              {/* same bag as the cart on the home page */}
+              <CartIcon size={32} />
+              {cartCount > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>
+                    {cartCount > 99 ? "99+" : cartCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
           </Animated.View>
         </View>
 
@@ -441,91 +519,85 @@ export default function Menu() {
             </View>
           )
         ) : (
-        <View style={styles.list}>
-          {allCategories.map((item, index) => {
-            const categoryName = pick(item) || t("menuCategory");
+          <View style={styles.list}>
+            {allCategories.map((item, index) => {
+              const categoryName = pick(item) || t("menuCategory");
 
-            const isEven = index % 2 === 0;
-            const panelFirst = isEven;
-            const cardColor = isEven ? SOFT_ORANGE : SOFT_TEAL;
+              const isEven = index % 2 === 0;
+              const panelFirst = isEven;
+              const cardColor = isEven ? SOFT_ORANGE : SOFT_TEAL;
 
-            // Zig-zag entrance: each card slides in from the side its colour panel is on.
-            return (
-              <Animated.View
-                key={item.id}
-                entering={panelFirst ? enterFromLeft(index + 2) : enterFromRight(index + 2)}
-                onLayout={(event) => {
-                  categoryPositions.current[item.id] =
-                    event.nativeEvent.layout.y;
-                }}
-              >
-                <FlashCard
-                  signal={flash.id === item.id ? flash.count : 0}
-                  color={isEven ? ORANGE : TEAL}
+              // Zig-zag entrance: each card slides in from the side its colour panel is on.
+              return (
+                <Animated.View
+                  key={item.id}
+                  entering={
+                    panelFirst
+                      ? enterFromLeft(index + 2)
+                      : enterFromRight(index + 2)
+                  }
+                  onLayout={(event) => {
+                    categoryPositions.current[item.id] =
+                      event.nativeEvent.layout.y;
+                  }}
                 >
-                <Pressable
-                  onPress={() => router.push(item.route)}
-                  style={({ pressed }) => [
-                    styles.categoryCard,
-                    { flexDirection: panelFirst ? "row" : "row-reverse" },
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  {/* COLOR PANEL */}
-
-                  <View
-                    style={[
-                      styles.categoryPanel,
-                      { backgroundColor: cardColor },
-                    ]}
+                  <FlashCard
+                    signal={flash.id === item.id ? flash.count : 0}
+                    color={isEven ? ORANGE : TEAL}
                   >
-                    <Text
-                      style={[
-                        styles.categoryName,
-                        dir.noSpacing,
-                        { fontSize: isSmall ? 18 : 21 },
+                    <Pressable
+                      onPress={() => router.push(item.route)}
+                      style={({ pressed }) => [
+                        styles.categoryCard,
+                        { flexDirection: panelFirst ? "row" : "row-reverse" },
+                        pressed && styles.pressed,
                       ]}
-                      numberOfLines={2}
                     >
-                      {categoryName}
-                    </Text>
-                  </View>
+                      {/* COLOR PANEL */}
 
-                  {/* IMAGE */}
+                      <View
+                        style={[
+                          styles.categoryPanel,
+                          { backgroundColor: cardColor },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.categoryName,
+                            dir.noSpacing,
+                            { fontSize: isSmall ? 18 : 21 },
+                          ]}
+                          numberOfLines={2}
+                        >
+                          {categoryName}
+                        </Text>
+                      </View>
 
-                  <View style={styles.imageWrapper}>
-                    <Image
-                      source={
-                        isUsableImagePath(item.imageUrl)
-                          ? {
-                              uri: imageUrl(item.imageUrl),
-                            }
-                          : item.image || FALLBACK_IMAGE
-                      }
-                      cachePolicy="memory-disk"
-                      transition={120}
-                      style={styles.image}
-                    />
-                  </View>
-                </Pressable>
-                </FlashCard>
-              </Animated.View>
-            );
-          })}
-        </View>
+                      {/* IMAGE */}
+
+                      <View style={styles.imageWrapper}>
+                        <Image
+                          source={
+                            isUsableImagePath(item.imageUrl)
+                              ? {
+                                  uri: imageUrl(item.imageUrl),
+                                }
+                              : item.image || FALLBACK_IMAGE
+                          }
+                          cachePolicy="memory-disk"
+                          transition={120}
+                          style={styles.image}
+                        />
+                      </View>
+                    </Pressable>
+                  </FlashCard>
+                </Animated.View>
+              );
+            })}
+          </View>
         )}
 
-        {/* ================= FOOTER ================= */}
-
-        <View style={styles.footer}>
-          <View style={styles.footerLine} />
-
-          <Text style={[styles.footerText, dir.noSpacing]}>
-            {t("menuFooter")}
-          </Text>
-
-          <View style={styles.footerLine} />
-        </View>
+        <MadeBy />
       </ScrollView>
     </View>
   );
@@ -538,6 +610,7 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    flexGrow: 1,
     position: "relative",
   },
 
@@ -598,9 +671,16 @@ const styles = StyleSheet.create({
 
   /* ================= SEARCH ================= */
 
-  searchBox: {
-    height: 52,
+  searchRow: {
     marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  searchBox: {
+    flex: 1,
+    height: 52,
     backgroundColor: WHITE,
     borderWidth: 2,
     borderColor: ORANGE,
@@ -611,9 +691,69 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
-  searchInput: {
+  cartBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    backgroundColor: WHITE,
+    borderWidth: 2,
+    borderColor: ORANGE,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+
+  cartBoxPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.95 }],
+  },
+
+  cartBadge: {
+    position: "absolute",
+    top: -7,
+    right: -7,
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 5,
+    borderRadius: 11,
+    backgroundColor: ORANGE,
+    borderWidth: 2,
+    borderColor: WHITE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  cartBadgeText: {
+    color: WHITE,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  searchField: {
     flex: 1,
+    // web inputs keep a default width; without this it overflows the shorter box
+    minWidth: 0,
     height: "100%",
+    justifyContent: "center",
+  },
+
+  searchHint: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    color: "#A4A4A4",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  searchInput: {
+    width: "100%",
+    height: "100%",
+    paddingVertical: 0,
     color: "#17201F",
     fontSize: 14,
     fontWeight: "600",

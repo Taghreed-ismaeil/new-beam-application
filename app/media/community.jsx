@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import MediaViewer from "@/components/MediaViewer";
 import { useAuth } from "@/context/AuthContext";
@@ -145,7 +146,7 @@ export default function CommunityFeed() {
         onEndReached={loadMore}
         onEndReachedThreshold={0.6}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={TEAL} />}
-        contentContainerStyle={{ paddingBottom: 140 + insets.bottom }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 140 + insets.bottom }}
         ListHeaderComponent={header}
         ListEmptyComponent={
           posts === null ? (
@@ -157,7 +158,13 @@ export default function CommunityFeed() {
             </View>
           )
         }
-        ListFooterComponent={loadingMore ? <ActivityIndicator color={TEAL} style={{ margin: 20 }} /> : null}
+        ListFooterComponentStyle={{ marginTop: "auto" }}
+        ListFooterComponent={
+          <>
+            {loadingMore ? <ActivityIndicator color={TEAL} style={{ margin: 20 }} /> : null}
+            {posts !== null && <MadeBy />}
+          </>
+        }
         renderItem={({ item: p, index }) => {
           const accent = index % 2 === 0 ? ORANGE : TEAL;
           return (

@@ -10,21 +10,45 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { useAppLang } from "@/lib/app-lang";
-import { prepareTabTransition } from "@/lib/tab-transition";
 import { Text } from "@/lib/arabic-font";
+import { prepareTabTransition } from "@/lib/tab-transition";
 
 // `route` is the root Stack route name each tab opens (used for its slide animation).
 const TABS = [
   { key: "home", label: "tabHome", icon: "home", path: "/", route: "(tabs)" },
-  { key: "menu", label: "tabMenu", icon: "restaurant", path: "/menu", route: "menu" },
+  {
+    key: "menu",
+    label: "tabMenu",
+    icon: "restaurant",
+    path: "/menu",
+    route: "menu",
+  },
   // Contact moved into the Profile page; its tab slot is the Media tab now.
-  { key: "media", label: "tabMedia", icon: "images", path: "/media", route: "media/index" },
-  { key: "gifts", label: "tabGifts", icon: "gift", path: "/loyalty", route: "loyalty/index" },
-  { key: "profile", label: "tabProfile", icon: "person", path: "/account", route: "account" },
+  {
+    key: "media",
+    label: "tabMedia",
+    icon: "images",
+    path: "/media",
+    route: "media/index",
+  },
+  {
+    key: "gifts",
+    label: "tabGifts",
+    icon: "gift",
+    path: "/loyalty",
+    route: "loyalty/index",
+  },
+  {
+    key: "profile",
+    label: "tabProfile",
+    icon: "person",
+    path: "/account",
+    route: "account",
+  },
 ];
 
 // The item details screen has its own add-to-cart bar at the bottom.
-const HIDDEN_ON = ["/login", "/item", "/media/share"];
+const HIDDEN_ON = ["/login", "/item", "/media/share", "/policies"];
 
 function isTabActive(tab, pathname) {
   return tab.path === "/" ? pathname === "/" : pathname.startsWith(tab.path);
@@ -77,7 +101,10 @@ export default function BottomTabBar() {
   // The admin panel is its own full-screen experience with its own
   // navigation (see app/admin/_layout.tsx) — the customer tab bar has no
   // business floating on top of it.
-  if (HIDDEN_ON.some((p) => pathname === p || pathname.startsWith(`${p}/`)) || pathname.startsWith("/admin"))
+  if (
+    HIDDEN_ON.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
+    pathname.startsWith("/admin")
+  )
     return null;
 
   return (

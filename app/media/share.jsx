@@ -6,6 +6,7 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -17,10 +18,12 @@ import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import BackButton from "@/components/BackButton";
+import MadeBy from "@/components/MadeBy";
+import MyMediaPosts from "@/components/MyMediaPosts";
 import { useAppLang } from "@/lib/app-lang";
+import { AnimatedText, Text, TextInput } from "@/lib/arabic-font";
 import { shareMedia } from "@/lib/media-api";
 import { enterPop, enterUp } from "@/lib/motion";
-import { Text, TextInput, AnimatedText } from "@/lib/arabic-font";
 
 /* =========================================================
    SHARE A PHOTO
@@ -54,6 +57,8 @@ export default function SharePhoto() {
   const [caption, setCaption] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  // the small "under review" window that pops up right after posting
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [error, setError] = useState("");
 
   async function pick(fromCamera) {
@@ -75,6 +80,7 @@ export default function SharePhoto() {
     try {
       await shareMedia(asset, caption);
       setSent(true);
+      setReviewOpen(true);
     } catch (e) {
       setError(e?.status === 429 ? t("mediaErrTooMany") : t("mediaErrUpload"));
     } finally {
@@ -89,6 +95,39 @@ export default function SharePhoto() {
   if (sent) {
     return (
       <View style={[styles.screen, styles.center]}>
+        {/* Posts go live only after staff approve them — say so, with how long it takes */}
+        <Modal
+          visible={reviewOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setReviewOpen(false)}
+        >
+          <View style={styles.reviewBackdrop}>
+            <Animated.View entering={enterPop(0)} style={styles.reviewCard}>
+              <View style={styles.reviewIcon}>
+                <Ionicons name="time-outline" size={34} color={ORANGE} />
+              </View>
+              <Text style={[styles.reviewTitle, dir.noSpacing]}>
+                {t("mediaReviewTitle")}
+              </Text>
+              <Text style={styles.reviewText}>{t("mediaReviewText")}</Text>
+              <View style={styles.reviewBadge}>
+                <Text style={styles.reviewBadgeText}>24 - 48h</Text>
+              </View>
+              <Pressable
+                onPress={() => setReviewOpen(false)}
+                style={({ pressed }) => [
+                  styles.primary,
+                  { marginTop: 18 },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.primaryText}>{t("mediaReviewOk")}</Text>
+              </Pressable>
+            </Animated.View>
+          </View>
+        </Modal>
+
         <Animated.View entering={enterPop(0)} style={styles.sentIcon}>
           <Ionicons name="checkmark" size={46} color={WHITE} />
         </Animated.View>
@@ -100,8 +139,16 @@ export default function SharePhoto() {
         </AnimatedText>
         <Animated.View entering={enterUp(3)}>
           <Pressable
-            onPress={() => (router.canGoBack() ? router.back() : router.replace("/media/community"))}
-            style={({ pressed }) => [styles.primary, { marginTop: 26 }, pressed && styles.pressed]}
+            onPress={() =>
+              router.canGoBack()
+                ? router.back()
+                : router.replace("/media/community")
+            }
+            style={({ pressed }) => [
+              styles.primary,
+              { marginTop: 26 },
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.primaryText}>{t("mediaCommunityTitle")}</Text>
           </Pressable>
@@ -113,19 +160,37 @@ export default function SharePhoto() {
   /* ================= PICK + CAPTION ================= */
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       <BackButton />
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[styles.content, { paddingBottom: 40 + insets.bottom }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: 40 + insets.bottom },
+        ]}
       >
-        <Text style={[styles.title, dir.noSpacing]}>{t("mediaShareTitle")}</Text>
+        <Text style={[styles.title, dir.noSpacing]}>
+          {t("mediaShareTitle")}
+        </Text>
         <Text style={styles.hint}>{t("mediaShareHint")}</Text>
 
         {/* Preview, or an empty frame inviting a photo */}
-        <Pressable onPress={() => pick(false)} style={[styles.preview, { width: previewWidth, height: previewWidth * 1.25 }]}>
+        <Pressable
+          onPress={() => pick(false)}
+          style={[
+            styles.preview,
+            { width: previewWidth, height: previewWidth * 1.25 },
+          ]}
+        >
           {asset ? (
-            <Image source={{ uri: asset.uri }} contentFit="cover" style={StyleSheet.absoluteFill} />
+            <Image
+              source={{ uri: asset.uri }}
+              contentFit="cover"
+              style={StyleSheet.absoluteFill}
+            />
           ) : (
             <View style={styles.previewEmpty}>
               <Ionicons name="image-outline" size={54} color={SOFT_TEAL} />
@@ -136,14 +201,22 @@ export default function SharePhoto() {
         <View style={[styles.pickRow, dir.row]}>
           <Pressable
             onPress={() => pick(true)}
-            style={({ pressed }) => [styles.pickBtn, { backgroundColor: ORANGE }, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.pickBtn,
+              { backgroundColor: ORANGE },
+              pressed && styles.pressed,
+            ]}
           >
             <Ionicons name="camera" size={20} color={WHITE} />
             <Text style={styles.pickText}>{t("mediaTakePhoto")}</Text>
           </Pressable>
           <Pressable
             onPress={() => pick(false)}
-            style={({ pressed }) => [styles.pickBtn, { backgroundColor: TEAL }, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.pickBtn,
+              { backgroundColor: TEAL },
+              pressed && styles.pressed,
+            ]}
           >
             <Ionicons name="images" size={20} color={WHITE} />
             <Text style={styles.pickText}>{t("mediaPickPhoto")}</Text>
@@ -162,6 +235,19 @@ export default function SharePhoto() {
 
         {!!error && <Text style={styles.error}>{error}</Text>}
 
+        {/* what posting allows, said right before the button (Content Policy, section 5) */}
+        <Text
+          style={styles.consent}
+          onPress={() =>
+            router.push({
+              pathname: "/policies/[doc]",
+              params: { doc: "content" },
+            })
+          }
+        >
+          {t("mediaShareConsent")}
+        </Text>
+
         <Pressable
           onPress={send}
           disabled={!asset || sending}
@@ -177,6 +263,10 @@ export default function SharePhoto() {
             <Text style={styles.primaryText}>{t("mediaPost")}</Text>
           )}
         </Pressable>
+
+        {/* everything this customer shared — archive or delete from here */}
+        <MyMediaPosts />
+        <MadeBy />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -195,6 +285,7 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    flexGrow: 1,
     alignItems: "center",
     paddingTop: 100,
     paddingHorizontal: 24,
@@ -283,6 +374,17 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
+  consent: {
+    alignSelf: "stretch",
+    marginTop: 14,
+    color: MUTED,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "600",
+    textAlign: "center",
+    textDecorationLine: "underline",
+  },
+
   primary: {
     alignSelf: "stretch",
     marginTop: 18,
@@ -309,6 +411,66 @@ const styles = StyleSheet.create({
   },
 
   /* ================= SENT ================= */
+
+  reviewBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(10,16,15,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+
+  reviewCard: {
+    width: "100%",
+    maxWidth: 340,
+    backgroundColor: WHITE,
+    borderRadius: 28,
+    paddingTop: 26,
+    paddingBottom: 20,
+    paddingHorizontal: 22,
+    alignItems: "center",
+  },
+
+  reviewIcon: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: "#FFF0EA",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+
+  reviewTitle: {
+    color: DARK,
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+
+  reviewText: {
+    color: MUTED,
+    fontSize: 14,
+    lineHeight: 22,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  reviewBadge: {
+    marginTop: 14,
+    backgroundColor: "#E8F5F2",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+
+  reviewBadgeText: {
+    color: TEAL,
+    fontSize: 14,
+    fontWeight: "900",
+    writingDirection: "ltr",
+  },
 
   sentIcon: {
     width: 92,
