@@ -1,17 +1,18 @@
-import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
-import Animated from "react-native-reanimated";
-import { enterDown, enterPop, enterUp } from "@/lib/motion";
+import MadeBy from "@/components/MadeBy";
 import QrScanner from "@/components/QrScanner";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
-import { apiRequest } from "@/lib/api-client";
+import { apiRequest, apiRequestCached } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
+import { AnimatedText, Text } from "@/lib/arabic-font";
+import { enterDown, enterPop, enterUp } from "@/lib/motion";
+import { refreshOffers } from "@/lib/offers";
 import { takePendingDeliveryLocation } from "@/lib/pendingLocation";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -20,7 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Text, AnimatedText } from "@/lib/arabic-font";
+import Animated from "react-native-reanimated";
 
 const ORANGE = "#FC4A14";
 const ORANGE_DARK = "#C94320";
@@ -36,21 +37,48 @@ const WHITE = "#FFFFFF";
 const DRAFT_KEY = "beem_checkout_draft";
 
 const ORDER_TYPES = [
-  { value: "pickup", label: "confirmPickup", hint: "confirmPickupHint", icon: "bag-handle-outline" },
-  { value: "delivery", label: "confirmDelivery", hint: "confirmDeliveryHint", icon: "bicycle-outline" },
-  { value: "dine_in", label: "confirmTable", hint: "confirmTableHint", icon: "restaurant-outline" },
+  {
+    value: "pickup",
+    label: "confirmPickup",
+    hint: "confirmPickupHint",
+    icon: "bag-handle-outline",
+  },
+  {
+    value: "delivery",
+    label: "confirmDelivery",
+    hint: "confirmDeliveryHint",
+    icon: "bicycle-outline",
+  },
+  {
+    value: "dine_in",
+    label: "confirmTable",
+    hint: "confirmTableHint",
+    icon: "restaurant-outline",
+  },
 ];
 
 const PAYMENT_METHODS = [
-  { value: "cash", label: "confirmCash", hint: "confirmCashHint", icon: "cash-outline" },
-  { value: "cliq", label: "confirmCliq", hint: "confirmCliqHint", icon: "phone-portrait-outline" },
+  {
+    value: "cash",
+    label: "confirmCash",
+    hint: "confirmCashHint",
+    icon: "cash-outline",
+  },
+  {
+    value: "cliq",
+    label: "confirmCliq",
+    hint: "confirmCliqHint",
+    icon: "phone-portrait-outline",
+  },
 ];
 
 function SectionTitle({ children }) {
   const { dir } = useAppLang();
 
   return (
-    <Text style={[styles.sectionTitle, dir.text, dir.noSpacing]}>{children}</Text>
+    <Text style={[styles.sectionTitle, dir.text, dir.noSpacing]}>
+      {children}
+    </Text>
   );
 }
 
@@ -71,9 +99,11 @@ export default function CheckoutScreen() {
   const { editing } = useCart();
 
   useEffect(() => {
-    apiRequest("/api/restaurant")
-      .then((d) => setCliqAlias(d.restaurant?.cliqAlias ?? null))
-      .catch(() => {});
+    apiRequestCached(
+      "/api/restaurant",
+      (d) => setCliqAlias(d.restaurant?.cliqAlias ?? null),
+      () => {},
+    );
   }, []);
 
   // Restore what was picked last time (survives closing the app). The table
@@ -99,7 +129,8 @@ export default function CheckoutScreen() {
           if (editing.deliveryLat != null) setDeliveryLat(editing.deliveryLat);
           if (editing.deliveryLng != null) setDeliveryLng(editing.deliveryLng);
           if (editing.address) setAddress(editing.address);
-          if (editing.tableId) setTable({ id: editing.tableId, tableNumber: editing.tableNumber });
+          if (editing.tableId)
+            setTable({ id: editing.tableId, tableNumber: editing.tableNumber });
         }
         draftLoaded.current = true;
       });
@@ -110,7 +141,13 @@ export default function CheckoutScreen() {
     if (!draftLoaded.current) return;
     AsyncStorage.setItem(
       DRAFT_KEY,
-      JSON.stringify({ orderType, paymentMethod, address, deliveryLat, deliveryLng }),
+      JSON.stringify({
+        orderType,
+        paymentMethod,
+        address,
+        deliveryLat,
+        deliveryLng,
+      }),
     ).catch(() => {});
   }, [orderType, paymentMethod, address, deliveryLat, deliveryLng]);
 
@@ -159,28 +196,35 @@ export default function CheckoutScreen() {
     setBusy(true);
     try {
       // editing an order from the WhatsApp receipt → update it instead of a new one
-      const res = await apiRequest(editing ? `/api/orders/${editing.orderId}` : "/api/orders", {
-        method: editing ? "PUT" : "POST",
-        body: {
-          orderType,
-          paymentMethod,
-          tableId: table?.id,
-          deliveryAddress:
-            orderType === "delivery" ? address.trim() : undefined,
-          deliveryLat: orderType === "delivery" ? deliveryLat : undefined,
-          deliveryLng: orderType === "delivery" ? deliveryLng : undefined,
-          items: lines.map((l) => ({
-            menuItemId: l.menuItemId,
-            quantity: l.quantity,
-            ...(l.notes ? { notes: l.notes } : {}),
-          })),
+      const res = await apiRequest(
+        editing ? `/api/orders/${editing.orderId}` : "/api/orders",
+        {
+          method: editing ? "PUT" : "POST",
+          body: {
+            orderType,
+            paymentMethod,
+            tableId: table?.id,
+            deliveryAddress:
+              orderType === "delivery" ? address.trim() : undefined,
+            deliveryLat: orderType === "delivery" ? deliveryLat : undefined,
+            deliveryLng: orderType === "delivery" ? deliveryLng : undefined,
+            items: lines.map((l) => ({
+              menuItemId: l.menuItemId,
+              quantity: l.quantity,
+              ...(l.notes ? { notes: l.notes } : {}),
+            })),
+          },
         },
-      });
+      );
       clear();
       // keep order type / payment / address for next time — only the table resets
+      // a timed offer used in this order is now taken — drop it from the home page
+      refreshOffers();
       router.replace(`/order-tracking/${res.order.id}`);
     } catch (e) {
-      setError(e?.status === 409 ? t("confirmErrNotEditable") : t("confirmErrPlace"));
+      setError(
+        e?.status === 409 ? t("confirmErrNotEditable") : t("confirmErrPlace"),
+      );
     } finally {
       setBusy(false);
     }
@@ -192,7 +236,10 @@ export default function CheckoutScreen() {
         <BackButton />
         <Text style={styles.scannerTitle}>{t("confirmScanTitle")}</Text>
         <QrScanner onDecode={onTableToken} />
-        <TouchableOpacity onPress={() => setScanningTable(false)} style={styles.scannerCancel}>
+        <TouchableOpacity
+          onPress={() => setScanningTable(false)}
+          style={styles.scannerCancel}
+        >
           <Text style={styles.scannerCancelText}>{t("cancel")}</Text>
         </TouchableOpacity>
       </View>
@@ -220,7 +267,10 @@ export default function CheckoutScreen() {
       <StatusBar style="light" />
       <BackButton />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+      >
         {/* =====================================================
             HEADER
         ====================================================== */}
@@ -239,7 +289,11 @@ export default function CheckoutScreen() {
               <Ionicons name="cart-outline" size={38} color={ORANGE} />
             </View>
             <Text style={styles.emptyTitle}>{t("cartEmpty")}</Text>
-            <TouchableOpacity style={styles.outlineBtn} onPress={() => router.push("/menu")} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={styles.outlineBtn}
+              onPress={() => router.push("/menu")}
+              activeOpacity={0.85}
+            >
               <Text style={styles.outlineBtnText}>{t("confirmBrowse")}</Text>
             </TouchableOpacity>
           </Animated.View>
@@ -257,12 +311,18 @@ export default function CheckoutScreen() {
 
             <Animated.View entering={enterUp(2)} style={styles.card}>
               {lines.map((l, i) => (
-                <View key={l.menuItemId} style={[styles.lineRow, dir.row, i > 0 && styles.lineDivider]}>
+                <View
+                  key={l.menuItemId}
+                  style={[styles.lineRow, dir.row, i > 0 && styles.lineDivider]}
+                >
                   <View style={styles.qtyBadge}>
                     <Text style={styles.qtyText}>{l.quantity}×</Text>
                   </View>
                   <Text style={[styles.lineName, dir.text]} numberOfLines={2}>
-                    {pick({ name: l.nameAr || l.name, nameEn: l.nameEn || l.name })}
+                    {pick({
+                      name: l.nameAr || l.name,
+                      nameEn: l.nameEn || l.name,
+                    })}
                   </Text>
                   <Text style={styles.linePrice}>
                     {(l.price * l.quantity).toFixed(2)} {t("jd")}
@@ -276,7 +336,10 @@ export default function CheckoutScreen() {
             ====================================================== */}
             <SectionTitle>{t("confirmHow")}</SectionTitle>
 
-            <Animated.View entering={enterUp(4)} style={[styles.typeRow, dir.row]}>
+            <Animated.View
+              entering={enterUp(4)}
+              style={[styles.typeRow, dir.row]}
+            >
               {ORDER_TYPES.map((type) => {
                 const active = orderType === type.value;
                 return (
@@ -289,8 +352,14 @@ export default function CheckoutScreen() {
                     }}
                     activeOpacity={0.85}
                   >
-                    <View style={[styles.typeIcon, active && styles.typeIconActive]}>
-                      <Ionicons name={type.icon} size={22} color={active ? WHITE : TEAL} />
+                    <View
+                      style={[styles.typeIcon, active && styles.typeIconActive]}
+                    >
+                      <Ionicons
+                        name={type.icon}
+                        size={22}
+                        color={active ? WHITE : TEAL}
+                      />
                     </View>
                     <Text style={[styles.typeLabel, active && { color: TEAL }]}>
                       {t(type.label)}
@@ -303,33 +372,54 @@ export default function CheckoutScreen() {
 
             {orderType === "delivery" &&
               (deliveryLat && deliveryLng ? (
-                <TouchableOpacity style={[styles.detailCard, dir.row]} onPress={openLocationPicker} activeOpacity={0.85}>
+                <TouchableOpacity
+                  style={[styles.detailCard, dir.row]}
+                  onPress={openLocationPicker}
+                  activeOpacity={0.85}
+                >
                   <View style={styles.detailIcon}>
                     <Ionicons name="location" size={20} color={TEAL} />
                   </View>
                   <View style={styles.detailText}>
-                    <Text style={[styles.detailLabel, dir.text]}>{t("confirmDeliveringTo")}</Text>
-                    <Text style={[styles.detailValue, dir.text]} numberOfLines={2}>
+                    <Text style={[styles.detailLabel, dir.text]}>
+                      {t("confirmDeliveringTo")}
+                    </Text>
+                    <Text
+                      style={[styles.detailValue, dir.text]}
+                      numberOfLines={2}
+                    >
                       {address || t("confirmLocationSet")}
                     </Text>
                   </View>
                   <Text style={styles.changeLink}>{t("confirmChange")}</Text>
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity style={[styles.dashedBtn, dir.row]} onPress={openLocationPicker} activeOpacity={0.85}>
+                <TouchableOpacity
+                  style={[styles.dashedBtn, dir.row]}
+                  onPress={openLocationPicker}
+                  activeOpacity={0.85}
+                >
                   <Ionicons name="map-outline" size={20} color={ORANGE} />
-                  <Text style={styles.dashedBtnText}>{t("confirmSetLocation")}</Text>
+                  <Text style={styles.dashedBtnText}>
+                    {t("confirmSetLocation")}
+                  </Text>
                 </TouchableOpacity>
               ))}
 
             {orderType === "dine_in" &&
               (table ? (
-                <TouchableOpacity style={[styles.detailCard, dir.row]} onPress={() => setScanningTable(true)} activeOpacity={0.85}>
+                <TouchableOpacity
+                  style={[styles.detailCard, dir.row]}
+                  onPress={() => setScanningTable(true)}
+                  activeOpacity={0.85}
+                >
                   <View style={styles.detailIcon}>
                     <Ionicons name="checkmark-circle" size={20} color={TEAL} />
                   </View>
                   <View style={styles.detailText}>
-                    <Text style={[styles.detailLabel, dir.text]}>{t("confirmYourTable")}</Text>
+                    <Text style={[styles.detailLabel, dir.text]}>
+                      {t("confirmYourTable")}
+                    </Text>
                     <Text style={[styles.detailValue, dir.text]}>
                       {t("confirmTableNumber", { number: table.tableNumber })}
                     </Text>
@@ -337,9 +427,15 @@ export default function CheckoutScreen() {
                   <Text style={styles.changeLink}>{t("confirmRescan")}</Text>
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity style={[styles.dashedBtn, dir.row]} onPress={() => setScanningTable(true)} activeOpacity={0.85}>
+                <TouchableOpacity
+                  style={[styles.dashedBtn, dir.row]}
+                  onPress={() => setScanningTable(true)}
+                  activeOpacity={0.85}
+                >
                   <Ionicons name="qr-code-outline" size={20} color={ORANGE} />
-                  <Text style={styles.dashedBtnText}>{t("confirmScanTable")}</Text>
+                  <Text style={styles.dashedBtnText}>
+                    {t("confirmScanTable")}
+                  </Text>
                 </TouchableOpacity>
               ))}
 
@@ -354,16 +450,30 @@ export default function CheckoutScreen() {
                 return (
                   <TouchableOpacity
                     key={p.value}
-                    style={[styles.payRow, dir.row, i > 0 && styles.lineDivider]}
+                    style={[
+                      styles.payRow,
+                      dir.row,
+                      i > 0 && styles.lineDivider,
+                    ]}
                     onPress={() => setPaymentMethod(p.value)}
                     activeOpacity={0.85}
                   >
-                    <View style={[styles.payIcon, active && styles.payIconActive]}>
-                      <Ionicons name={p.icon} size={20} color={active ? WHITE : TEAL} />
+                    <View
+                      style={[styles.payIcon, active && styles.payIconActive]}
+                    >
+                      <Ionicons
+                        name={p.icon}
+                        size={20}
+                        color={active ? WHITE : TEAL}
+                      />
                     </View>
                     <View style={styles.detailText}>
-                      <Text style={[styles.payLabel, dir.text]}>{t(p.label)}</Text>
-                      <Text style={[styles.payHint, dir.text]}>{t(p.hint)}</Text>
+                      <Text style={[styles.payLabel, dir.text]}>
+                        {t(p.label)}
+                      </Text>
+                      <Text style={[styles.payHint, dir.text]}>
+                        {t(p.hint)}
+                      </Text>
                     </View>
                     <View style={[styles.radio, active && styles.radioActive]}>
                       {active && <View style={styles.radioDot} />}
@@ -375,7 +485,11 @@ export default function CheckoutScreen() {
 
             {paymentMethod === "cliq" && (
               <View style={[styles.noteBox, dir.row]}>
-                <Ionicons name="information-circle-outline" size={18} color={TEAL} />
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color={TEAL}
+                />
                 <Text style={[styles.noteText, dir.text]}>
                   {cliqAlias
                     ? t("confirmCliqTransfer", { alias: cliqAlias })
@@ -387,7 +501,11 @@ export default function CheckoutScreen() {
 
             {!!error && (
               <View style={[styles.errorBox, dir.row]}>
-                <Ionicons name="alert-circle-outline" size={18} color="#C0392B" />
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={18}
+                  color="#C0392B"
+                />
                 <Text style={[styles.errorText, dir.text]}>{error}</Text>
               </View>
             )}
@@ -397,30 +515,34 @@ export default function CheckoutScreen() {
                 never covers the payment options on shorter phones
             ====================================================== */}
             <Animated.View entering={enterUp(5)} style={styles.footer}>
-          <View style={[styles.totalRow, dir.row]}>
-            <Text style={styles.totalLabel}>{t("cartTotal")}</Text>
-            <Text style={styles.totalValue}>
-              {total.toFixed(2)} {t("jd")}
-            </Text>
-          </View>
+              <View style={[styles.totalRow, dir.row]}>
+                <Text style={styles.totalLabel}>{t("cartTotal")}</Text>
+                <Text style={styles.totalValue}>
+                  {total.toFixed(2)} {t("jd")}
+                </Text>
+              </View>
 
-          <TouchableOpacity
-            style={[styles.confirmBtn, dir.row, busy && { opacity: 0.7 }]}
-            onPress={submit}
-            disabled={busy}
-            activeOpacity={0.85}
-          >
-            {busy ? (
-              <ActivityIndicator color={WHITE} />
-            ) : (
-              <>
-                <Text style={styles.confirmBtnText}>{t("confirmOrder")}</Text>
-                <Ionicons name={dir.arrow} size={18} color={WHITE} />
-              </>
-            )}
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmBtn, dir.row, busy && { opacity: 0.7 }]}
+                onPress={submit}
+                disabled={busy}
+                activeOpacity={0.85}
+              >
+                {busy ? (
+                  <ActivityIndicator color={WHITE} />
+                ) : (
+                  <>
+                    <Text style={styles.confirmBtnText}>
+                      {t("confirmOrder")}
+                    </Text>
+                    <Ionicons name={dir.arrow} size={18} color={WHITE} />
+                  </>
+                )}
+              </TouchableOpacity>
 
-          {!user && <Text style={styles.guestHint}>{t("confirmGuestHint")}</Text>}
+              {!user && (
+                <Text style={styles.guestHint}>{t("confirmGuestHint")}</Text>
+              )}
             </Animated.View>
           </View>
         )}

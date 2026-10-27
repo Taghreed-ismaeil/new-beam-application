@@ -14,15 +14,15 @@ import {
   View,
 } from "react-native";
 
-import MadeBy from "@/components/MadeBy";
 import FeedbackSheet from "@/components/FeedbackSheet";
 import LeafletMap from "@/components/LeafletMap";
+import MadeBy from "@/components/MadeBy";
 import { useAuth } from "@/context/AuthContext";
 import { apiRequest } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
+import { Text } from "@/lib/arabic-font";
 import { enterUp } from "@/lib/motion";
 import Animated from "react-native-reanimated";
-import { Text } from "@/lib/arabic-font";
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";
@@ -80,7 +80,9 @@ export default function AccountScreen() {
         }),
       apiRequest("/api/loyalty/vouchers")
         .then((d) => {
-          setReadyRewards((d.vouchers ?? []).filter((v) => !v.redeemedAt).length);
+          setReadyRewards(
+            (d.vouchers ?? []).filter((v) => !v.redeemedAt).length,
+          );
         })
         .catch(() => {}),
     ]);
@@ -176,7 +178,14 @@ export default function AccountScreen() {
       <ScrollView
         style={styles.screen}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={TEAL} colors={[TEAL]} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={TEAL}
+            colors={[TEAL]}
+          />
+        }
         contentContainerStyle={[
           styles.content,
           {
@@ -384,6 +393,40 @@ export default function AccountScreen() {
 
               <Text style={[styles.menuSubtitle, dir.text]}>
                 {t("accountContactSub")}
+              </Text>
+            </View>
+
+            <Ionicons name="chevron-forward" size={20} color={TEAL} />
+          </Pressable>
+
+          {/* Policies and terms */}
+
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/policies/[doc]",
+                params: { doc: "terms" },
+              })
+            }
+            style={({ pressed }) => [
+              styles.menuItem,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={[styles.menuIcon, styles.tealMenuIcon]}>
+              <Ionicons
+                name="document-text-outline"
+                size={21}
+                color={LIGHT_TEAL}
+              />
+            </View>
+
+            <View style={styles.menuText}>
+              <Text style={[styles.menuTitle, dir.text]}>
+                {t("accountPolicies")}
+              </Text>
+              <Text style={[styles.menuSubtitle, dir.text]}>
+                {t("accountPoliciesSub")}
               </Text>
             </View>
 

@@ -19,11 +19,21 @@ const SOFT = "#F4F1ED";
 
 const DAYS_AHEAD = 14;
 const MAX_PARTY = 20;
-// every half hour from noon to 11:30 pm
-const SLOTS = Array.from({ length: 24 }, (_, i) => {
-  const mins = 12 * 60 + i * 30;
-  return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+// Open every day 8 am – 2 am: a slot every half hour from 8:00 am to 1:30 am.
+// `mins` counts from the picked day's midnight, so the after-midnight slots run
+// past 24h — those land on the next calendar date.
+const OPEN_MINS = 8 * 60;
+const CLOSE_MINS = 26 * 60;
+const SLOTS = Array.from({ length: (CLOSE_MINS - OPEN_MINS) / 30 }, (_, i) => {
+  const mins = OPEN_MINS + i * 30;
+  const h = Math.floor(mins / 60) % 24;
+  return { mins, time: `${String(h).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}` };
 });
+
+function addDays(iso, n) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return isoDay(new Date(y, m - 1, d + n));
+}
 
 export default function NewReservationScreen() {
   const { t, lang, dir } = useAppLang();
@@ -38,7 +48,7 @@ export default function NewReservationScreen() {
 
   const [partySize, setPartySize] = useState(2);
   const [day, setDay] = useState(days[0].iso);
-  const [time, setTime] = useState("");
+  const [time, setTime] = useState(null);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -48,16 +58,13 @@ export default function NewReservationScreen() {
     if (day !== days[0].iso) return SLOTS;
     const now = new Date();
     const earliest = now.getHours() * 60 + now.getMinutes() + 30;
-    return SLOTS.filter((s) => {
-      const [h, m] = s.split(":").map(Number);
-      return h * 60 + m >= earliest;
-    });
+    return SLOTS.filter((s) => s.mins >= earliest);
   }, [day, days]);
 
   function pickDay(iso) {
     setDay(iso);
     setError("");
-    if (iso === days[0].iso) setTime("");
+    if (iso === days[0].iso) setTime(null);
   }
 
   async function submit() {
@@ -72,7 +79,7 @@ export default function NewReservationScreen() {
         method: "POST",
         body: {
           partySize,
-          reservationTime: `${day}T${time}:00`,
+          reservationTime: `${time.mins >= 24 * 60 ? addDays(day, 1) : day}T${time.time}:00`,
           notes: notes.trim() || undefined,
         },
       });
@@ -156,7 +163,7 @@ export default function NewReservationScreen() {
             const on = s === time;
             return (
               <TouchableOpacity
-                key={s}
+                key={s.mins}
                 style={[styles.timeChip, on && styles.timeChipOn]}
                 onPress={() => {
                   setTime(s);
@@ -164,7 +171,7 @@ export default function NewReservationScreen() {
                 }}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.timeText, on && styles.chipTextOn]}>{formatTime(s, lang)}</Text>
+                <Text style={[styles.timeText, on && styles.chipTextOn]}>{formatTime(s.time, lang)}</Text>
               </TouchableOpacity>
             );
           })}

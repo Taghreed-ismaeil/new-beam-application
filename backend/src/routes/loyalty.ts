@@ -360,12 +360,11 @@ loyaltyRouter.post('/scan', async (req, res) => {
   });
 });
 
-// Lucky-wheel prize on the Gifts QR: each scan has a WHEEL_CHANCE shot at a
-// wheel spin instead of a gift piece, and after WHEEL_PITY_SCANS scans in a row
-// without one, the next scan wins it for sure. The streak is counted from the
-// scan log (gift_qr rows since this user's last gift_wheel row), so no schema change.
-const WHEEL_CHANCE = 0.005; // 0.5%
-const WHEEL_PITY_SCANS = 10;
+// Lucky-wheel prize on the Gifts QR: after WHEEL_EVERY_SCANS gift pieces in a
+// row, the next scan (the 11th) wins a wheel spin instead — every time, no
+// randomness. The streak is counted from the scan log (gift_qr rows since this
+// user's last gift_wheel row), so no schema change.
+const WHEEL_EVERY_SCANS = 10;
 
 async function rollGiftWheel(userId: number) {
   const lastWheel = await prisma.scanLog.findFirst({
@@ -381,7 +380,7 @@ async function rollGiftWheel(userId: number) {
       ...(lastWheel ? { scannedAt: { gt: lastWheel.scannedAt } } : {}),
     },
   });
-  return streak >= WHEEL_PITY_SCANS || Math.random() < WHEEL_CHANCE;
+  return streak >= WHEEL_EVERY_SCANS;
 }
 
 loyaltyRouter.post('/gift-scan', async (req, res) => {
@@ -474,8 +473,29 @@ loyaltyRouter.get('/vouchers', async (req, res) => {
   res.json({ vouchers });
 });
 
+// A spin has to be earned: each gift_wheel row in the scan log is one spin won
+// from the Gifts QR, and each wheel_spin row is one spent. The spin is logged
+// first and the counts checked after, so two taps racing each other can't both
+// spend the same earned spin.
+const notWheelSpin = { OR: [{ reason: null }, { reason: { not: 'wheel_spin' } }] };
+
+async function spinsLeft(userId: number) {
+  const [earned, spent] = await Promise.all([
+    prisma.scanLog.count({ where: { userId, reason: 'gift_wheel' } }),
+    prisma.scanLog.count({ where: { userId, reason: 'wheel_spin' } }),
+  ]);
+  return earned - spent;
+}
+
 loyaltyRouter.post('/wheel/spin', async (req, res) => {
   const userId = (req.auth as any).userId;
+
+  const spend = await prisma.scanLog.create({ data: { userId, accepted: true, reason: 'wheel_spin' } });
+  if ((await spinsLeft(userId)) < 0) {
+    await prisma.scanLog.delete({ where: { id: spend.id } });
+    return res.status(403).json({ error: 'no_spin', reason: 'no_spin' });
+  }
+
   const { index, segment } = pickWheelSegment();
 
   let voucher = null;
@@ -536,6 +556,7 @@ adminLoyaltyRouter.get('/scanlogs', requireStaff('admin'), async (req, res) => {
   const limit = req.query.limit ? Number(req.query.limit) : 200;
 
   const logs = await prisma.scanLog.findMany({
+    where: notWheelSpin,
     include: { user: { select: { id: true, name: true, phone: true } }, menuItem: true },
     orderBy: { scannedAt: 'desc' },
     take: 500,
@@ -615,7 +636,7 @@ adminLoyaltyRouter.get('/vouchers', requireStaff('admin', 'manager', 'cashier', 
 // Rewards → Stats: program totals plus per-card progress.
 adminLoyaltyRouter.get('/stats', requireStaff('admin', 'manager'), async (_req, res) => {
   const [scans, vouchersValid, vouchersRedeemed, collectorRows, cards, progress, scanRows, redeemedRows] = await Promise.all([
-    prisma.scanLog.count({ where: { accepted: true } }),
+    prisma.scanLog.count({ where: { accepted: true, ...notWheelSpin } }),
     prisma.voucher.count({ where: { redeemedAt: null } }),
     prisma.voucher.count({ where: { redeemedAt: { not: null } } }),
     prisma.loyaltyProgress.groupBy({ by: ['userId'], where: { consumedCount: { gt: 0 } } }),

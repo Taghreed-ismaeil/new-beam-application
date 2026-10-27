@@ -13,6 +13,8 @@ const introVideo = require("@/assets/video/intro.mp4");
 const FAILSAFE_MS = 15000;
 // If the first frame hasn't rendered by then, drop the splash anyway rather than hang.
 const SPLASH_MAX_MS = 3000;
+// Away from the app longer than this → the intro plays again on return.
+const REPLAY_AFTER_MS = 30 * 60_000;
 // The clip's first frame is this light grey — matching it means no flash between
 // the native splash and the video.
 const INTRO_BG = "#EEEDF0";
@@ -39,16 +41,20 @@ export default function IntroVideo() {
   const pathRef = useRef(pathname);
   pathRef.current = pathname;
 
-  // Every time the app is reopened from the background the intro plays again;
-  // bumping the key remounts the player so it starts from the first frame.
+  // Coming back after a long break plays the intro again (bumping the key
+  // remounts the player so it starts from the first frame). A quick trip to
+  // another app — answering a message — goes straight back to where you were.
   const [runId, setRunId] = useState(isAdmin ? -1 : 0);
   useEffect(() => {
-    let wasBackground = false;
+    let backgroundAt = 0;
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "background") wasBackground = true;
-      else if (state === "active" && wasBackground) {
-        wasBackground = false;
-        if (!pathRef.current.startsWith("/admin")) setRunId((n) => Math.max(n, 0) + 1);
+      if (state === "background") backgroundAt = Date.now();
+      else if (state === "active" && backgroundAt) {
+        const away = Date.now() - backgroundAt;
+        backgroundAt = 0;
+        if (away > REPLAY_AFTER_MS && !pathRef.current.startsWith("/admin")) {
+          setRunId((n) => Math.max(n, 0) + 1);
+        }
       }
     });
     return () => sub.remove();

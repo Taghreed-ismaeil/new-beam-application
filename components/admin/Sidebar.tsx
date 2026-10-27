@@ -12,6 +12,28 @@ import { Text } from "@/lib/arabic-font";
 
 const BEAM_LOGO = require("../../assets/img/beam_logoo.jpg");
 
+// Declared outside Sidebar so a re-render doesn't remount every nav row.
+function Item({ href, icon, label, active }: { href: string; icon: any; label: string; active: boolean }) {
+  const dir = useDirection();
+  return (
+    <Pressable
+      onPress={() => router.navigate(href as Href)}
+      style={({ hovered, pressed }: any) => [
+        styles.item,
+        dir.row,
+        (hovered || pressed) && !active && styles.itemHover,
+        active && styles.itemActive,
+      ]}
+    >
+      <View style={[styles.marker, dir.isRTL ? styles.markerRTL : styles.markerLTR, active && styles.markerOn]} />
+      <Ionicons name={icon} size={19} color={active ? C.orange : "rgba(255,255,255,0.72)"} />
+      <Text style={[styles.itemText, dir.text, active && styles.itemTextActive]} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 /**
  * Persistent navigation for wide screens (desktop / tablet web). Styled after the logo:
  * brand-green panel with the logo's orange as the "you are here" marker.
@@ -24,26 +46,6 @@ export default function Sidebar() {
 
   const isHome = pathname === "/admin" || pathname === "/admin/";
   const visible = SECTIONS.filter((s) => can(s.resource));
-
-  function Item({ href, icon, label, active }: { href: string; icon: any; label: string; active: boolean }) {
-    return (
-      <Pressable
-        onPress={() => router.navigate(href as Href)}
-        style={({ hovered, pressed }: any) => [
-          styles.item,
-          dir.row,
-          (hovered || pressed) && !active && styles.itemHover,
-          active && styles.itemActive,
-        ]}
-      >
-        <View style={[styles.marker, dir.isRTL ? styles.markerRTL : styles.markerLTR, active && styles.markerOn]} />
-        <Ionicons name={icon} size={19} color={active ? C.orange : "rgba(255,255,255,0.72)"} />
-        <Text style={[styles.itemText, dir.text, active && styles.itemTextActive]} numberOfLines={1}>
-          {label}
-        </Text>
-      </Pressable>
-    );
-  }
 
   return (
     <View style={styles.panel}>

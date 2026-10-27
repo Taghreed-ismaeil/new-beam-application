@@ -1,16 +1,11 @@
+import CartIcon from "@/components/CartIcon";
 import WaveText from "@/components/WaveText/WaveText";
-import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useCallback } from "react";
-import {
-  Pressable,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from "react-native";
-import { Image } from "expo-image";
+import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 
 import { useAppLang } from "@/lib/app-lang";
 import { Text } from "@/lib/arabic-font";
@@ -142,11 +137,7 @@ export default function Hero() {
 
             <Pressable onPress={() => router.push("/cart")} hitSlop={6}>
               {({ pressed }) => (
-                <Ionicons
-                  name="bag"
-                  size={iconSize}
-                  color={pressed ? "#C94320" : "#FC4A14"}
-                />
+                <CartIcon size={Math.round(iconSize * 1.2)} pressed={pressed} />
               )}
             </Pressable>
           </View>

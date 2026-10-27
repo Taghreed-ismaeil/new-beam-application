@@ -1,4 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -11,7 +12,6 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { Image } from "expo-image";
 
 import Animated, {
   useAnimatedStyle,
@@ -22,16 +22,22 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
-import MadeBy from "@/components/MadeBy";
+import CartIcon from "@/components/CartIcon";
 import FoodCard from "@/components/FoodCard";
+import MadeBy from "@/components/MadeBy";
 import QuickCategoryPills from "@/components/QuickCategoryPills";
 import { useCart } from "@/context/CartContext";
-import { apiRequestCached, imageUrl, isUsableImagePath, refreshCached } from "@/lib/api-client";
+import {
+  apiRequestCached,
+  imageUrl,
+  isUsableImagePath,
+  refreshCached,
+} from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
+import { Text, TextInput } from "@/lib/arabic-font";
 import { findMenuCategory } from "@/lib/menu-category";
 import { categoryItems } from "@/lib/menu-sections";
 import { enterDown, enterFromLeft, enterFromRight } from "@/lib/motion";
-import { Text, TextInput } from "@/lib/arabic-font";
 
 // White logo made for the teal background (same one as the home hero)
 const LOGO = require("../assets/img/remove_beam_logoo.jpg");
@@ -107,7 +113,17 @@ const CATEGORY_META = {
 
 // Same name matching as the category pages (lib/menu-category), so a tap on a pill, a card and
 // the page it opens always agree on which category is which — whatever spelling the admin used.
-const CATEGORY_KEYS = ["breakfast", "snaks", "burger", "shawerma", "sandwiches", "drinks", "salad", "fattah", "extras"];
+const CATEGORY_KEYS = [
+  "breakfast",
+  "snaks",
+  "burger",
+  "shawerma",
+  "sandwiches",
+  "drinks",
+  "salad",
+  "fattah",
+  "extras",
+];
 
 const getCategoryKey = (item) =>
   CATEGORY_KEYS.find((key) => findMenuCategory([item], key)) ?? null;
@@ -332,7 +348,6 @@ export default function Menu() {
   if (loading) {
     return (
       <View style={styles.loadingScreen}>
-
         <View style={styles.loadingIcon}>
           <MaterialCommunityIcons
             name="silverware-fork-knife"
@@ -350,13 +365,19 @@ export default function Menu() {
 
   return (
     <View style={styles.screen}>
-
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={TEAL} colors={[TEAL]} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={TEAL}
+            colors={[TEAL]}
+          />
+        }
         contentContainerStyle={[
           styles.content,
           {
@@ -398,48 +419,53 @@ export default function Menu() {
             entering={enterDown(3)}
             style={[styles.searchRow, { marginHorizontal: gutter }]}
           >
-          <View style={[styles.searchBox, dir.row]}>
-            <Ionicons name="search" size={20} color={ORANGE} />
+            <View style={[styles.searchBox, dir.row]}>
+              <Ionicons name="search" size={20} color={ORANGE} />
 
-            {/* The hint is drawn as plain text over the field: Android measures a
+              {/* The hint is drawn as plain text over the field: Android measures a
                 placeholder in its own font and then cuts off the wider Arabic face */}
-            <View style={styles.searchField}>
-              {!query && (
-                <Text
-                  pointerEvents="none"
-                  numberOfLines={1}
-                  style={[styles.searchHint, dir.text]}
-                >
-                  {t("searchPlaceholder")}
-                </Text>
-              )}
-              <TextInput
-                style={[styles.searchInput, dir.text]}
-                accessibilityLabel={t("searchPlaceholder")}
-                value={query}
-                onChangeText={setQuery}
-                returnKeyType="search"
-              />
-            </View>
+              <View style={styles.searchField}>
+                {!query && (
+                  <Text
+                    pointerEvents="none"
+                    numberOfLines={1}
+                    style={[styles.searchHint, dir.text]}
+                  >
+                    {t("searchPlaceholder")}
+                  </Text>
+                )}
+                <TextInput
+                  style={[styles.searchInput, dir.text]}
+                  accessibilityLabel={t("searchPlaceholder")}
+                  value={query}
+                  onChangeText={setQuery}
+                  returnKeyType="search"
+                />
+              </View>
 
-            {!!query && (
-              <Pressable onPress={() => setQuery("")} hitSlop={10}>
-                <Ionicons name="close-circle" size={21} color="#C8C8C8" />
-              </Pressable>
-            )}
-          </View>
+              {!!query && (
+                <Pressable onPress={() => setQuery("")} hitSlop={10}>
+                  <Ionicons name="close-circle" size={21} color="#C8C8C8" />
+                </Pressable>
+              )}
+            </View>
 
             <Pressable
               onPress={() => router.push("/cart")}
               accessibilityRole="button"
               accessibilityLabel={t("cartTitle")}
-              style={({ pressed }) => [styles.cartBox, pressed && styles.cartBoxPressed]}
+              style={({ pressed }) => [
+                styles.cartBox,
+                pressed && styles.cartBoxPressed,
+              ]}
             >
               {/* same bag as the cart on the home page */}
-              <Ionicons name="bag" size={26} color={ORANGE} />
+              <CartIcon size={32} />
               {cartCount > 0 && (
                 <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{cartCount > 99 ? "99+" : cartCount}</Text>
+                  <Text style={styles.cartBadgeText}>
+                    {cartCount > 99 ? "99+" : cartCount}
+                  </Text>
                 </View>
               )}
             </Pressable>
@@ -493,78 +519,82 @@ export default function Menu() {
             </View>
           )
         ) : (
-        <View style={styles.list}>
-          {allCategories.map((item, index) => {
-            const categoryName = pick(item) || t("menuCategory");
+          <View style={styles.list}>
+            {allCategories.map((item, index) => {
+              const categoryName = pick(item) || t("menuCategory");
 
-            const isEven = index % 2 === 0;
-            const panelFirst = isEven;
-            const cardColor = isEven ? SOFT_ORANGE : SOFT_TEAL;
+              const isEven = index % 2 === 0;
+              const panelFirst = isEven;
+              const cardColor = isEven ? SOFT_ORANGE : SOFT_TEAL;
 
-            // Zig-zag entrance: each card slides in from the side its colour panel is on.
-            return (
-              <Animated.View
-                key={item.id}
-                entering={panelFirst ? enterFromLeft(index + 2) : enterFromRight(index + 2)}
-                onLayout={(event) => {
-                  categoryPositions.current[item.id] =
-                    event.nativeEvent.layout.y;
-                }}
-              >
-                <FlashCard
-                  signal={flash.id === item.id ? flash.count : 0}
-                  color={isEven ? ORANGE : TEAL}
+              // Zig-zag entrance: each card slides in from the side its colour panel is on.
+              return (
+                <Animated.View
+                  key={item.id}
+                  entering={
+                    panelFirst
+                      ? enterFromLeft(index + 2)
+                      : enterFromRight(index + 2)
+                  }
+                  onLayout={(event) => {
+                    categoryPositions.current[item.id] =
+                      event.nativeEvent.layout.y;
+                  }}
                 >
-                <Pressable
-                  onPress={() => router.push(item.route)}
-                  style={({ pressed }) => [
-                    styles.categoryCard,
-                    { flexDirection: panelFirst ? "row" : "row-reverse" },
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  {/* COLOR PANEL */}
-
-                  <View
-                    style={[
-                      styles.categoryPanel,
-                      { backgroundColor: cardColor },
-                    ]}
+                  <FlashCard
+                    signal={flash.id === item.id ? flash.count : 0}
+                    color={isEven ? ORANGE : TEAL}
                   >
-                    <Text
-                      style={[
-                        styles.categoryName,
-                        dir.noSpacing,
-                        { fontSize: isSmall ? 18 : 21 },
+                    <Pressable
+                      onPress={() => router.push(item.route)}
+                      style={({ pressed }) => [
+                        styles.categoryCard,
+                        { flexDirection: panelFirst ? "row" : "row-reverse" },
+                        pressed && styles.pressed,
                       ]}
-                      numberOfLines={2}
                     >
-                      {categoryName}
-                    </Text>
-                  </View>
+                      {/* COLOR PANEL */}
 
-                  {/* IMAGE */}
+                      <View
+                        style={[
+                          styles.categoryPanel,
+                          { backgroundColor: cardColor },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.categoryName,
+                            dir.noSpacing,
+                            { fontSize: isSmall ? 18 : 21 },
+                          ]}
+                          numberOfLines={2}
+                        >
+                          {categoryName}
+                        </Text>
+                      </View>
 
-                  <View style={styles.imageWrapper}>
-                    <Image
-                      source={
-                        isUsableImagePath(item.imageUrl)
-                          ? {
-                              uri: imageUrl(item.imageUrl),
-                            }
-                          : item.image || FALLBACK_IMAGE
-                      }
-                      cachePolicy="memory-disk"
-                      transition={120}
-                      style={styles.image}
-                    />
-                  </View>
-                </Pressable>
-                </FlashCard>
-              </Animated.View>
-            );
-          })}
-        </View>
+                      {/* IMAGE */}
+
+                      <View style={styles.imageWrapper}>
+                        <Image
+                          source={
+                            isUsableImagePath(item.imageUrl)
+                              ? {
+                                  uri: imageUrl(item.imageUrl),
+                                }
+                              : item.image || FALLBACK_IMAGE
+                          }
+                          cachePolicy="memory-disk"
+                          transition={120}
+                          style={styles.image}
+                        />
+                      </View>
+                    </Pressable>
+                  </FlashCard>
+                </Animated.View>
+              );
+            })}
+          </View>
         )}
 
         <MadeBy />

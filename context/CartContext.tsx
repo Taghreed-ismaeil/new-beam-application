@@ -1,18 +1,33 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import { useAuth } from "@/context/AuthContext";
+import {
+  checkoutOfferFor,
+  clearOffers,
+  refreshOffers,
+  useOffers,
+} from "@/lib/offers";
 
 // The cart is saved on the device so it survives the app being closed (or
 // killed in the background) — e.g. a guest who leaves mid-checkout to fetch
 // their sign-up code comes back to the same items.
-const STORAGE_KEY = 'beem_cart_lines';
+const STORAGE_KEY = "beem_cart_lines";
 // Set while the cart holds an already-placed order being edited (opened from
 // the WhatsApp receipt's "edit" link) — confirming then updates that order.
-const EDIT_KEY = 'beem_cart_editing';
+const EDIT_KEY = "beem_cart_editing";
 
 export type EditingOrder = {
   orderId: number;
   /** 'edit' replaces the order's items; 'add' only appends new ones (order already being prepared). */
-  mode?: 'edit' | 'add';
+  mode?: "edit" | "add";
   orderType: string;
   paymentMethod: string;
   address?: string | null;
@@ -34,6 +49,13 @@ export type CartLine = {
   imageUrl?: string | null;
   // Customer's note for the kitchen ("no pickles"), sent with the order line.
   notes?: string | null;
+  // Set on lines loaded from a placed order that was priced with an offer —
+  // `price` is then already the offer price and isn't discounted again.
+  offerId?: number | null;
+  // Filled in by the provider (not stored): the menu price before a live offer,
+  // and when that offer's countdown ends (timed offers).
+  basePrice?: number;
+  offerEndsAt?: string | null;
 };
 
 type CartAddItem = {
@@ -71,6 +93,14 @@ const CartContext = createContext<CartContextValue | null>(null);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [lines, setLines] = useState<CartLine[]>([]);
   const [editing, setEditing] = useState<EditingOrder | null>(null);
+  const { user } = useAuth();
+  const liveOffers = useOffers();
+
+  // Timed offers are per customer: re-read them on sign-in, forget them on sign-out.
+  useEffect(() => {
+    if (user?.id) refreshOffers();
+    else clearOffers();
+  }, [user?.id]);
 
   useEffect(() => {
     AsyncStorage.getItem(EDIT_KEY)
@@ -80,7 +110,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   function saveEditing(next: EditingOrder | null) {
     setEditing(next);
-    (next ? AsyncStorage.setItem(EDIT_KEY, JSON.stringify(next)) : AsyncStorage.removeItem(EDIT_KEY)).catch(() => {});
+    (next
+      ? AsyncStorage.setItem(EDIT_KEY, JSON.stringify(next))
+      : AsyncStorage.removeItem(EDIT_KEY)
+    ).catch(() => {});
   }
 
   function startEditing(order: any, images: Record<number, string> = {}) {
@@ -93,12 +126,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         price: Number(i.unitPriceSnapshot),
         quantity: i.quantity,
         notes: i.notes ?? null,
+        offerId: i.offerId ?? null,
         imageUrl: images[i.menuItemId] ?? null,
       })),
     );
     saveEditing({
       orderId: order.id,
-      mode: 'edit',
+      mode: "edit",
       orderType: order.orderType,
       paymentMethod: order.paymentMethod,
       address: order.deliveryAddress,
@@ -111,7 +145,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   function startAdding(order: any) {
     setLines([]);
-    saveEditing({ orderId: order.id, mode: 'add', orderType: order.orderType, paymentMethod: order.paymentMethod });
+    saveEditing({
+      orderId: order.id,
+      mode: "add",
+      orderType: order.orderType,
+      paymentMethod: order.paymentMethod,
+    });
   }
 
   function stopEditing() {
@@ -126,7 +165,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       .then((raw) => {
         const saved = raw ? JSON.parse(raw) : null;
         // Anything added before the read finished wins over the saved copy.
-        if (Array.isArray(saved)) setLines((current) => (current.length ? current : saved));
+        if (Array.isArray(saved))
+          setLines((current) => (current.length ? current : saved));
       })
       .catch(() => {})
       .finally(() => {
@@ -187,13 +227,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setLines((prev) =>
       quantity <= 0
         ? prev.filter((l) => l.menuItemId !== menuItemId)
-        : prev.map((l) => (l.menuItemId === menuItemId ? { ...l, quantity, notes: note } : l)),
+        : prev.map((l) =>
+            l.menuItemId === menuItemId ? { ...l, quantity, notes: note } : l,
+          ),
     );
   }
 
   function setQuantity(menuItemId: number, quantity: number) {
     if (quantity <= 0) return remove(menuItemId);
-    setLines((prev) => prev.map((l) => (l.menuItemId === menuItemId ? { ...l, quantity } : l)));
+    setLines((prev) =>
+      prev.map((l) => (l.menuItemId === menuItemId ? { ...l, quantity } : l)),
+    );
   }
 
   function clear() {
@@ -201,10 +245,49 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     saveEditing(null);
   }
 
-  const total = useMemo(() => lines.reduce((sum, l) => sum + l.price * l.quantity, 0), [lines]);
+  // What each line costs right now: a live offer that applies at checkout (a
+  // timed offer while its countdown runs) lowers the price — the server prices
+  // the order the same way. When the countdown ends the offer drops out of
+  // liveOffers and the line goes back to its menu price.
+  const pricedLines = useMemo(
+    () =>
+      lines.map((l) => {
+        if (l.offerId) return { ...l, basePrice: l.price, offerEndsAt: null };
+        const best = checkoutOfferFor(l.menuItemId, liveOffers, l.price);
+        return best
+          ? {
+              ...l,
+              basePrice: l.price,
+              price: best.price,
+              offerEndsAt: best.offer.expiresAt ?? null,
+            }
+          : { ...l, basePrice: l.price, offerEndsAt: null };
+      }),
+    [lines, liveOffers],
+  );
+
+  const total = useMemo(
+    () => pricedLines.reduce((sum, l) => sum + l.price * l.quantity, 0),
+    [pricedLines],
+  );
 
   return (
-    <CartContext.Provider value={{ lines, add, addMany, remove, updateLine, setQuantity, clear, total, editing, startEditing, startAdding, stopEditing }}>
+    <CartContext.Provider
+      value={{
+        lines: pricedLines,
+        add,
+        addMany,
+        remove,
+        updateLine,
+        setQuantity,
+        clear,
+        total,
+        editing,
+        startEditing,
+        startAdding,
+        stopEditing,
+      }}
+    >
       {children}
     </CartContext.Provider>
   );
@@ -212,6 +295,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
 export function useCart() {
   const ctx = useContext(CartContext);
-  if (!ctx) throw new Error('useCart must be used within CartProvider');
+  if (!ctx) throw new Error("useCart must be used within CartProvider");
   return ctx;
 }

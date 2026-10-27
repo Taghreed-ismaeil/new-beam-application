@@ -1,5 +1,6 @@
-import { apiRequest } from "@/lib/api-client";
+import { apiRequestCached } from "@/lib/api-client";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -11,7 +12,6 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { Image } from "expo-image";
 
 const FADE_STEPS = 24;
 
@@ -97,11 +97,13 @@ export default function Footer({ refreshKey = 0 }) {
   }, [moveDistance, translateX]);
 
   useEffect(() => {
-    apiRequest("/api/restaurant")
-      .then((data) => {
-        setRestaurant(data.restaurant);
-      })
-      .catch(() => {});
+    // cached: paints instantly from the last visit; pull-to-refresh (refreshKey) forces a refetch
+    apiRequestCached(
+      "/api/restaurant",
+      (data) => setRestaurant(data.restaurant),
+      () => {},
+      { revalidate: refreshKey > 0 },
+    );
   }, [refreshKey]);
 
   const BeemLogo = () => {
@@ -178,7 +180,9 @@ export default function Footer({ refreshKey = 0 }) {
           <TouchableOpacity
             activeOpacity={0.7}
             disabled={!restaurant?.phone}
-            onPress={() => open(`tel:${restaurant.phone.replace(/[^d+]/g, "")}`)}
+            onPress={() =>
+              open(`tel:${restaurant.phone.replace(/[^\d+]/g, "")}`)
+            }
             style={[styles.contactItem, dir.row]}
           >
             <Ionicons name="call-outline" size={iconSize} color="#FC4A14" />
@@ -229,7 +233,9 @@ export default function Footer({ refreshKey = 0 }) {
 
         <TouchableOpacity
           activeOpacity={0.7}
-          onPress={() => open(restaurant?.socialLinks?.instagram || INSTAGRAM_URL)}
+          onPress={() =>
+            open(restaurant?.socialLinks?.instagram || INSTAGRAM_URL)
+          }
           style={[styles.social, dir.row]}
         >
           <Ionicons name="logo-instagram" size={iconSize} color="#FC4A14" />

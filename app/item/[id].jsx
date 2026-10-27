@@ -1,3 +1,25 @@
+import BackButton from "@/components/BackButton";
+import CartIcon from "@/components/CartIcon";
+import FoodPhotoHero from "@/components/FoodPhotoHero";
+import MadeBy from "@/components/MadeBy";
+import { OfferCountdownChip } from "@/components/OfferCountdown";
+import { useCart } from "@/context/CartContext";
+import {
+  apiRequestCached,
+  imageUrl,
+  isUsableImagePath,
+} from "@/lib/api-client";
+import { useAppLang } from "@/lib/app-lang";
+import { Text, TextInput } from "@/lib/arabic-font";
+import { findMenuCategory } from "@/lib/menu-category";
+import {
+  allMenuItems,
+  categoryItems,
+  getMenuSections,
+} from "@/lib/menu-sections";
+import { enterDown, enterUp } from "@/lib/motion";
+import { checkoutOfferFor, useOffers } from "@/lib/offers";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
@@ -11,19 +33,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import MadeBy from "@/components/MadeBy";
-import BackButton from "@/components/BackButton";
-import FoodPhotoHero from "@/components/FoodPhotoHero";
-import { useCart } from "@/context/CartContext";
-import { apiRequestCached, imageUrl, isUsableImagePath } from "@/lib/api-client";
-import { useAppLang } from "@/lib/app-lang";
-import { findMenuCategory } from "@/lib/menu-category";
-import { allMenuItems, categoryItems, getMenuSections } from "@/lib/menu-sections";
-import { enterDown, enterUp } from "@/lib/motion";
-import { Text, TextInput } from "@/lib/arabic-font";
 
 /* =========================================================
    ITEM DETAILS
@@ -54,7 +65,9 @@ const FALLBACK_IMAGE = require("../../assets/img/menu-5.jpg");
 const EXTRAS_IMAGE = require("../../assets/img/about/menu-img/extras.jpg");
 
 const imageSource = (item, fallback) =>
-  isUsableImagePath(item?.imageUrl) ? { uri: imageUrl(item.imageUrl) } : fallback;
+  isUsableImagePath(item?.imageUrl)
+    ? { uri: imageUrl(item.imageUrl) }
+    : fallback;
 
 const money = (n) => Number(n).toFixed(2);
 
@@ -76,7 +89,11 @@ const splitIngredients = (text) =>
 
 // Each ingredient tag pops toward the viewer, overshoots, then settles —
 // one after another. (A 3D perspective version got stuck mid-air on web.)
-const popTag = (index) => ZoomIn.delay(250 + index * 80).springify().damping(9).stiffness(180);
+const popTag = (index) =>
+  ZoomIn.delay(120 + Math.min(index * 45, 360))
+    .springify()
+    .damping(9)
+    .stiffness(180);
 
 export default function ItemDetails() {
   const { id, fromCart } = useLocalSearchParams();
@@ -87,13 +104,18 @@ export default function ItemDetails() {
 
   const [menu, setMenu] = useState(null);
   // Opened from a cart line: start from what is in the cart, and saving updates it
-  const cartLine = fromCart ? cart.lines.find((l) => String(l.menuItemId) === String(id)) : null;
+  const cartLine = fromCart
+    ? cart.lines.find((l) => String(l.menuItemId) === String(id))
+    : null;
   const [quantity, setQuantity] = useState(() => cartLine?.quantity ?? 1);
   // extra item id → quantity; from the cart, start with the extras already in it
   const [extras, setExtras] = useState(() =>
-    fromCart ? Object.fromEntries(cart.lines.map((l) => [l.menuItemId, l.quantity])) : {},
+    fromCart
+      ? Object.fromEntries(cart.lines.map((l) => [l.menuItemId, l.quantity]))
+      : {},
   );
   const [notes, setNotes] = useState(() => cartLine?.notes ?? "");
+  const offers = useOffers();
 
   useEffect(() => {
     apiRequestCached("/api/menu", (data) => setMenu(data.categories ?? []));
@@ -111,7 +133,9 @@ export default function ItemDetails() {
     const category = findMenuCategory(menu, "extras");
     const allowed = item?.extraIds;
     return categoryItems(category).filter(
-      (e) => String(e.id) !== String(id) && (!Array.isArray(allowed) || allowed.includes(e.id)),
+      (e) =>
+        String(e.id) !== String(id) &&
+        (!Array.isArray(allowed) || allowed.includes(e.id)),
     );
   }, [menu, id, item]);
 
@@ -120,8 +144,12 @@ export default function ItemDetails() {
   // to the rest of its whole category.
   const sameKind = useMemo(() => {
     for (const c of menu ?? []) {
-      const lists = (getMenuSections(c) ?? [{ items: c.items ?? [] }]).map((s) => s.items);
-      const list = lists.find((l) => l.some((i) => String(i.id) === String(id)));
+      const lists = (getMenuSections(c) ?? [{ items: c.items ?? [] }]).map(
+        (s) => s.items,
+      );
+      const list = lists.find((l) =>
+        l.some((i) => String(i.id) === String(id)),
+      );
       if (!list) continue;
       const pool = list.length > 1 ? list : categoryItems(c);
       return pool.filter((i) => String(i.id) !== String(id));
@@ -152,7 +180,15 @@ export default function ItemDetails() {
     (sum, e) => sum + Number(e.price) * (extras[e.id] ?? 0),
     0,
   );
-  const total = item ? Number(item.price) * quantity + extrasTotal : 0;
+  // a live timed offer on this item: its price while the countdown runs
+  const deal = item
+    ? checkoutOfferFor(item.id, offers, Number(item.price))
+    : null;
+  const unitPrice = deal ? deal.price : Number(item?.price ?? 0);
+  const total = item ? unitPrice * quantity + extrasTotal : 0;
+  const cartCount = cart.lines.reduce((n, l) => n + l.quantity, 0);
+  // small phones: a slimmer quantity pill so "add to cart" + price + cart all fit on one line
+  const narrow = width < 400;
 
   function changeExtra(extraId, delta) {
     setExtras((prev) => {
@@ -168,7 +204,8 @@ export default function ItemDetails() {
     for (const e of extraItems) {
       const inCart = cartLine && cart.lines.find((l) => l.menuItemId === e.id);
       // editing from the cart sets the extras to what is chosen here
-      if (inCart) cart.updateLine(e.id, extras[e.id] ?? 0, inCart.notes ?? undefined);
+      if (inCart)
+        cart.updateLine(e.id, extras[e.id] ?? 0, inCart.notes ?? undefined);
       else if (extras[e.id]) cart.addMany(asCartItem(e), extras[e.id]);
     }
     if (router.canGoBack()) router.back();
@@ -202,12 +239,19 @@ export default function ItemDetails() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 130 + insets.bottom }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingBottom: 130 + insets.bottom,
+        }}
       >
         {/* ================= PHOTO ================= */}
 
         {/* Full-width photo with a slow zoom (see components/FoodPhotoHero) */}
-        <FoodPhotoHero source={imageSource(item, FALLBACK_IMAGE)} width={width} height={heroHeight} />
+        <FoodPhotoHero
+          source={imageSource(item, FALLBACK_IMAGE)}
+          width={width}
+          height={heroHeight}
+        />
 
         {/* ================= SHEET: NAME + INGREDIENTS + PRICE ================= */}
 
@@ -227,7 +271,11 @@ export default function ItemDetails() {
               <>
                 <View style={styles.ingList}>
                   {ingredients.map((ing, i) => (
-                    <Animated.View key={`${ing}-${i}`} entering={popTag(i)} style={styles.ingTag}>
+                    <Animated.View
+                      key={`${ing}-${i}`}
+                      entering={popTag(i)}
+                      style={styles.ingTag}
+                    >
                       <Text style={styles.ingText}>{ing}</Text>
                     </Animated.View>
                   ))}
@@ -236,8 +284,18 @@ export default function ItemDetails() {
               </>
             )}
             <Text style={styles.ingPrice}>
-              {money(item.price)} {t("jd")}
+              {money(unitPrice)} {t("jd")}
             </Text>
+            {!!deal && (
+              <View style={[styles.dealRow, dir.row]}>
+                <Text style={styles.dealOld}>
+                  {money(item.price)} {t("jd")}
+                </Text>
+                {!!deal.offer.expiresAt && (
+                  <OfferCountdownChip endsAt={deal.offer.expiresAt} light />
+                )}
+              </View>
+            )}
           </Animated.View>
         </View>
 
@@ -246,7 +304,9 @@ export default function ItemDetails() {
         {extraItems.length > 0 && (
           <Animated.View entering={enterUp(3)} style={styles.block}>
             <Text style={[styles.blockTitle, dir.text]}>{t("itemExtras")}</Text>
-            <Text style={[styles.blockHint, dir.text]}>{t("itemExtrasHint")}</Text>
+            <Text style={[styles.blockHint, dir.text]}>
+              {t("itemExtrasHint")}
+            </Text>
 
             <View style={styles.extrasCard}>
               {extraItems.map((e, i) => {
@@ -257,7 +317,11 @@ export default function ItemDetails() {
                 return (
                   <View
                     key={e.id}
-                    style={[styles.extraRow, dir.row, i > 0 && styles.extraDivider]}
+                    style={[
+                      styles.extraRow,
+                      dir.row,
+                      i > 0 && styles.extraDivider,
+                    ]}
                   >
                     <Image
                       source={imageSource(e, EXTRAS_IMAGE)}
@@ -267,10 +331,19 @@ export default function ItemDetails() {
                     />
 
                     <View style={styles.extraInfo}>
-                      <Text style={[styles.extraName, dir.text]} numberOfLines={2}>
+                      <Text
+                        style={[styles.extraName, dir.text]}
+                        numberOfLines={2}
+                      >
                         {pick(e)}
                       </Text>
-                      <Text style={[styles.extraPrice, dir.text, { color: rowColor }]}>
+                      <Text
+                        style={[
+                          styles.extraPrice,
+                          dir.text,
+                          { color: rowColor },
+                        ]}
+                      >
                         +{money(e.price)} {t("jd")}
                       </Text>
                     </View>
@@ -288,15 +361,32 @@ export default function ItemDetails() {
                         <Text style={styles.plusText}>+</Text>
                       </Pressable>
                     ) : (
-                      <View style={[styles.stepper, dir.row, { backgroundColor: rowSoft, borderColor: rowColor }]}>
-                        <Pressable onPress={() => changeExtra(e.id, -1)} hitSlop={6} style={styles.stepBtn}>
-                          <Text style={[styles.stepMinus, { color: rowColor }]}>−</Text>
+                      <View
+                        style={[
+                          styles.stepper,
+                          dir.row,
+                          { backgroundColor: rowSoft, borderColor: rowColor },
+                        ]}
+                      >
+                        <Pressable
+                          onPress={() => changeExtra(e.id, -1)}
+                          hitSlop={6}
+                          style={styles.stepBtn}
+                        >
+                          <Text style={[styles.stepMinus, { color: rowColor }]}>
+                            −
+                          </Text>
                         </Pressable>
-                        <Text style={[styles.stepCount, { color: rowColor }]}>{count}</Text>
+                        <Text style={[styles.stepCount, { color: rowColor }]}>
+                          {count}
+                        </Text>
                         <Pressable
                           onPress={() => changeExtra(e.id, 1)}
                           hitSlop={6}
-                          style={[styles.stepBtn, { backgroundColor: rowColor }]}
+                          style={[
+                            styles.stepBtn,
+                            { backgroundColor: rowColor },
+                          ]}
                         >
                           <Text style={styles.stepPlus}>+</Text>
                         </Pressable>
@@ -316,20 +406,33 @@ export default function ItemDetails() {
           {/* the button toggles the box; a written note is kept when it closes */}
           <Pressable
             onPress={() => setNoteOpen((open) => !open)}
-            style={({ pressed }) => [styles.addNote, dir.row, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.addNote,
+              dir.row,
+              pressed && styles.pressed,
+            ]}
           >
             <View style={styles.addNoteIcon}>
               <Ionicons name="pencil" size={15} color={WHITE} />
             </View>
             <View style={styles.addNoteBody}>
-              <Text style={[styles.addNoteText, dir.text]}>{t("itemAddNote")}</Text>
+              <Text style={[styles.addNoteText, dir.text]}>
+                {t("itemAddNote")}
+              </Text>
               {!noteOpen && !!notes.trim() && (
-                <Text style={[styles.addNotePreview, dir.text]} numberOfLines={1}>
+                <Text
+                  style={[styles.addNotePreview, dir.text]}
+                  numberOfLines={1}
+                >
                   {notes.trim()}
                 </Text>
               )}
             </View>
-            <Ionicons name={noteOpen ? "chevron-up" : "add"} size={20} color={TEAL} />
+            <Ionicons
+              name={noteOpen ? "chevron-up" : "add"}
+              size={20}
+              color={TEAL}
+            />
           </Pressable>
 
           {noteOpen && (
@@ -342,7 +445,11 @@ export default function ItemDetails() {
                 multiline
                 autoFocus={!notes}
                 maxLength={200}
-                style={[styles.notes, dir.text, { borderColor: `rgba(${fade},0.35)` }]}
+                style={[
+                  styles.notes,
+                  dir.text,
+                  { borderColor: `rgba(${fade},0.35)` },
+                ]}
               />
             </Animated.View>
           )}
@@ -352,7 +459,9 @@ export default function ItemDetails() {
 
         {sameKind.length > 0 && (
           <Animated.View entering={enterUp(5)} style={styles.moreBlock}>
-            <Text style={[styles.blockTitle, styles.moreTitle, dir.text]}>{t("itemMoreLikeThis")}</Text>
+            <Text style={[styles.blockTitle, styles.moreTitle, dir.text]}>
+              {t("itemMoreLikeThis")}
+            </Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -361,8 +470,16 @@ export default function ItemDetails() {
               {sameKind.map((i) => (
                 <Pressable
                   key={i.id}
-                  onPress={() => router.push({ pathname: "/item/[id]", params: { id: String(i.id) } })}
-                  style={({ pressed }) => [styles.moreCard, pressed && styles.pressed]}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/item/[id]",
+                      params: { id: String(i.id) },
+                    })
+                  }
+                  style={({ pressed }) => [
+                    styles.moreCard,
+                    pressed && styles.pressed,
+                  ]}
                 >
                   <Image
                     source={imageSource(i, FALLBACK_IMAGE)}
@@ -380,9 +497,16 @@ export default function ItemDetails() {
                     <Pressable
                       onPress={() => quickAdd(i)}
                       hitSlop={8}
-                      style={[styles.morePlus, justAdded === i.id && styles.morePlusDone]}
+                      style={[
+                        styles.morePlus,
+                        justAdded === i.id && styles.morePlusDone,
+                      ]}
                     >
-                      <Ionicons name={justAdded === i.id ? "checkmark" : "add"} size={16} color={WHITE} />
+                      <Ionicons
+                        name={justAdded === i.id ? "checkmark" : "add"}
+                        size={16}
+                        color={WHITE}
+                      />
                     </Pressable>
                   </View>
                 </Pressable>
@@ -399,19 +523,32 @@ export default function ItemDetails() {
         entering={enterDown(0)}
         style={[styles.bar, dir.row, { paddingBottom: 14 + insets.bottom }]}
       >
-        <View style={[styles.qty, dir.row, { borderColor: buttonColor }]}>
+        <View
+          style={[
+            styles.qty,
+            narrow && styles.qtyNarrow,
+            dir.row,
+            { borderColor: buttonColor },
+          ]}
+        >
           <Pressable
             onPress={() => setQuantity((q) => Math.max(q - 1, 1))}
             hitSlop={6}
-            style={styles.qtyBtn}
+            style={[styles.qtyBtn, narrow && styles.qtyBtnNarrow]}
           >
             <Text style={[styles.qtyMinus, { color: buttonColor }]}>−</Text>
           </Pressable>
-          <Text style={[styles.qtyCount, { color: buttonColor }]}>{quantity}</Text>
+          <Text style={[styles.qtyCount, { color: buttonColor }]}>
+            {quantity}
+          </Text>
           <Pressable
             onPress={() => setQuantity((q) => q + 1)}
             hitSlop={6}
-            style={[styles.qtyBtn, { backgroundColor: buttonColor }]}
+            style={[
+              styles.qtyBtn,
+              narrow && styles.qtyBtnNarrow,
+              { backgroundColor: buttonColor },
+            ]}
           >
             <Text style={styles.qtyPlus}>+</Text>
           </Pressable>
@@ -426,10 +563,43 @@ export default function ItemDetails() {
             pressed && styles.pressed,
           ]}
         >
-          <Text style={[styles.addText, dir.noSpacing]}>{t(cartLine ? "itemSaveChanges" : "itemAddToCart")}</Text>
-          <Text style={styles.addTotal}>
+          <Text
+            style={[
+              styles.addText,
+              narrow && styles.addTextNarrow,
+              dir.noSpacing,
+            ]}
+            numberOfLines={1}
+          >
+            {t(cartLine ? "itemSaveChanges" : "itemAddToCart")}
+          </Text>
+          <Text
+            style={[styles.addTotal, narrow && styles.addTextNarrow]}
+            numberOfLines={1}
+          >
             {money(total)} {t("jd")}
           </Text>
+        </Pressable>
+
+        {/* straight to the cart from any item, with how many things are in it */}
+        <Pressable
+          onPress={() => router.push("/cart")}
+          accessibilityRole="button"
+          accessibilityLabel={t("cartTitle")}
+          style={({ pressed }) => [
+            styles.cartBox,
+            { borderColor: buttonColor },
+            pressed && styles.pressed,
+          ]}
+        >
+          <CartIcon size={30} />
+          {cartCount > 0 && (
+            <View style={[styles.cartBadge, { backgroundColor: buttonColor }]}>
+              <Text style={styles.cartBadgeText}>
+                {cartCount > 99 ? "99+" : cartCount}
+              </Text>
+            </View>
+          )}
         </Pressable>
       </Animated.View>
     </KeyboardAvoidingView>
@@ -827,8 +997,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
+    gap: 8,
+    paddingHorizontal: 14,
     paddingTop: 14,
     backgroundColor: WHITE,
     borderTopLeftRadius: 26,
@@ -847,6 +1017,21 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     padding: 4,
     gap: 10,
+  },
+
+  qtyNarrow: {
+    gap: 4,
+    padding: 3,
+  },
+
+  qtyBtnNarrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+
+  addTextNarrow: {
+    fontSize: 13.5,
   },
 
   qtyBtn: {
@@ -882,12 +1067,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
     borderRadius: 999,
     paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
 
   addText: {
+    flexShrink: 1,
     color: WHITE,
     fontSize: 15,
     fontWeight: "900",
@@ -896,6 +1083,51 @@ const styles = StyleSheet.create({
   addTotal: {
     color: WHITE,
     fontSize: 15,
+    fontWeight: "900",
+  },
+
+  dealRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 4,
+  },
+
+  dealOld: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 13,
+    fontWeight: "800",
+    textDecorationLine: "line-through",
+  },
+
+  cartBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    backgroundColor: WHITE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  cartBadge: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    minWidth: 21,
+    height: 21,
+    paddingHorizontal: 4,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: WHITE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  cartBadgeText: {
+    color: WHITE,
+    fontSize: 10.5,
     fontWeight: "900",
   },
 

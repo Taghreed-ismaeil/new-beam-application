@@ -11,17 +11,18 @@ import {
   View,
 } from "react-native";
 
-import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
-import Animated from "react-native-reanimated";
 import FoodCard from "@/components/FoodCard";
+import MadeBy from "@/components/MadeBy";
+import QuickCategoryPills from "@/components/QuickCategoryPills";
 import { useCart } from "@/context/CartContext";
 import { apiRequestCached, refreshCached } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
-import { enterDown } from "@/lib/motion";
+import { AnimatedText, Text } from "@/lib/arabic-font";
 import { findMenuCategory } from "@/lib/menu-category";
 import { getMenuSections } from "@/lib/menu-sections";
-import { Text, AnimatedText } from "@/lib/arabic-font";
+import { enterDown } from "@/lib/motion";
+import Animated from "react-native-reanimated";
 
 // How far above a section to stop when a chip scrolls to it, so its band
 // isn't hidden under the floating back button.
@@ -85,6 +86,8 @@ export default function CategoryPage({
   const { t, pick, dir, lang } = useAppLang();
 
   const [category, setCategory] = useState(null);
+  // the extras category has no page file of its own — its pill opens it by id
+  const [extrasId, setExtrasId] = useState(null);
   const [menuIndex, setMenuIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -109,6 +112,7 @@ export default function CategoryPage({
         : categories.find((c) => String(c.id) === String(categoryId));
 
       setCategory(foundCategory ?? null);
+      setExtrasId(findMenuCategory(categories, "extras")?.id ?? null);
       setMenuIndex(Math.max(categories.indexOf(foundCategory), 0));
       setLoading(false);
     },
@@ -211,10 +215,32 @@ export default function CategoryPage({
 
   const sections = getMenuSections(category);
 
+  // The menu's category pills stay on top of every category page: the one
+  // you're on is filled in, the others switch straight to their page.
+  const activeTarget =
+    categoryKey ??
+    (category && extrasId != null && String(category.id) === String(extrasId)
+      ? "extras"
+      : null);
+
+  function openCategory(pill) {
+    if (pill.target === activeTarget) return;
+    const route =
+      pill.target === "extras"
+        ? extrasId != null
+          ? `/menu-food/${extrasId}`
+          : null
+        : `/menu-food/${pill.target}`;
+    if (route) router.replace(route);
+  }
+
   function scrollToSection(key) {
     const y = sectionY.current[key];
     if (y == null) return;
-    scrollRef.current?.scrollTo({ y: Math.max(y - SECTION_SCROLL_OFFSET, 0), animated: true });
+    scrollRef.current?.scrollTo({
+      y: Math.max(y - SECTION_SCROLL_OFFSET, 0),
+      animated: true,
+    });
   }
 
   const renderGrid = (list) => (
@@ -255,7 +281,14 @@ export default function CategoryPage({
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={headerColor} colors={[headerColor]} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={headerColor}
+            colors={[headerColor]}
+          />
+        }
         contentContainerStyle={styles.content}
       >
         {/* =====================================================
@@ -263,9 +296,21 @@ export default function CategoryPage({
         ===================================================== */}
 
         <View style={[styles.topArea, { backgroundColor: headerColor }]}>
+          <View style={styles.pillsWrap}>
+            <QuickCategoryPills
+              gutter={PAGE_GUTTER}
+              activeTarget={activeTarget}
+              onPress={openCategory}
+            />
+          </View>
+
           <AnimatedText
             entering={enterDown(0)}
-            style={[styles.topBrand, dir.noSpacing, lang === "ar" && styles.topBrandAr]}
+            style={[
+              styles.topBrand,
+              dir.noSpacing,
+              lang === "ar" && styles.topBrandAr,
+            ]}
           >
             {t("brandUpper")}
           </AnimatedText>
@@ -285,42 +330,53 @@ export default function CategoryPage({
           {/* Section shortcuts — tap one to jump down to its band */}
           {sections && sections.length > 1 && (
             <Animated.View entering={enterDown(2)} style={styles.chipsWrap}>
-            {/* Up to 3 keys sit centered; more than that become one row you
+              {/* Up to 3 keys sit centered; more than that become one row you
                 swipe sideways, instead of piling up into several lines. */}
-            <ScrollView
-              horizontal
-              scrollEnabled={sections.length > CHIPS_CENTERED_MAX}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[
-                styles.chips,
-                dir.row,
-                sections.length > CHIPS_CENTERED_MAX && styles.chipsScroll,
-              ]}
-            >
-              {sections.map((s) => (
-                // 3D key: a darker base shows under the white face like the side
-                // of a button; pressing pushes the face down onto it.
-                <Pressable
-                  key={s.key}
-                  onPress={() => scrollToSection(s.key)}
-                  style={styles.chipHit}
-                >
-                  {({ pressed }) => (
-                    <View style={[styles.chipBase, { backgroundColor: chipDepth }]}>
-                      <LinearGradient
-                        colors={[WHITE, "#FFF4EE"]}
-                        style={[styles.chipFace, pressed && styles.chipFacePressed]}
+              <ScrollView
+                horizontal
+                scrollEnabled={sections.length > CHIPS_CENTERED_MAX}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={[
+                  styles.chips,
+                  dir.row,
+                  sections.length > CHIPS_CENTERED_MAX && styles.chipsScroll,
+                ]}
+              >
+                {sections.map((s) => (
+                  // 3D key: a darker base shows under the white face like the side
+                  // of a button; pressing pushes the face down onto it.
+                  <Pressable
+                    key={s.key}
+                    onPress={() => scrollToSection(s.key)}
+                    style={styles.chipHit}
+                  >
+                    {({ pressed }) => (
+                      <View
+                        style={[
+                          styles.chipBase,
+                          { backgroundColor: chipDepth },
+                        ]}
                       >
-                        <View style={styles.chipShine} pointerEvents="none" />
-                        <Text style={[styles.chipText, { color: headerColor }]} numberOfLines={1}>
-                          {pick(s)}
-                        </Text>
-                      </LinearGradient>
-                    </View>
-                  )}
-                </Pressable>
-              ))}
-            </ScrollView>
+                        <LinearGradient
+                          colors={[WHITE, "#FFF4EE"]}
+                          style={[
+                            styles.chipFace,
+                            pressed && styles.chipFacePressed,
+                          ]}
+                        >
+                          <View style={styles.chipShine} pointerEvents="none" />
+                          <Text
+                            style={[styles.chipText, { color: headerColor }]}
+                            numberOfLines={1}
+                          >
+                            {pick(s)}
+                          </Text>
+                        </LinearGradient>
+                      </View>
+                    )}
+                  </Pressable>
+                ))}
+              </ScrollView>
             </Animated.View>
           )}
         </View>
@@ -358,22 +414,39 @@ export default function CategoryPage({
                   an accent line under it. */}
               <LinearGradient
                 pointerEvents="none"
-                colors={[`rgba(${fade},0.17)`, `rgba(${fade},0.06)`, `rgba(${fade},0)`]}
+                colors={[
+                  `rgba(${fade},0.17)`,
+                  `rgba(${fade},0.06)`,
+                  `rgba(${fade},0)`,
+                ]}
                 locations={[0, 0.35, 1]}
                 style={styles.sectionBackdrop}
               />
               <View style={styles.sectionHead}>
-                <Text style={[styles.sectionTitle, dir.noSpacing]} numberOfLines={1}>
+                <Text
+                  style={[styles.sectionTitle, dir.noSpacing]}
+                  numberOfLines={1}
+                >
                   {pick(s)}
                 </Text>
-                <View style={[styles.sectionAccent, { backgroundColor: headerColor }]} />
+                <View
+                  style={[
+                    styles.sectionAccent,
+                    { backgroundColor: headerColor },
+                  ]}
+                />
               </View>
 
               <View style={styles.section}>
                 {s.items.length ? (
                   renderGrid(s.items)
                 ) : (
-                  <View style={[styles.soonCard, { borderColor: `rgba(${fade},0.45)` }]}>
+                  <View
+                    style={[
+                      styles.soonCard,
+                      { borderColor: `rgba(${fade},0.45)` },
+                    ]}
+                  >
                     <Text style={[styles.soonText, { color: headerColor }]}>
                       {t("sectionComingSoon")}
                     </Text>
@@ -383,23 +456,21 @@ export default function CategoryPage({
             </View>
           ))
         ) : (
-        <View style={styles.section}>
-          {items.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <View style={styles.emptyIcon}>
-                <Text style={styles.emptyEmoji}>{emoji}</Text>
+          <View style={styles.section}>
+            {items.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <View style={styles.emptyIcon}>
+                  <Text style={styles.emptyEmoji}>{emoji}</Text>
+                </View>
+
+                <Text style={styles.emptyTitle}>{t("categoryEmpty")}</Text>
+
+                <Text style={styles.emptyText}>{t("categoryEmptyText")}</Text>
               </View>
-
-              <Text style={styles.emptyTitle}>{t("categoryEmpty")}</Text>
-
-              <Text style={styles.emptyText}>
-                {t("categoryEmptyText")}
-              </Text>
-            </View>
-          ) : (
-            renderGrid(items)
-          )}
-        </View>
+            ) : (
+              renderGrid(items)
+            )}
+          </View>
         )}
 
         <MadeBy />
@@ -475,6 +546,11 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     alignItems: "center",
     zIndex: 2,
+  },
+
+  pillsWrap: {
+    alignSelf: "stretch",
+    marginBottom: 16,
   },
 
   topBrand: {

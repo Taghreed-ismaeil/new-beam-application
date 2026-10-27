@@ -374,6 +374,12 @@ export default function LoyaltyScanScreen() {
           method: "POST",
         });
 
+        // this scan won a spin instead of a gift piece — straight to the wheel
+        if (res?.wheel) {
+          router.replace("/loyalty/wheel");
+          return;
+        }
+
         showScanResult(res);
       } catch {
         setResult({

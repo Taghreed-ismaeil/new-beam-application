@@ -3,7 +3,7 @@ export const STRINGS = {
   jd: ["JD", "د.أ"],
   add: ["ADD", "أضف"],
   itemExtras: ["Extras", "الإضافات"],
-  itemExtrasHint: ["     ", " "],
+  itemExtrasHint: ["Add what you like on the side", "زيد على طلبك اللي بتحبه"],
   itemNotes: ["Notes", "ملاحظات"],
   itemNotesPlaceholder: [
     "Anything we should know? e.g. no pickles",
@@ -57,6 +57,12 @@ export const STRINGS = {
   mediaPost: ["Share", "شارك"],
   mediaPosting: ["Sharing…", "عم نشارك…"],
   mediaSentTitle: ["Thanks for sharing! 🎉", "شكراً إنك شاركتنا! 🎉"],
+  mediaReviewTitle: ["Your post is under review", "بوستك قيد المراجعة"],
+  mediaReviewText: [
+    "The Beam team approves posts within 24–48 hours. Once it's approved, it shows up in the community.",
+    "فريق بيم بيوافق على البوستات خلال 24 - 48 ساعة، وأول ما ينقبل بينزل بمجتمع بيم.",
+  ],
+  mediaReviewOk: ["Got it", "تمام"],
   mediaSentText: [
     "We'll post it as soon as it's approved",
     "رح تنزل أول ما نوافق عليها",
@@ -94,6 +100,18 @@ export const STRINGS = {
     "لسا ما في تعليقات… احكي إشي!",
   ],
   mediaAddComment: ["Add a comment...", "اكتب تعليق..."],
+  offerTimedTitle: ["Just for you — limited time", "عرض خاص إلك لوقت محدود"],
+  offerTimedHint: [
+    "Order before the timer runs out — after that the offer is gone",
+    "اطلب قبل ما يخلص الوقت — بعدها العرض بروح",
+  ],
+  offerTimeLeft: ["left", "باقي"],
+  mediaAddReply: ["Write a reply...", "اكتب رد..."],
+  mediaReply: ["Reply", "رد"],
+  mediaLikeComment: ["Like comment", "لايك على التعليق"],
+  mediaReplyingTo: ["Replying to @{name}", "بترد على @{name}"],
+  mediaViewReplies: ["View replies ({count})", "عرض الردود ({count})"],
+  mediaHideReplies: ["Hide replies", "إخفاء الردود"],
   mediaMineEmpty: [
     "Photos you share will show up here",
     "الصور اللي بتشاركها رح تبيّن هون",
@@ -123,7 +141,10 @@ export const STRINGS = {
   contactPhoneText: ["Let's talk.", "يلا نحكي"],
   contactBadge: ["GET IN TOUCH", "تواصل معنا"],
   contactCardTitle: ["We’re here for you", "إحنا هون عشانك"],
-  contactCardSub: ["", " "],
+  contactCardSub: [
+    "Reach us anytime through one of the options below.",
+    "تواصل معنا بأي وقت    .",
+  ],
   contactPhone: ["PHONE", "الهاتف"],
   contactLocation: ["LOCATION", "الموقع"],
   contactEmail: ["EMAIL", "الإيميل"],
@@ -138,7 +159,7 @@ export const STRINGS = {
   contactTime3: ["12:00 PM – 10:00 PM", "12:00 م – 10:00 م"],
   contactFollow: ["FOLLOW ALONG", "تابعنا"],
   contactSocialTitle: ["Find us on social", "لاقينا على السوشال ميديا"],
-  contactSocialSub: ["", ""],
+  contactSocialSub: ["Stay hungry. Stay connected.", "خليك جوعان. وخليك قريب."],
   contactBottom: ["WE CAN’T WAIT TO HEAR FROM YOU", "مستنيين نسمع منك"],
 
   /* ================= ABOUT PAGE ================= */
@@ -213,7 +234,7 @@ export const STRINGS = {
   loyTitle: ["Collect & Win", "اجمع واربح"],
   loySubtitle: [
     "Collect your stamps and unlock delicious rewards.",
-    "اجمع قطعك وافتح جوائز مميزة.",
+    "اجمع قطعك وافتح جوائز لذيذة.",
   ],
   loyMyRewards: ["My Rewards", "الجوائز"],
   // special prize of the month (top of the Gifts page)
@@ -619,26 +640,6 @@ export const STRINGS = {
   loginBack: ["← Back", "رجوع →"],
   loginShowPassword: ["Show password", "إظهار كلمة السر"],
   loginHidePassword: ["Hide password", "إخفاء كلمة السر"],
-  loginAgreePrefix: ["I have read and agree to the ", "قرأت وبوافق على "],
-  loginAgreeAnd: [" and ", " و"],
-  loginAgreeComma: [", ", "، "],
-  loginOffersOptIn: [
-    "Send me notifications about offers and new items",
-    "بدي توصلني إشعارات بالعروض والأصناف الجديدة",
-  ],
-  loginErrAgree: [
-    "Please agree to the terms and policies to create your account",
-    "لازم توافق على الشروط والسياسات عشان تنشئ حساب",
-  ],
-  policyClose: ["Close", "إغلاق"],
-  policyDocRestaurant: ["Beam Restaurant", "مطعم بيم"],
-  policyDocTitle: ["Policies & Terms", "السياسات والشروط"],
-  policyDocContains: ["This document contains:", "تحتوي هذه الوثيقة على:"],
-  policyShortTerms: ["Terms & Conditions", "الشروط والأحكام"],
-  policyShortPrivacy: ["Privacy Policy", "سياسة الخصوصية"],
-  policyShortGifts: ["Gifts Terms", "شروط الهدايا"],
-  policyShortContent: ["Content Policy", "سياسة المحتوى"],
-  policyShortRefunds: ["Refund Policy", "سياسة الإلغاء والاسترجاع"],
   loginErrPhonePassword: [
     "Please enter your phone number and password",
     "دخّل رقم موبايلك وكلمة السر",
@@ -667,6 +668,35 @@ export const STRINGS = {
   loginErrInvalidPhone: [
     "Please enter a valid mobile number, e.g. 0791234567",
     "دخّل رقم موبايل صحيح، مثلاً 0791234567",
+  ],
+  loginErrAcceptTerms: [
+    "Please agree to the terms and policies to create an account",
+    "لازم توافق على الشروط والسياسات لتنشئ حساب",
+  ],
+  consentPrefix: ["I have read and agree to the ", "قرأت وأوافق على "],
+  consentTerms: ["Terms and Conditions", "الشروط والأحكام"],
+  consentPrivacy: ["Privacy Policy", "سياسة الخصوصية"],
+  consentGifts: ["Gifts & Rewards Terms", "شروط الهدايا والجوائز"],
+  consentContent: ["Content Policy", "سياسة المحتوى"],
+  consentRefunds: ["Refund Policy", "سياسة الاسترجاع"],
+  consentComma: [", ", "، "],
+  consentAnd: [" and the ", " و"],
+  consentMarketing: [
+    "Send me offers and discounts on WhatsApp (optional)",
+    "بدي توصلني العروض والخصومات على واتساب (اختياري)",
+  ],
+  ordersEyebrow: ["YOUR ORDERS", "طلباتك"],
+  ordersLoading: ["Loading your orders...", "عم نجيب طلباتك..."],
+  ordersEmpty: ["No orders yet", "لسا ما طلبت إشي"],
+  ordersEmptyText: [
+    "Your orders will show up here once you place one",
+    "طلباتك رح تبيّن هون أول ما تطلب",
+  ],
+  ordersNumber: ["Order #{id}", "طلب رقم {id}"],
+  accountPolicies: ["Policies and terms", "السياسات والشروط"],
+  accountPoliciesSub: [
+    "Terms, privacy, gifts and refunds",
+    "الشروط والخصوصية والهدايا والاسترجاع",
   ],
   loginErrPasswordShort: [
     "Choose a password of at least 6 characters",
@@ -746,7 +776,7 @@ export const STRINGS = {
   trackBackHome: ["Back to home", "رجوع للرئيسية"],
 
   /* ================= TABLE BOOKINGS ================= */
-  resEyebrow: [" ", " "],
+  resEyebrow: ["TABLE BOOKINGS", "حجز الطاولات"],
   resTitle: ["My bookings", "حجوزاتي"],
   resNew: ["Book a table", "احجز طاولة"],
   resEmptyTitle: ["No bookings yet", "ما عندك حجوزات لسا"],

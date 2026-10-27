@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 
-import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
+import MadeBy from "@/components/MadeBy";
+import { OfferCountdownChip } from "@/components/OfferCountdown";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import { Image } from "expo-image";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -15,12 +17,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Image } from "expo-image";
 
 import { apiRequest, apiRequestCached, imageUrl } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
-import { allMenuItems } from "@/lib/menu-sections";
 import { Text } from "@/lib/arabic-font";
+import { allMenuItems } from "@/lib/menu-sections";
+import { refreshOffers } from "@/lib/offers";
 
 const FALLBACK_IMAGE = require("../assets/img/menu-5.jpg");
 
@@ -44,7 +46,16 @@ const STATUS_LABEL = {
 };
 
 export default function CartScreen() {
-  const { lines, setQuantity, remove, total, editing, startEditing, startAdding, clear } = useCart();
+  const {
+    lines,
+    setQuantity,
+    remove,
+    total,
+    editing,
+    startEditing,
+    startAdding,
+    clear,
+  } = useCart();
   const { t, pick, dir } = useAppLang();
   const { user, loading: authLoading } = useAuth();
 
@@ -94,11 +105,14 @@ export default function CartScreen() {
       apiRequest("/api/orders/mine")
         .then(({ orders }) => {
           if (!alive) return;
-          const open = (orders ?? []).find((o) => o.status !== "completed" && o.status !== "cancelled");
+          const open = (orders ?? []).find(
+            (o) => o.status !== "completed" && o.status !== "cancelled",
+          );
           setActiveOrder(open ?? null);
           // The kitchen moved on while this order was open for editing: drop to
           // "add only" (or out entirely) so confirming can't be refused.
-          const mine = editing && (orders ?? []).find((o) => o.id === editing.orderId);
+          const mine =
+            editing && (orders ?? []).find((o) => o.id === editing.orderId);
           if (mine && editing.mode !== "add" && !mine.can?.edit) {
             if (mine.can?.add) {
               startAdding(mine);
@@ -114,7 +128,7 @@ export default function CartScreen() {
         alive = false;
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user, editing?.orderId, editing?.mode])
+    }, [user, editing?.orderId, editing?.mode]),
   );
 
   // Asks before throwing away items already in the cart (web has no Alert buttons)
@@ -139,7 +153,7 @@ export default function CartScreen() {
           if (order.can?.edit) startEditing(order, menuImages);
           else if (order.can?.add) startAdding(order);
         })
-        .catch(() => setEditNotice(t("cartEditMissing")))
+        .catch(() => setEditNotice(t("cartEditMissing"))),
     );
   }
 
@@ -167,9 +181,12 @@ export default function CartScreen() {
         },
       });
       clear();
+      refreshOffers();
       router.replace(`/order-tracking/${id}`);
     } catch (e) {
-      setEditNotice(e?.status === 409 ? t("cartAddClosed") : t("cartAddFailed"));
+      setEditNotice(
+        e?.status === 409 ? t("cartAddClosed") : t("cartAddFailed"),
+      );
     } finally {
       setAdding(false);
     }
@@ -178,7 +195,6 @@ export default function CartScreen() {
   const addMode = editing?.mode === "add";
   // the order box hides while that same order is already open in the cart
   const showActive = activeOrder && editing?.orderId !== activeOrder.id;
-
 
   useEffect(() => {
     apiRequestCached("/api/menu", (data) => {
@@ -227,10 +243,17 @@ export default function CartScreen() {
       ====================================================== */}
 
       {(!!editing || !!editNotice) && (
-        <View style={[styles.editBanner, !!editNotice && !editing && styles.editBannerLocked]}>
+        <View
+          style={[
+            styles.editBanner,
+            !!editNotice && !editing && styles.editBannerLocked,
+          ]}
+        >
           <Text style={styles.editBannerText}>
             {editing
-              ? t(addMode ? "cartAdding" : "cartEditing", { id: editing.orderId })
+              ? t(addMode ? "cartAdding" : "cartEditing", {
+                  id: editing.orderId,
+                })
               : editNotice}
           </Text>
           {editing && (
@@ -245,7 +268,11 @@ export default function CartScreen() {
         <Text style={[styles.addHint, dir.text]}>
           {editNotice ||
             // chose "add" while a full edit was still possible vs. the kitchen already started
-            t(activeOrder?.id === editing.orderId && activeOrder?.can?.edit ? "cartAddHint" : "cartAddOnlyHint")}
+            t(
+              activeOrder?.id === editing.orderId && activeOrder?.can?.edit
+                ? "cartAddHint"
+                : "cartAddOnlyHint",
+            )}
         </Text>
       )}
 
@@ -279,14 +306,26 @@ export default function CartScreen() {
           {(activeOrder.can?.edit || activeOrder.can?.add) && (
             <View style={[styles.activeActions, dir.row]}>
               {activeOrder.can?.edit && (
-                <TouchableOpacity style={[styles.actionBtn, styles.actionBtnLight]} onPress={editActive} activeOpacity={0.8}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnLight]}
+                  onPress={editActive}
+                  activeOpacity={0.8}
+                >
                   <Ionicons name="create-outline" size={16} color={ORANGE} />
-                  <Text style={[styles.actionBtnText, { color: ORANGE }]}>{t("cartChooseEdit")}</Text>
+                  <Text style={[styles.actionBtnText, { color: ORANGE }]}>
+                    {t("cartChooseEdit")}
+                  </Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={[styles.actionBtn, styles.actionBtnTeal]} onPress={addToActive} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnTeal]}
+                onPress={addToActive}
+                activeOpacity={0.8}
+              >
                 <Ionicons name="add" size={17} color={WHITE} />
-                <Text style={[styles.actionBtnText, { color: WHITE }]}>{t("cartChooseAdd")}</Text>
+                <Text style={[styles.actionBtnText, { color: WHITE }]}>
+                  {t("cartChooseAdd")}
+                </Text>
               </TouchableOpacity>
             </View>
           )}
@@ -305,9 +344,7 @@ export default function CartScreen() {
 
             <Text style={styles.emptyTitle}>{t("cartEmpty")}</Text>
 
-            <Text style={styles.emptyText}>
-              {t("cartEmptyText")}
-            </Text>
+            <Text style={styles.emptyText}>{t("cartEmptyText")}</Text>
           </View>
         ) : (
           lines.map((l) => (
@@ -323,32 +360,46 @@ export default function CartScreen() {
                   })
                 }
               >
-              <Image
-                source={(() => {
-                  const path = l.imageUrl || menuImages[l.menuItemId];
+                <Image
+                  source={(() => {
+                    const path = l.imageUrl || menuImages[l.menuItemId];
 
-                  return path ? { uri: imageUrl(path) } : FALLBACK_IMAGE;
-                })()}
-                cachePolicy="memory-disk"
-                transition={120}
-                style={styles.thumb}
-              />
+                    return path ? { uri: imageUrl(path) } : FALLBACK_IMAGE;
+                  })()}
+                  cachePolicy="memory-disk"
+                  transition={120}
+                  style={styles.thumb}
+                />
 
-              <View style={styles.itemInfo}>
-                <Text style={[styles.name, dir.text]} numberOfLines={1}>
-                  {pick({ name: l.nameAr || l.name, nameEn: l.nameEn || l.name })}
-                </Text>
-
-                {!!l.notes && (
-                  <Text style={[styles.lineNote, dir.text]} numberOfLines={2}>
-                    {l.notes}
+                <View style={styles.itemInfo}>
+                  <Text style={[styles.name, dir.text]} numberOfLines={1}>
+                    {pick({
+                      name: l.nameAr || l.name,
+                      nameEn: l.nameEn || l.name,
+                    })}
                   </Text>
-                )}
 
-                <Text style={[styles.price, dir.text]}>
-                  {l.price.toFixed(2)} {t("jd")}
-                </Text>
-              </View>
+                  {!!l.notes && (
+                    <Text style={[styles.lineNote, dir.text]} numberOfLines={2}>
+                      {l.notes}
+                    </Text>
+                  )}
+
+                  <View style={[styles.priceRow, dir.row]}>
+                    <Text style={[styles.price, dir.text]}>
+                      {l.price.toFixed(2)} {t("jd")}
+                    </Text>
+                    {/* a live offer: the menu price struck through, and its countdown */}
+                    {l.basePrice > l.price && (
+                      <Text style={styles.oldPrice}>
+                        {l.basePrice.toFixed(2)}
+                      </Text>
+                    )}
+                    {!!l.offerEndsAt && (
+                      <OfferCountdownChip endsAt={l.offerEndsAt} />
+                    )}
+                  </View>
+                </View>
               </TouchableOpacity>
 
               <View style={[styles.stepper, dir.row]}>
@@ -393,39 +444,38 @@ export default function CartScreen() {
 ====================================================== */}
 
       {lines.length > 0 && (
-      <View style={styles.footer}>
-        <View style={[styles.totalRow, dir.row]}>
-          <Text style={styles.totalLabel}>{t("cartTotal")}</Text>
+        <View style={styles.footer}>
+          <View style={[styles.totalRow, dir.row]}>
+            <Text style={styles.totalLabel}>{t("cartTotal")}</Text>
 
-          <Text style={styles.total}>
-            {total.toFixed(2)} {t("jd")}
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.confirmBtn, adding && { opacity: 0.7 }]}
-          disabled={adding}
-          onPress={() =>
-            addMode
-              ? submitAddition()
-              : router.push({
-                  pathname: "/confirm",
-                  params: { from: "cart" },
-                })
-          }
-          activeOpacity={0.8}
-        >
-          {adding ? (
-            <ActivityIndicator color={WHITE} />
-          ) : (
-            <Text style={styles.confirmBtnText}>
-              {addMode ? t("cartAddConfirm") : t("cartConfirm")}
+            <Text style={styles.total}>
+              {total.toFixed(2)} {t("jd")}
             </Text>
-          )}
-        </TouchableOpacity>
-      </View>
-      )}
+          </View>
 
+          <TouchableOpacity
+            style={[styles.confirmBtn, adding && { opacity: 0.7 }]}
+            disabled={adding}
+            onPress={() =>
+              addMode
+                ? submitAddition()
+                : router.push({
+                    pathname: "/confirm",
+                    params: { from: "cart" },
+                  })
+            }
+            activeOpacity={0.8}
+          >
+            {adding ? (
+              <ActivityIndicator color={WHITE} />
+            ) : (
+              <Text style={styles.confirmBtnText}>
+                {addMode ? t("cartAddConfirm") : t("cartConfirm")}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -622,7 +672,6 @@ const styles = StyleSheet.create({
     marginTop: 25,
   },
 
-
   /* =====================================================
      CONTENT
   ====================================================== */
@@ -736,6 +785,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontStyle: "italic",
     color: "#68706E",
+  },
+
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+
+  oldPrice: {
+    color: "#A4A4A4",
+    fontSize: 12,
+    fontWeight: "700",
+    textDecorationLine: "line-through",
   },
 
   price: {

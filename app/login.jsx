@@ -1,11 +1,12 @@
-import MadeBy from "@/components/MadeBy";
 import GiftsBackdrop from "@/components/GiftsBackdrop";
-import PolicySheet from "@/components/PolicySheet";
+import MadeBy from "@/components/MadeBy";
 import { useAuth } from "@/context/AuthContext";
 import { apiRequest } from "@/lib/api-client";
-import { POLICY_VERSION } from "@/lib/policies";
 import { useAppLang } from "@/lib/app-lang";
+import { Text, TextInput } from "@/lib/arabic-font";
+import { POLICY_VERSION } from "@/lib/policies";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -18,8 +19,6 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { Image } from "expo-image";
-import { Text, TextInput } from "@/lib/arabic-font";
 
 const ORANGE = "#FC4A14";
 const TEAL = "#005751";
@@ -56,34 +55,6 @@ function useAndroidKeyboardHeight() {
   return height;
 }
 
-const POLICY_LINKS = [
-  ["terms", "policyShortTerms"],
-  ["privacy", "policyShortPrivacy"],
-  ["gifts", "policyShortGifts"],
-  ["content", "policyShortContent"],
-  ["refunds", "policyShortRefunds"],
-];
-
-// Square tick box with its label beside it — the whole row toggles it.
-function CheckRow({ checked, onToggle, children }) {
-  const { dir } = useAppLang();
-
-  return (
-    <TouchableOpacity
-      style={[styles.checkRow, dir.row]}
-      onPress={onToggle}
-      activeOpacity={0.8}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked }}
-    >
-      <View style={[styles.checkBox, checked && styles.checkBoxOn]}>
-        {checked && <Ionicons name="checkmark" size={16} color={WHITE} />}
-      </View>
-      <View style={styles.checkLabel}>{children}</View>
-    </TouchableOpacity>
-  );
-}
-
 // Eye button at the end of a password field — shows/hides what was typed.
 function PasswordToggle({ visible, onToggle }) {
   const { t } = useAppLang();
@@ -93,9 +64,15 @@ function PasswordToggle({ visible, onToggle }) {
       onPress={onToggle}
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       accessibilityRole="button"
-      accessibilityLabel={visible ? t("loginHidePassword") : t("loginShowPassword")}
+      accessibilityLabel={
+        visible ? t("loginHidePassword") : t("loginShowPassword")
+      }
     >
-      <Ionicons name={visible ? "eye-off-outline" : "eye-outline"} size={22} color={ORANGE} />
+      <Ionicons
+        name={visible ? "eye-off-outline" : "eye-outline"}
+        size={22}
+        color={ORANGE}
+      />
     </TouchableOpacity>
   );
 }
@@ -123,21 +100,13 @@ export default function Login() {
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [agreed, setAgreed] = useState(false);
-  const [offersOptIn, setOffersOptIn] = useState(false);
-  const [openPolicy, setOpenPolicy] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
-  // Registering needs the terms ticked; logging in doesn't show the boxes at all.
-  const submitDisabled = busy || (isRegister && !agreed);
+  // sign-up consent: the policies are required, marketing messages are optional
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
 
   async function submitForm() {
-    if (isRegister && !agreed) {
-      setError(t("loginErrAgree"));
-      return;
-    }
-
     if (!phone.trim() || !password) {
       setError(t("loginErrPhonePassword"));
       return;
@@ -151,6 +120,11 @@ export default function Login() {
     // the server needs 6+ characters — say so now, not after the code screen
     if (isRegister && password.length < 6) {
       setError(t("loginErrPasswordShort"));
+      return;
+    }
+
+    if (isRegister && !acceptTerms) {
+      setError(t("loginErrAcceptTerms"));
       return;
     }
 
@@ -223,8 +197,9 @@ export default function Login() {
           code,
           name: name.trim() || undefined,
           password,
+          // which version of the policies they agreed to, and the optional marketing choice
           acceptedPolicyVersion: POLICY_VERSION,
-          marketingOptIn: offersOptIn,
+          marketingOptIn,
         },
       });
 
@@ -325,316 +300,383 @@ export default function Login() {
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
       >
-      {/* keyboardShouldPersistTaps="handled" already closes the keyboard when
+        {/* keyboardShouldPersistTaps="handled" already closes the keyboard when
           tapping empty space — no wrapper Pressable, it swallowed taps on native */}
-      <View style={styles.inner}>
-      {/* =====================================================
+        <View style={styles.inner}>
+          {/* =====================================================
           LOGO
       ====================================================== */}
-      <View
-        pointerEvents="none"
-        style={[
-          styles.logoWrapper,
-          {
-            width: logoWidth + LOGO_BORDER * 2,
-            height: logoHeight + LOGO_BORDER * 2,
-            marginBottom: isShort ? 16 : 24,
-          },
-        ]}
-      >
-        <Image
-          source={BEAM_LOGO}
-          contentFit="cover"
-          style={{ width: logoWidth, height: logoHeight }}
-        />
-      </View>
+          <View
+            pointerEvents="none"
+            style={[
+              styles.logoWrapper,
+              {
+                width: logoWidth + LOGO_BORDER * 2,
+                height: logoHeight + LOGO_BORDER * 2,
+                marginBottom: isShort ? 16 : 24,
+              },
+            ]}
+          >
+            <Image
+              source={BEAM_LOGO}
+              contentFit="cover"
+              style={{ width: logoWidth, height: logoHeight }}
+            />
+          </View>
 
-      {/* =====================================================
+          {/* =====================================================
           LOGIN CARD
       ====================================================== */}
 
-      <View style={[styles.card, { padding: isSmall ? 22 : 32 }]}>
-        <Text style={[styles.title, { marginBottom: isShort ? 22 : 36 }]}>
-          {step === "otp"
-            ? t("loginVerify")
-            : step === "forgot-phone" || step === "forgot-reset"
-              ? t("loginResetPassword")
-              : isRegister
-                ? t("loginRegister")
-                : t("accountLogin")}
-        </Text>
+          <View style={[styles.card, { padding: isSmall ? 22 : 32 }]}>
+            <Text style={[styles.title, { marginBottom: isShort ? 22 : 36 }]}>
+              {step === "otp"
+                ? t("loginVerify")
+                : step === "forgot-phone" || step === "forgot-reset"
+                  ? t("loginResetPassword")
+                  : isRegister
+                    ? t("loginRegister")
+                    : t("accountLogin")}
+            </Text>
 
-        {step === "form" && (
-          <>
-            {/* Name */}
-            {isRegister && (
-              <View style={[styles.inputBox, dir.row]}>
-                <TextInput
-                  placeholder={t("loginUsername")}
-                  placeholderTextColor="#aaa"
-                  style={[styles.input, dir.text]}
-                  value={name}
-                  onChangeText={setName}
-                  returnKeyType="next"
-                  submitBehavior="submit"
-                  onSubmitEditing={() => phoneRef.current?.focus()}
-                />
+            {step === "form" && (
+              <>
+                {/* Name */}
+                {isRegister && (
+                  <View style={[styles.inputBox, dir.row]}>
+                    <TextInput
+                      placeholder={t("loginUsername")}
+                      placeholderTextColor="#aaa"
+                      style={[styles.input, dir.text]}
+                      value={name}
+                      onChangeText={setName}
+                      returnKeyType="next"
+                      submitBehavior="submit"
+                      onSubmitEditing={() => phoneRef.current?.focus()}
+                    />
 
-                <Ionicons name="person-outline" size={22} color={ORANGE} />
-              </View>
-            )}
+                    <Ionicons name="person-outline" size={22} color={ORANGE} />
+                  </View>
+                )}
 
-            {/* Phone */}
-            <View style={[styles.inputBox, dir.row]}>
-              <TextInput
-                ref={phoneRef}
-                placeholder={t("loginPhone")}
-                placeholderTextColor="#aaa"
-                style={[styles.input, dir.text]}
-                keyboardType="phone-pad"
-                value={phone}
-                onChangeText={setPhone}
-                returnKeyType="next"
-                submitBehavior="submit"
-                onSubmitEditing={() => passwordRef.current?.focus()}
-              />
+                {/* Phone */}
+                <View style={[styles.inputBox, dir.row]}>
+                  <TextInput
+                    ref={phoneRef}
+                    placeholder={t("loginPhone")}
+                    placeholderTextColor="#aaa"
+                    style={[styles.input, dir.text]}
+                    keyboardType="phone-pad"
+                    value={phone}
+                    onChangeText={setPhone}
+                    returnKeyType="next"
+                    submitBehavior="submit"
+                    onSubmitEditing={() => passwordRef.current?.focus()}
+                  />
 
-              <Ionicons name="call-outline" size={22} color={ORANGE} />
-            </View>
+                  <Ionicons name="call-outline" size={22} color={ORANGE} />
+                </View>
 
-            {/* Password */}
-            <View style={[styles.inputBox, dir.row]}>
-              <TextInput
-                ref={passwordRef}
-                placeholder={t("loginPassword")}
-                placeholderTextColor="#aaa"
-                style={[styles.input, dir.text]}
-                secureTextEntry={!showPassword}
-                value={password}
-                onChangeText={setPassword}
-                returnKeyType="done"
-                onSubmitEditing={submitForm}
-              />
+                {/* Password */}
+                <View style={[styles.inputBox, dir.row]}>
+                  <TextInput
+                    ref={passwordRef}
+                    placeholder={t("loginPassword")}
+                    placeholderTextColor="#aaa"
+                    style={[styles.input, dir.text]}
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={setPassword}
+                    returnKeyType="done"
+                    onSubmitEditing={submitForm}
+                  />
 
-              <PasswordToggle visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
-            </View>
+                  <PasswordToggle
+                    visible={showPassword}
+                    onToggle={() => setShowPassword((v) => !v)}
+                  />
+                </View>
 
-            {/* Terms + offers — only when creating an account */}
-            {isRegister && (
-              <View style={styles.consents}>
-                <CheckRow checked={agreed} onToggle={() => setAgreed((v) => !v)}>
-                  <Text style={[styles.checkText, dir.text]}>
-                    {t("loginAgreePrefix")}
-                    {POLICY_LINKS.map(([id, key], i) => (
-                      <Text key={id}>
-                        {i === 0
-                          ? ""
-                          : i === POLICY_LINKS.length - 1
-                            ? t("loginAgreeAnd")
-                            : t("loginAgreeComma")}
-                        <Text style={styles.policyLink} onPress={() => setOpenPolicy(id)}>
-                          {t(key)}
-                        </Text>
+                {/* Sign-up consent: required policies + optional offers */}
+                {isRegister && (
+                  <View style={styles.consentBox}>
+                    <TouchableOpacity
+                      style={[
+                        styles.consentRow,
+                        dir.isRTL ? dir.rowReverse : dir.row,
+                      ]}
+                      onPress={() => {
+                        setAcceptTerms((v) => !v);
+                        setError("");
+                      }}
+                      activeOpacity={0.8}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: acceptTerms }}
+                    >
+                      <View
+                        style={[
+                          styles.checkbox,
+                          acceptTerms && styles.checkboxOn,
+                        ]}
+                      >
+                        {acceptTerms && (
+                          <Ionicons name="checkmark" size={15} color={WHITE} />
+                        )}
+                      </View>
+                      <Text style={[styles.consentText, dir.text]}>
+                        {t("consentPrefix")}
+                        {[
+                          ["terms", "consentTerms"],
+                          ["privacy", "consentPrivacy"],
+                          ["gifts", "consentGifts"],
+                          ["content", "consentContent"],
+                          ["refunds", "consentRefunds"],
+                        ].map(([doc, key], i, all) => (
+                          <Text key={doc}>
+                            <Text
+                              style={styles.consentLink}
+                              onPress={() =>
+                                router.push({
+                                  pathname: "/policies/[doc]",
+                                  params: { doc },
+                                })
+                              }
+                            >
+                              {t(key)}
+                            </Text>
+                            {i < all.length - 2
+                              ? t("consentComma")
+                              : i === all.length - 2
+                                ? t("consentAnd")
+                                : ""}
+                          </Text>
+                        ))}
                       </Text>
-                    ))}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.consentRow,
+                        dir.isRTL ? dir.rowReverse : dir.row,
+                      ]}
+                      onPress={() => setMarketingOptIn((v) => !v)}
+                      activeOpacity={0.8}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: marketingOptIn }}
+                    >
+                      <View
+                        style={[
+                          styles.checkbox,
+                          marketingOptIn && styles.checkboxOn,
+                        ]}
+                      >
+                        {marketingOptIn && (
+                          <Ionicons name="checkmark" size={15} color={WHITE} />
+                        )}
+                      </View>
+                      <Text style={[styles.consentText, dir.text]}>
+                        {t("consentMarketing")}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {!!error && <Text style={styles.error}>{error}</Text>}
+
+                {/* Button */}
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    isRegister && !acceptTerms && styles.buttonOff,
+                  ]}
+                  onPress={submitForm}
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <ActivityIndicator color={ORANGE} />
+                  ) : (
+                    <Text style={styles.buttonText}>
+                      {isRegister ? t("loginRegister") : t("accountLogin")}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                {/* Forgot password */}
+                {!isRegister && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setStep("forgot-phone");
+                      setError("");
+                    }}
+                  >
+                    <Text style={styles.switchText}>{t("loginForgot")}</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Switch */}
+                <TouchableOpacity
+                  onPress={() => {
+                    setIsRegister(!isRegister);
+                    setError("");
+                  }}
+                >
+                  <Text style={styles.switchText}>
+                    {isRegister ? t("loginHaveAccount") : t("loginNoAccount")}
                   </Text>
-                </CheckRow>
-
-                <CheckRow checked={offersOptIn} onToggle={() => setOffersOptIn((v) => !v)}>
-                  <Text style={[styles.checkText, dir.text]}>{t("loginOffersOptIn")}</Text>
-                </CheckRow>
-              </View>
+                </TouchableOpacity>
+              </>
             )}
 
-            {!!error && <Text style={styles.error}>{error}</Text>}
-
-            {/* Button */}
-            <TouchableOpacity
-              style={[styles.button, submitDisabled && !busy && styles.buttonDisabled]}
-              onPress={submitForm}
-              disabled={submitDisabled}
-            >
-              {busy ? (
-                <ActivityIndicator color={ORANGE} />
-              ) : (
-                <Text style={styles.buttonText}>
-                  {isRegister ? t("loginRegister") : t("accountLogin")}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Forgot password */}
-            {!isRegister && (
-              <TouchableOpacity
-                onPress={() => {
-                  setStep("forgot-phone");
-                  setError("");
-                }}
-              >
-                <Text style={styles.switchText}>{t("loginForgot")}</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Switch */}
-            <TouchableOpacity
-              onPress={() => {
-                setIsRegister(!isRegister);
-                setError("");
-              }}
-            >
-              <Text style={styles.switchText}>
-                {isRegister ? t("loginHaveAccount") : t("loginNoAccount")}
-              </Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* =====================================================
+            {/* =====================================================
             FORGOT PASSWORD — PHONE
         ====================================================== */}
 
-        {step === "forgot-phone" && (
-          <>
-            <View style={[styles.inputBox, dir.row]}>
-              <TextInput
-                placeholder={t("loginPhone")}
-                placeholderTextColor="#aaa"
-                style={[styles.input, dir.text]}
-                keyboardType="phone-pad"
-                value={phone}
-                onChangeText={setPhone}
-              />
+            {step === "forgot-phone" && (
+              <>
+                <View style={[styles.inputBox, dir.row]}>
+                  <TextInput
+                    placeholder={t("loginPhone")}
+                    placeholderTextColor="#aaa"
+                    style={[styles.input, dir.text]}
+                    keyboardType="phone-pad"
+                    value={phone}
+                    onChangeText={setPhone}
+                  />
 
-              <Ionicons name="call-outline" size={22} color={ORANGE} />
-            </View>
+                  <Ionicons name="call-outline" size={22} color={ORANGE} />
+                </View>
 
-            {!!error && <Text style={styles.error}>{error}</Text>}
+                {!!error && <Text style={styles.error}>{error}</Text>}
 
-            <TouchableOpacity
-              style={styles.button}
-              onPress={requestPasswordReset}
-              disabled={busy}
-            >
-              {busy ? (
-                <ActivityIndicator color={ORANGE} />
-              ) : (
-                <Text style={styles.buttonText}>{t("loginSendCode")}</Text>
-              )}
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.button}
+                  onPress={requestPasswordReset}
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <ActivityIndicator color={ORANGE} />
+                  ) : (
+                    <Text style={styles.buttonText}>{t("loginSendCode")}</Text>
+                  )}
+                </TouchableOpacity>
 
-            <TouchableOpacity onPress={backToForm}>
-              <Text style={styles.switchText}>{t("loginBackToLogin")}</Text>
-            </TouchableOpacity>
-          </>
-        )}
+                <TouchableOpacity onPress={backToForm}>
+                  <Text style={styles.switchText}>{t("loginBackToLogin")}</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
-        {/* =====================================================
+            {/* =====================================================
             FORGOT PASSWORD — CODE + NEW PASSWORD
         ====================================================== */}
 
-        {step === "forgot-reset" && (
-          <>
-            <View style={[styles.inputBox, dir.row]}>
-              <TextInput
-                placeholder={t("loginCode")}
-                placeholderTextColor="#aaa"
-                style={[styles.input, dir.text]}
-                keyboardType="number-pad"
-                maxLength={6}
-                value={code}
-                onChangeText={setCode}
-              />
+            {step === "forgot-reset" && (
+              <>
+                <View style={[styles.inputBox, dir.row]}>
+                  <TextInput
+                    placeholder={t("loginCode")}
+                    placeholderTextColor="#aaa"
+                    style={[styles.input, dir.text]}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    value={code}
+                    onChangeText={setCode}
+                  />
 
-              <Ionicons name="key-outline" size={22} color={ORANGE} />
-            </View>
+                  <Ionicons name="key-outline" size={22} color={ORANGE} />
+                </View>
 
-            <View style={[styles.inputBox, dir.row]}>
-              <TextInput
-                placeholder={t("loginNewPassword")}
-                placeholderTextColor="#aaa"
-                style={[styles.input, dir.text]}
-                secureTextEntry={!showPassword}
-                value={newPassword}
-                onChangeText={setNewPassword}
-              />
+                <View style={[styles.inputBox, dir.row]}>
+                  <TextInput
+                    placeholder={t("loginNewPassword")}
+                    placeholderTextColor="#aaa"
+                    style={[styles.input, dir.text]}
+                    secureTextEntry={!showPassword}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                  />
 
-              <PasswordToggle visible={showPassword} onToggle={() => setShowPassword((v) => !v)} />
-            </View>
+                  <PasswordToggle
+                    visible={showPassword}
+                    onToggle={() => setShowPassword((v) => !v)}
+                  />
+                </View>
 
-            {!!error && <Text style={styles.error}>{error}</Text>}
+                {!!error && <Text style={styles.error}>{error}</Text>}
 
-            <TouchableOpacity
-              style={styles.button}
-              onPress={confirmPasswordReset}
-              disabled={busy}
-            >
-              {busy ? (
-                <ActivityIndicator color={ORANGE} />
-              ) : (
-                <Text style={styles.buttonText}>{t("loginResetPassword")}</Text>
-              )}
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.button}
+                  onPress={confirmPasswordReset}
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <ActivityIndicator color={ORANGE} />
+                  ) : (
+                    <Text style={styles.buttonText}>
+                      {t("loginResetPassword")}
+                    </Text>
+                  )}
+                </TouchableOpacity>
 
-            <TouchableOpacity onPress={backToForm}>
-              <Text style={styles.switchText}>{t("loginBackToLogin")}</Text>
-            </TouchableOpacity>
-          </>
-        )}
+                <TouchableOpacity onPress={backToForm}>
+                  <Text style={styles.switchText}>{t("loginBackToLogin")}</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
-        {/* =====================================================
+            {/* =====================================================
             OTP
         ====================================================== */}
 
-        {step === "otp" && (
-          <>
-            <View style={[styles.inputBox, dir.row]}>
-              <TextInput
-                placeholder={t("loginCode")}
-                placeholderTextColor="#aaa"
-                style={[styles.input, dir.text]}
-                keyboardType="number-pad"
-                maxLength={6}
-                value={code}
-                onChangeText={setCode}
-              />
+            {step === "otp" && (
+              <>
+                <View style={[styles.inputBox, dir.row]}>
+                  <TextInput
+                    placeholder={t("loginCode")}
+                    placeholderTextColor="#aaa"
+                    style={[styles.input, dir.text]}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    value={code}
+                    onChangeText={setCode}
+                  />
 
-              <Ionicons name="key-outline" size={22} color={ORANGE} />
-            </View>
+                  <Ionicons name="key-outline" size={22} color={ORANGE} />
+                </View>
 
-            {!!error && <Text style={styles.error}>{error}</Text>}
+                {!!error && <Text style={styles.error}>{error}</Text>}
 
-            <TouchableOpacity
-              style={styles.button}
-              onPress={verify}
-              disabled={busy}
-            >
-              {busy ? (
-                <ActivityIndicator color={ORANGE} />
-              ) : (
-                <Text style={styles.buttonText}>{t("loginVerify")}</Text>
-              )}
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.button}
+                  onPress={verify}
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <ActivityIndicator color={ORANGE} />
+                  ) : (
+                    <Text style={styles.buttonText}>{t("loginVerify")}</Text>
+                  )}
+                </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => setStep("form")}>
-              <Text style={styles.switchText}>{t("loginChangePhone")}</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
+                <TouchableOpacity onPress={() => setStep("form")}>
+                  <Text style={styles.switchText}>{t("loginChangePhone")}</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
 
-      {/* =====================================================
+          {/* =====================================================
           BOTTOM DECORATIONS
       ====================================================== */}
 
-      {router.canGoBack() && (
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.back}>{t("loginBack")}</Text>
-        </TouchableOpacity>
-      )}
-      </View>
+          {router.canGoBack() && (
+            <TouchableOpacity onPress={() => router.back()}>
+              <Text style={styles.back}>{t("loginBack")}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         <MadeBy />
       </ScrollView>
-      <PolicySheet policyId={openPolicy} onClose={() => setOpenPolicy(null)} />
     </View>
   );
 }
@@ -762,57 +804,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  buttonDisabled: {
-    opacity: 0.35,
-  },
-
-  /* =====================================================
-     CONSENTS
-  ====================================================== */
-
-  consents: {
-    gap: 14,
-    marginTop: -6,
-    marginBottom: 6,
-  },
-
-  checkRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-  },
-
-  checkBox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: ORANGE,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 1,
-  },
-
-  checkBoxOn: {
-    backgroundColor: ORANGE,
-  },
-
-  checkLabel: {
-    flex: 1,
-  },
-
-  checkText: {
-    color: "#17201F",
-    fontSize: 13,
-    lineHeight: 21,
-  },
-
-  policyLink: {
-    color: TEAL,
-    fontWeight: "800",
-    textDecorationLine: "underline",
-  },
-
   /* =====================================================
      BOTTOM DECOR
   ====================================================== */
@@ -827,6 +818,42 @@ const styles = StyleSheet.create({
      TEXT
   ====================================================== */
 
+  consentBox: {
+    marginTop: 4,
+    marginBottom: 6,
+    gap: 12,
+  },
+  consentRow: {
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: ORANGE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  checkboxOn: {
+    backgroundColor: ORANGE,
+  },
+  consentText: {
+    flex: 1,
+    color: "#3D4644",
+    fontSize: 13,
+    lineHeight: 21,
+  },
+  consentLink: {
+    color: TEAL,
+    fontWeight: "800",
+    textDecorationLine: "underline",
+  },
+  buttonOff: {
+    opacity: 0.45,
+  },
   switchText: {
     color: ORANGE,
     textAlign: "center",

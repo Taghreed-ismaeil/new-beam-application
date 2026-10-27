@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -19,7 +19,9 @@ import MediaComments from "@/components/MediaComments";
 import MediaPostCard from "@/components/MediaPostCard";
 import MediaViewer from "@/components/MediaViewer";
 import { useAppLang } from "@/lib/app-lang";
+import { apiRequestCached, refreshCached } from "@/lib/api-client";
 import { fetchMediaPage } from "@/lib/media-api";
+import { MEDIA_FIRST_PAGE } from "@/lib/preload";
 import { enterDown, enterFromLeft, enterFromRight } from "@/lib/motion";
 import { Text, AnimatedText } from "@/lib/arabic-font";
 
@@ -55,8 +57,21 @@ export default function MediaHub() {
   const [commentsFor, setCommentsFor] = useState(null);
   const loadingRef = useRef(false);
 
+  // Paint the last saved first page right away (warmed at launch), then the
+  // fresh one replaces it — no empty screen while the server answers.
+  useEffect(() => {
+    apiRequestCached(
+      MEDIA_FIRST_PAGE,
+      (d) => {
+        setPosts((p) => p ?? d.posts ?? []);
+        setCursor((c) => c ?? d.nextCursor ?? null);
+      },
+      () => {},
+    );
+  }, []);
+
   const loadFirst = useCallback(() => {
-    return fetchMediaPage("all")
+    return refreshCached(MEDIA_FIRST_PAGE)
       .then((d) => {
         setPosts(d.posts ?? []);
         setCursor(d.nextCursor ?? null);

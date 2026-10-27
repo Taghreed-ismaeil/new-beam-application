@@ -1,9 +1,20 @@
-import { apiRequestCached, imageUrl, isUsableImagePath } from "@/lib/api-client";
-import { allMenuItems } from "@/lib/menu-sections";
+import {
+  OfferCountdownChip,
+  TimedOfferBanner,
+} from "@/components/OfferCountdown";
+import {
+  apiRequestCached,
+  imageUrl,
+  isUsableImagePath,
+} from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
+import { RNAnimatedText, Text } from "@/lib/arabic-font";
+import { allMenuItems } from "@/lib/menu-sections";
+import { discountedPrice, refreshOffers, useOffers } from "@/lib/offers";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -12,8 +23,12 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { Image } from "expo-image";
-import { Text, RNAnimatedText } from "@/lib/arabic-font";
+import Reanimated, {
+  runOnJS,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
 
 const FALLBACK_IMAGE = require("../../assets/img/menu-1.jpg");
 
@@ -41,7 +56,18 @@ const GRADIENT_LOCATIONS = [0, 0.35, 0.7, 1];
 export default function Menu({ refreshKey = 0 }) {
   const { t, pick, dir } = useAppLang();
   const [deals, setDeals] = useState([]);
-  const [rotation, setRotation] = useState(0);
+  // The ring turns on the animation thread: the per-frame angle lives in a shared
+  // value, and React only re-renders when a different item reaches the front.
+  // (Setting React state every frame re-rendered all of Home 60 times a second,
+  // which made the whole app feel stuck on phones.)
+  const rotation = useSharedValue(0);
+  const [frontStep, setFrontStep] = useState(0);
+  useAnimatedReaction(
+    () => Math.round(rotation.get()),
+    (step, prev) => {
+      if (step !== prev) runOnJS(setFrontStep)(step);
+    },
+  );
 
   /* =====================================================
      FOOD ROTATION REFS
@@ -62,7 +88,9 @@ export default function Menu({ refreshKey = 0 }) {
   // covers gets a slot, newest offer first. With no live offers it falls back
   // to the loyalty items so the section is never empty.
   const [menuItems, setMenuItems] = useState(null);
-  const [offers, setOffers] = useState([]);
+  // shared live offers (lib/offers) — a timed offer's countdown starts the first
+  // time they are read for this customer, i.e. when they open the app
+  const offers = useOffers();
 
   // refreshKey bumps on Home's pull-to-refresh
   useEffect(() => {
@@ -76,10 +104,7 @@ export default function Menu({ refreshKey = 0 }) {
   // admin panel shows up on its own — even on another phone.
   useFocusEffect(
     useCallback(() => {
-      const refresh = () =>
-        apiRequestCached("/api/offers", (data) => setOffers(data.offers ?? []), () => {}, {
-          revalidate: true,
-        });
+      const refresh = () => refreshOffers();
       refresh();
       const timer = setInterval(refresh, OFFERS_POLL_MS);
       return () => clearInterval(timer);
@@ -91,7 +116,15 @@ export default function Menu({ refreshKey = 0 }) {
     const byId = new Map(menuItems.map((item) => [item.id, item]));
     const seen = new Set();
     const fromOffers = [];
-    for (const offer of [...offers].sort((a, b) => b.id - a.id)) {
+    // timed offers first (soonest to end first), then the newest normal offers
+    const ordered = [...offers].sort(
+      (a, b) =>
+        Number(!!b.expiresAt) - Number(!!a.expiresAt) ||
+        (a.expiresAt && b.expiresAt
+          ? new Date(a.expiresAt) - new Date(b.expiresAt)
+          : b.id - a.id),
+    );
+    for (const offer of ordered) {
       for (const id of offer.menuItemIds ?? []) {
         const item = byId.get(id);
         if (!item || seen.has(id) || item.isAvailable === false) continue;
@@ -151,7 +184,7 @@ export default function Menu({ refreshKey = 0 }) {
             rotationRef.current += AUTO_SPIN_SPEED * dt;
           }
 
-          setRotation(rotationRef.current);
+          rotation.set(rotationRef.current);
         }
 
         rafRef.current = requestAnimationFrame(tick);
@@ -164,7 +197,7 @@ export default function Menu({ refreshKey = 0 }) {
           cancelAnimationFrame(rafRef.current);
         }
       };
-    }, []),
+    }, [rotation]),
   );
 
   /* =====================================================
@@ -190,7 +223,7 @@ export default function Menu({ refreshKey = 0 }) {
         rotationRef.current =
           dragStartRotation.current - gesture.dx / DRAG_SENSITIVITY;
 
-        setRotation(rotationRef.current);
+        rotation.set(rotationRef.current);
       },
 
       onPanResponderRelease: (_, gesture) => {
@@ -213,7 +246,7 @@ export default function Menu({ refreshKey = 0 }) {
 
   // round, not trunc: an item sits dead-center when rotation equals its index,
   // so trunc picked the circle half a step to the left of center.
-  const frontIndex = deals.length ? ((Math.round(rotation) % n) + n) % n : 0;
+  const frontIndex = deals.length ? ((frontStep % n) + n) % n : 0;
   const activeItem = deals[frontIndex];
 
   /* =====================================================
@@ -251,6 +284,18 @@ export default function Menu({ refreshKey = 0 }) {
      RENDER
   ====================================================== */
 
+  // Offers that are this customer's for a limited time get a big countdown card.
+  const byId = new Map((menuItems ?? []).map((item) => [item.id, item]));
+  const timedOffers = offers
+    .filter((o) => o.expiresAt)
+    .sort((a, b) => new Date(a.expiresAt) - new Date(b.expiresAt))
+    .slice(0, 2);
+
+  const activePrice = Number(activeItem?.price ?? 0);
+  const activeOfferPrice = activeItem?.offer?.appliesAtCheckout
+    ? discountedPrice(activePrice, activeItem.offer)
+    : null;
+
   return (
     <View style={styles.container}>
       {/* Background gradient as its own layer — the native gradient view clips
@@ -264,6 +309,27 @@ export default function Menu({ refreshKey = 0 }) {
 
       {/* SEE TODAY'S BEST DEAL lives in the Hero now (bottom of the video),
           so it's never hidden behind the video on iOS. */}
+
+      {timedOffers.map((offer) => {
+        const firstItem = (offer.menuItemIds ?? [])
+          .map((id) => byId.get(id))
+          .find(Boolean);
+        return (
+          <TimedOfferBanner
+            key={offer.id}
+            offer={offer}
+            itemName={firstItem ? pick(firstItem) : null}
+            onPress={() =>
+              firstItem
+                ? router.push({
+                    pathname: "/item/[id]",
+                    params: { id: String(firstItem.id) },
+                  })
+                : router.push("/menu")
+            }
+          />
+        );
+      })}
 
       {/* =================================================
           FOOD CAROUSEL
@@ -303,6 +369,9 @@ export default function Menu({ refreshKey = 0 }) {
                   <Text style={[styles.offerTitle, dir.text]} numberOfLines={1}>
                     {activeItem.offer.title}
                   </Text>
+                  {!!activeItem.offer.expiresAt && (
+                    <OfferCountdownChip endsAt={activeItem.offer.expiresAt} />
+                  )}
                 </View>
               ) : activeItem.rewardValue ? (
                 <Text style={[styles.dealReward, dir.text]} numberOfLines={1}>
@@ -318,7 +387,7 @@ export default function Menu({ refreshKey = 0 }) {
               <RNAnimatedText
                 style={[styles.dealPriceText, { opacity: dealOpacity }]}
               >
-                {Number(activeItem.price).toFixed(2)} {t("jd")}
+                {(activeOfferPrice ?? activePrice).toFixed(2)} {t("jd")}
               </RNAnimatedText>
             </View>
           </View>
@@ -332,39 +401,32 @@ export default function Menu({ refreshKey = 0 }) {
    FOOD RING ITEM
 ========================================================= */
 
-function RingItem({ item, index, n, rotation, activeIndex }) {
-  const angle = ((index - rotation) / n) * Math.PI * 2;
-
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-
-  const depth = (cos + 1) / 2;
-
-  const scale = 0.56 + depth * (1.15 - 0.56);
-
+// memo: an item only re-renders when it becomes / stops being the front one —
+// its position on the ring is computed on the animation thread.
+const RingItem = memo(function RingItem({
+  item,
+  index,
+  n,
+  rotation,
+  activeIndex,
+}) {
   const isActive = index === activeIndex;
 
+  const slotStyle = useAnimatedStyle(() => {
+    const angle = ((index - rotation.get()) / n) * Math.PI * 2;
+    const cos = Math.cos(angle);
+    const depth = (cos + 1) / 2;
+    return {
+      transform: [
+        { translateX: Math.sin(angle) * RADIUS_X },
+        { scale: 0.56 + depth * (1.15 - 0.56) },
+      ],
+      zIndex: Math.round(cos * 100),
+    };
+  });
+
   return (
-    <View
-      style={[
-        styles.slot,
-
-        {
-          transform: [
-            {
-              translateX: sin * RADIUS_X,
-            },
-
-            {
-              scale,
-            },
-          ],
-
-          zIndex: Math.round(cos * 100),
-        },
-      ]}
-      pointerEvents="none"
-    >
+    <Reanimated.View style={[styles.slot, slotStyle]} pointerEvents="none">
       <View style={[styles.card, isActive && styles.cardActive]}>
         <Image
           source={
@@ -379,9 +441,9 @@ function RingItem({ item, index, n, rotation, activeIndex }) {
           style={styles.image}
         />
       </View>
-    </View>
+    </Reanimated.View>
   );
-}
+});
 
 /* =========================================================
    STYLES
