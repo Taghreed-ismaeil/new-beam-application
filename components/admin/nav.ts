@@ -21,6 +21,7 @@ export const SECTIONS: AdminSection[] = [
   { key: "offers", href: "/admin/offers", resource: "offers", icon: "pricetag-outline", title: "navOffersTitle", text: "navOffersText", group: "catalog" },
   { key: "rewards", href: "/admin/rewards", resource: "rewards", icon: "gift-outline", title: "navRewardsTitle", text: "navRewardsText", group: "catalog" },
   { key: "media", href: "/admin/media", resource: "media", icon: "images-outline", title: "navMediaTitle", text: "navMediaText", group: "catalog" },
+  { key: "feedback", href: "/admin/feedback", resource: "feedback", icon: "chatbubbles-outline", title: "navFeedbackTitle", text: "navFeedbackText", group: "people" },
   { key: "inventory", href: "/admin/inventory", resource: "inventory", icon: "cube-outline", title: "navInventoryTitle", text: "navInventoryText", group: "stock" },
   { key: "suppliers", href: "/admin/suppliers", resource: "suppliers", icon: "briefcase-outline", title: "navSuppliersTitle", text: "navSuppliersText", group: "stock" },
   { key: "expenses", href: "/admin/expenses", resource: "expenses", icon: "wallet-outline", title: "navExpensesTitle", text: "navExpensesText", group: "stock" },

@@ -374,6 +374,12 @@ export default function LoyaltyScanScreen() {
           method: "POST",
         });
 
+        // this scan won a spin instead of a gift piece — straight to the wheel
+        if (res?.wheel) {
+          router.replace("/loyalty/wheel");
+          return;
+        }
+
         showScanResult(res);
       } catch {
         setResult({
@@ -585,9 +591,7 @@ export default function LoyaltyScanScreen() {
                   <TileImage
                     itemId={result.item.id}
                     grayImage={result.item.grayImage}
-                    layers={result.item.layers}
                     revealedCount={result.revealedCount ?? 0}
-                    updatedAt={result.item.updatedAt}
                     size={280}
                   />
                 </View>

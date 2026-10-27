@@ -56,6 +56,17 @@ async function buildOrderPayload(items: z.infer<typeof orderItemSchema>[]) {
   return { lines, subtotal };
 }
 
+// What a customer may still change, by status: everything until the kitchen
+// starts; once it's being prepared they can only add items; after that, nothing.
+const FULL_EDIT_STATUSES = ['pending', 'accepted'];
+const ADD_ONLY_STATUSES = ['preparing'];
+function customerCan(status: string) {
+  const edit = FULL_EDIT_STATUSES.includes(status);
+  return { edit, add: edit || ADD_ONLY_STATUSES.includes(status) };
+}
+// prefix on lines added after the order was placed, so the kitchen spots them
+const ADDED_NOTE = 'إضافة على الطلب';
+
 // ---------- Customer ----------
 export const ordersRouter = Router();
 ordersRouter.use(requireUser);
@@ -112,9 +123,9 @@ ordersRouter.post('/', async (req, res) => {
   res.json({ order });
 });
 
-// Customer edits their own order (from the WhatsApp receipt's "edit" link → the
-// app's cart). Only while it's still pending — once the restaurant accepts it the
-// kitchen may have started. Same body as placing an order; items are replaced.
+// Customer edits their own order (from the cart's "edit" button or the WhatsApp
+// receipt link). Allowed until the kitchen starts preparing it (pending/accepted).
+// Same body as placing an order; items are replaced.
 ordersRouter.put('/:id', async (req, res) => {
   const id = Number(req.params.id);
   const userId = (req.auth as any).userId;
@@ -124,7 +135,7 @@ ordersRouter.put('/:id', async (req, res) => {
 
   const existing = await prisma.order.findUnique({ where: { id } });
   if (!existing || existing.userId !== userId) return res.status(404).json({ error: 'not_found' });
-  if (existing.status !== 'pending') return res.status(409).json({ error: 'not_editable', status: existing.status });
+  if (!customerCan(existing.status).edit) return res.status(409).json({ error: 'not_editable', status: existing.status });
 
   if (data.orderType === 'delivery' && !data.deliveryAddress) {
     return res.status(400).json({ error: 'delivery_address_required' });
@@ -143,9 +154,11 @@ ordersRouter.put('/:id', async (req, res) => {
   const order = await prisma.$transaction(async (tx) => {
     // re-check inside the transaction so a staff "accept" can't slip in between
     const fresh = await tx.order.findUnique({ where: { id }, select: { status: true } });
-    if (fresh?.status !== 'pending') return null;
+    if (!fresh || !customerCan(fresh.status).edit) return null;
+    // stock follows the new lines: give back what the old ones took, take the new ones
+    await restoreStockForOrder(tx, id);
     await tx.orderItem.deleteMany({ where: { orderId: id } });
-    return tx.order.update({
+    const updated = await tx.order.update({
       where: { id },
       data: {
         orderType: data.orderType,
@@ -162,12 +175,62 @@ ordersRouter.put('/:id', async (req, res) => {
       },
       include: { items: true },
     });
+    await deductStockForOrder(tx, id);
+    return updated;
   });
   if (!order) return res.status(409).json({ error: 'not_editable' });
 
   emitOrderEvent('order:updated', order);
   queueOrderReceipt(order.id, 'updated');
-  res.json({ order });
+  res.json({ order: { ...order, can: customerCan(order.status) } });
+});
+
+const addItemsSchema = z.object({ items: z.array(orderItemSchema).min(1) });
+
+// Customer adds items to their order — also while it's being prepared, when a
+// full edit isn't possible any more. Existing lines are never touched; the new
+// ones are appended (marked for the kitchen) and the total is recalculated.
+ordersRouter.post('/:id/items', async (req, res) => {
+  const id = Number(req.params.id);
+  const userId = (req.auth as any).userId;
+  const parsed = addItemsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_input', details: parsed.error.flatten() });
+
+  const existing = await prisma.order.findUnique({ where: { id } });
+  if (!existing || existing.userId !== userId) return res.status(404).json({ error: 'not_found' });
+  if (!customerCan(existing.status).add) return res.status(409).json({ error: 'not_addable', status: existing.status });
+
+  let payload;
+  try {
+    payload = await buildOrderPayload(parsed.data.items);
+  } catch (e: any) {
+    return res.status(400).json({ error: e.message, item: e.item });
+  }
+  const lines = payload.lines.map((l) => ({ ...l, notes: l.notes ? `${ADDED_NOTE} — ${l.notes}` : ADDED_NOTE }));
+
+  const order = await prisma.$transaction(async (tx) => {
+    const fresh = await tx.order.findUnique({ where: { id }, select: { status: true, subtotal: true, discountTotal: true } });
+    if (!fresh || !customerCan(fresh.status).add) return null;
+    const subtotal = Number(fresh.subtotal) + payload.subtotal;
+    // re-count stock over all lines (deducting is per order, so settle the old amount first)
+    await restoreStockForOrder(tx, id);
+    const updated = await tx.order.update({
+      where: { id },
+      data: {
+        subtotal,
+        total: subtotal - Number(fresh.discountTotal),
+        items: { create: lines },
+      },
+      include: { items: true },
+    });
+    await deductStockForOrder(tx, id);
+    return updated;
+  });
+  if (!order) return res.status(409).json({ error: 'not_addable' });
+
+  emitOrderEvent('order:updated', order);
+  queueOrderReceipt(order.id, 'updated');
+  res.json({ order: { ...order, can: customerCan(order.status) } });
 });
 
 ordersRouter.post('/:id/payment-proof', upload.single('proof'), async (req, res) => {
@@ -191,7 +254,7 @@ ordersRouter.get('/mine', async (req, res) => {
     include: { items: true },
     orderBy: { createdAt: 'desc' },
   });
-  res.json({ orders });
+  res.json({ orders: orders.map((o) => ({ ...o, can: customerCan(o.status) })) });
 });
 
 ordersRouter.get('/:id', async (req, res) => {
@@ -201,7 +264,7 @@ ordersRouter.get('/:id', async (req, res) => {
     include: { items: true, statusLogs: true, table: true, driver: { select: { id: true, name: true, phone: true } } },
   });
   if (!order || order.userId !== userId) return res.status(404).json({ error: 'not_found' });
-  res.json({ order });
+  res.json({ order: { ...order, can: customerCan(order.status) } });
 });
 
 // ---------- Staff ----------

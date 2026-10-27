@@ -31,16 +31,19 @@ const LOCAL_IMAGES = [
 
 let started = false;
 
+// First page of the Media feed — cached so the page opens with photos already there.
+export const MEDIA_FIRST_PAGE = "/api/media?source=all";
+
 // Loyalty progress + vouchers are per account — cache them under the user id.
 export const loyaltyProgressKey = (userId: number) => `/api/loyalty/progress#${userId}`;
 export const loyaltyVouchersKey = (userId: number) => `/api/loyalty/vouchers#${userId}`;
 
-/** Every image a gift tile shows: the grey base plus each revealed colour piece. */
+/** Every image a gift tile shows: the grey base, plus the colour photo once a piece is revealed. */
 export function loyaltyTileUrls(item: any): string[] {
-  const version = item.updatedAt ? `?v=${item.updatedAt}` : "";
-  const urls = item.grayImage ? [imageUrl(item.grayImage)] : [];
-  for (let i = 0; i < (item.revealedCount ?? 0); i++) {
-    urls.push(imageUrl(`/images/${item.id}/layer_${i}.png${version}`));
+  if (!item.grayImage) return [];
+  const urls = [imageUrl(item.grayImage)];
+  if ((item.revealedCount ?? 0) > 0 || item.completed) {
+    urls.push(imageUrl(item.grayImage.replace("gray.png", "color.png")));
   }
   return urls;
 }
@@ -107,6 +110,21 @@ export function preloadCustomerContent() {
           urls.push(url);
         }
       }
+      if (urls.length) Image.prefetch(urls, "memory-disk").catch(() => {});
+    },
+    () => {},
+  );
+
+  // Footer, Contact and checkout all read the restaurant's details.
+  apiRequestCached("/api/restaurant", () => {}, () => {});
+
+  apiRequestCached(
+    MEDIA_FIRST_PAGE,
+    (data: any) => {
+      const urls = (data?.posts ?? [])
+        .map((p: any) => imageUrl(p.imageUrl))
+        .filter((u: string) => u && !prefetched.has(u));
+      urls.forEach((u: string) => prefetched.add(u));
       if (urls.length) Image.prefetch(urls, "memory-disk").catch(() => {});
     },
     () => {},

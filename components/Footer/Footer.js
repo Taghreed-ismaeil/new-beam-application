@@ -1,16 +1,17 @@
-import { apiRequest } from "@/lib/api-client";
+import { apiRequestCached } from "@/lib/api-client";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
+  Linking,
   StyleSheet,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
-import { Image } from "expo-image";
 
 const FADE_STEPS = 24;
 
@@ -31,9 +32,19 @@ export function getFooterFadeHeight(width) {
 import { useAppLang } from "@/lib/app-lang";
 import { Text } from "@/lib/arabic-font";
 
+// Beam's Instagram — used until a link is saved in the restaurant settings (socialLinks.instagram).
+const INSTAGRAM_URL = "https://www.instagram.com/";
+
+// Same pin the Account page opens (Beam Shawerma, Al Abdali).
+const MAPS_URL =
+  "https://www.google.com/maps/search/?api=1&query=" +
+  encodeURIComponent("Beam Shawerma, Al Abdali, Amman, Jordan");
+
+const open = (url) => Linking.openURL(url).catch(() => {});
+
 const LOGO = require("@/assets/img/remove_beam_logoo.jpg");
 
-export default function Footer() {
+export default function Footer({ refreshKey = 0 }) {
   const [restaurant, setRestaurant] = useState(null);
 
   const { width } = useWindowDimensions();
@@ -86,12 +97,14 @@ export default function Footer() {
   }, [moveDistance, translateX]);
 
   useEffect(() => {
-    apiRequest("/api/restaurant")
-      .then((data) => {
-        setRestaurant(data.restaurant);
-      })
-      .catch(() => {});
-  }, []);
+    // cached: paints instantly from the last visit; pull-to-refresh (refreshKey) forces a refetch
+    apiRequestCached(
+      "/api/restaurant",
+      (data) => setRestaurant(data.restaurant),
+      () => {},
+      { revalidate: refreshKey > 0 },
+    );
+  }, [refreshKey]);
 
   const BeemLogo = () => {
     return (
@@ -164,7 +177,14 @@ export default function Footer() {
         ===================================================== */}
 
         <View style={[styles.contactRow, dir.row]}>
-          <View style={[styles.contactItem, dir.row]}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            disabled={!restaurant?.phone}
+            onPress={() =>
+              open(`tel:${restaurant.phone.replace(/[^\d+]/g, "")}`)
+            }
+            style={[styles.contactItem, dir.row]}
+          >
             <Ionicons name="call-outline" size={iconSize} color="#FC4A14" />
 
             <Text
@@ -178,9 +198,19 @@ export default function Footer() {
             >
               {restaurant?.phone ?? "+962 7X XXX XXXX"}
             </Text>
-          </View>
+          </TouchableOpacity>
 
-          <View style={[styles.contactItem, dir.row]}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() =>
+              open(
+                restaurant?.lat != null && restaurant?.lng != null
+                  ? `https://www.google.com/maps/search/?api=1&query=${restaurant.lat},${restaurant.lng}`
+                  : MAPS_URL,
+              )
+            }
+            style={[styles.contactItem, dir.row]}
+          >
             <Ionicons name="location-outline" size={iconSize} color="#FC4A14" />
 
             <Text
@@ -194,14 +224,20 @@ export default function Footer() {
             >
               {restaurant?.address ?? t("footerAddress")}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* =====================================================
             INSTAGRAM
         ===================================================== */}
 
-        <TouchableOpacity activeOpacity={0.7} style={[styles.social, dir.row]}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() =>
+            open(restaurant?.socialLinks?.instagram || INSTAGRAM_URL)
+          }
+          style={[styles.social, dir.row]}
+        >
           <Ionicons name="logo-instagram" size={iconSize} color="#FC4A14" />
 
           <Text

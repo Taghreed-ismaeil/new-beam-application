@@ -1,5 +1,5 @@
-import { Ionicons } from "@expo/vector-icons";
 import { fs } from "@/lib/admin-font";
+import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Image,
@@ -26,11 +26,17 @@ import {
   Pill,
   ToggleRow,
 } from "@/components/admin/ui";
-import { createOffer, deleteOffer, fetchAdminMenu, fetchOffers, updateOffer } from "@/lib/admin-api";
-import { imageUrl } from "@/lib/api-client";
 import { useStaff } from "@/context/StaffContext";
-import { useDirection, useI18n } from "@/lib/i18n";
+import {
+  createOffer,
+  deleteOffer,
+  fetchAdminMenu,
+  fetchOffers,
+  updateOffer,
+} from "@/lib/admin-api";
+import { imageUrl } from "@/lib/api-client";
 import { Text } from "@/lib/arabic-font";
+import { useDirection, useI18n } from "@/lib/i18n";
 
 // The real backend (backend/src/routes/offers.ts) stores a single `title`
 // (no i18n split), `discountType`/`discountValue` instead of kind/value, and
@@ -46,11 +52,23 @@ const EMPTY_OFFER = {
   menuItemIds: [],
   startsAt: "",
   endsAt: "",
+  // minutes each customer gets from when they first see it; "" = a normal offer
+  durationMinutes: "",
   isActive: true,
 };
 
-const STATE_TONE = { live: "teal", scheduled: "orange", expired: "gray", off: "gray" };
-const STATE_COLOR = { live: C.teal, scheduled: C.orange, expired: C.muted, off: C.muted };
+const STATE_TONE = {
+  live: "teal",
+  scheduled: "orange",
+  expired: "gray",
+  off: "gray",
+};
+const STATE_COLOR = {
+  live: C.teal,
+  scheduled: C.orange,
+  expired: C.muted,
+  off: C.muted,
+};
 // Live offers are the ones a manager actually needs to see right now — everything
 // else (upcoming, expired, switched off) matters progressively less at a glance.
 const STATE_ORDER = { live: 0, scheduled: 1, off: 2, expired: 3 };
@@ -60,7 +78,8 @@ const KIND_ICON = { percentage: "pricetag-outline", fixed: "cash-outline" };
  * expired/off" is purely a client-side read of those three fields. */
 function offerState(offer, now = Date.now()) {
   if (offer.active === false) return "off";
-  if (offer.startsAt && new Date(offer.startsAt).getTime() > now) return "scheduled";
+  if (offer.startsAt && new Date(offer.startsAt).getTime() > now)
+    return "scheduled";
   if (offer.endsAt && new Date(offer.endsAt).getTime() < now) return "expired";
   return "live";
 }
@@ -88,12 +107,19 @@ function normalizeDate(input) {
   const month = Number(m);
   const day = Number(d);
   const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  )
+    return null;
   return `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-const toStartIso = (d) => (normalizeDate(d) ? `${normalizeDate(d)}T00:00:00.000Z` : null);
-const toEndIso = (d) => (normalizeDate(d) ? `${normalizeDate(d)}T23:59:59.999Z` : null);
+const toStartIso = (d) =>
+  normalizeDate(d) ? `${normalizeDate(d)}T00:00:00.000Z` : null;
+const toEndIso = (d) =>
+  normalizeDate(d) ? `${normalizeDate(d)}T23:59:59.999Z` : null;
 const isoToDate = (iso) => (iso ? String(iso).slice(0, 10) : "");
 
 export default function AdminOffers() {
@@ -133,10 +159,14 @@ export default function AdminOffers() {
     const now = Date.now();
     return offers
       .map((o) => ({ ...o, state: offerState(o, now) }))
-      .sort((a, b) => (STATE_ORDER[a.state] ?? 9) - (STATE_ORDER[b.state] ?? 9));
+      .sort(
+        (a, b) => (STATE_ORDER[a.state] ?? 9) - (STATE_ORDER[b.state] ?? 9),
+      );
   }, [offers]);
 
-  const allItems = categories.flatMap((c) => (c.items ?? []).map((i) => ({ ...i, categoryId: c.id })));
+  const allItems = categories.flatMap((c) =>
+    (c.items ?? []).map((i) => ({ ...i, categoryId: c.id })),
+  );
   const patch = (p) => setEditing((e) => (e ? { ...e, ...p } : e));
   const [itemSearch, setItemSearch] = useState("");
 
@@ -161,6 +191,9 @@ export default function AdminOffers() {
       menuItemIds: offer.menuItemIds ?? [],
       startsAt: isoToDate(offer.startsAt),
       endsAt: isoToDate(offer.endsAt),
+      durationMinutes: offer.durationMinutes
+        ? String(offer.durationMinutes)
+        : "",
       isActive: offer.active !== false,
     });
   }
@@ -174,9 +207,13 @@ export default function AdminOffers() {
    * The PUT route compares `body.active` to the *string* 'true' (a multipart-form
    * leftover), so a JS boolean would silently be read as false — send it as text. */
   async function toggleActive(offer, next) {
-    setOffers((list) => list.map((o) => (o.id === offer.id ? { ...o, active: next } : o)));
+    setOffers((list) =>
+      list.map((o) => (o.id === offer.id ? { ...o, active: next } : o)),
+    );
     try {
-      const res = await updateOffer(offer.id, { active: next ? "true" : "false" });
+      const res = await updateOffer(offer.id, {
+        active: next ? "true" : "false",
+      });
       setOffers((list) => list.map((o) => (o.id === offer.id ? res.offer : o)));
     } catch (e) {
       load();
@@ -188,13 +225,19 @@ export default function AdminOffers() {
     if (!editing.title?.trim()) return t("errNameRequired");
     const value = Number(editing.value);
     if (!Number.isFinite(value) || value < 0) return t("errOfferValueInvalid");
-    if (editing.kind === "percent" && (value <= 0 || value > 100)) return t("errOfferPercentRange");
+    if (editing.kind === "percent" && (value <= 0 || value > 100))
+      return t("errOfferPercentRange");
     const start = normalizeDate(editing.startsAt);
     const end = normalizeDate(editing.endsAt);
     if (editing.startsAt && !start) return t("errOfferDateInvalid");
     if (editing.endsAt && !end) return t("errOfferDateInvalid");
     // both are zero-padded YYYY-MM-DD, so plain string order is date order; same day is allowed
     if (start && end && start > end) return t("errOfferDateRange");
+    if (editing.durationMinutes) {
+      const minutes = Number(editing.durationMinutes);
+      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 10080)
+        return t("errOfferDurationInvalid");
+    }
     return null;
   }
 
@@ -215,6 +258,12 @@ export default function AdminOffers() {
       // on update the PUT route treats "" as "clear this date" — so removing a date sticks.
       startsAt: toStartIso(editing.startsAt) ?? "",
       endsAt: toEndIso(editing.endsAt) ?? "",
+      // empty = a normal offer: left out on create, "" clears it on update
+      durationMinutes: editing.durationMinutes
+        ? Number(editing.durationMinutes)
+        : editing.id
+          ? ""
+          : undefined,
       // no-op on create (the route doesn't accept it there) but needed on
       // update, and as a string — see toggleActive's note on why.
       active: editing.isActive !== false ? "true" : "false",
@@ -256,7 +305,9 @@ export default function AdminOffers() {
 
   const describeValue = (o) =>
     o.discountType === "fixed"
-      ? t("offerFixedPrice", { value: `${Number(o.discountValue).toFixed(2)} ${t("currency")}` })
+      ? t("offerFixedPrice", {
+          value: `${Number(o.discountValue).toFixed(2)} ${t("currency")}`,
+        })
       : t("offerPercentOff", { value: o.discountValue });
 
   // menuItemIds only carries ids — the names have to be resolved against the
@@ -266,87 +317,128 @@ export default function AdminOffers() {
       .map((id) => allItems.find((i) => i.id === id))
       .filter(Boolean)
       .map((i) => pick(i));
-    return names.length ? t("offerAppliesToItem", { name: names.join("، ") }) : "";
+    return names.length
+      ? t("offerAppliesToItem", { name: names.join("، ") })
+      : "";
   };
 
   // Dates are stored as UTC day boundaries (see toStartIso/toEndIso), so they must be
   // *displayed* in UTC too — otherwise Amman's +3 offset pushes 23:59:59 UTC on the end date
   // into the small hours of the next day, and the list shows a day later than what was typed.
-  const fmtDate = (iso) => new Date(iso).toLocaleDateString(undefined, { timeZone: "UTC" });
+  const fmtDate = (iso) =>
+    new Date(iso).toLocaleDateString(undefined, { timeZone: "UTC" });
 
   const canAdd = canEdit && editing === null;
 
   return (
     <View style={styles.screen}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <AdminHeader eyebrow={t("admin")} title={t("offersTitle")} subtitle={t("offersSubtitle")} />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+      >
+        <AdminHeader
+          eyebrow={t("admin")}
+          title={t("offersTitle")}
+          subtitle={t("offersSubtitle")}
+        />
 
         <View style={styles.body}>
-          {!canEdit && <Banner value={{ tone: "info", text: t("readOnlyNotice") }} />}
+          {!canEdit && (
+            <Banner value={{ tone: "info", text: t("readOnlyNotice") }} />
+          )}
 
           {error && <ErrorState error={error} onRetry={load} />}
           {!error && offers === null && <Loading text={t("loading")} />}
 
           {!error && offers?.length === 0 && (
-            <Empty icon="pricetag-outline" title={t("noOffers")} text={t("noOffersHint")} />
+            <Empty
+              icon="pricetag-outline"
+              title={t("noOffers")}
+              text={t("noOffersHint")}
+            />
           )}
 
           {!error &&
             sortedOffers?.map((offer) => {
               const stateColor = STATE_COLOR[offer.state] ?? C.muted;
               return (
-              <Pressable
-                key={offer.id}
-                onPress={() => openEdit(offer)}
-                style={({ pressed }) => [
-                  styles.row,
-                  { shadowColor: stateColor },
-                  pressed && styles.pressed,
-                ]}
-              >
-                {/* state accent — reading-start edge (left in LTR, right in
-                    this app's hand-rolled RTL) */}
-                <View
-                  style={[
-                    styles.rowAccent,
-                    dir.isRTL ? { right: 0 } : { left: 0 },
-                    { backgroundColor: stateColor },
+                <Pressable
+                  key={offer.id}
+                  onPress={() => openEdit(offer)}
+                  style={({ pressed }) => [
+                    styles.row,
+                    { shadowColor: stateColor },
+                    pressed && styles.pressed,
                   ]}
-                />
-                <View style={[styles.rowTop, dir.row]}>
-                  <View style={[styles.kindIcon, { backgroundColor: `${stateColor}18` }]}>
-                    <Ionicons
-                      name={KIND_ICON[offer.discountType] ?? "pricetag-outline"}
-                      size={16}
-                      color={stateColor}
+                >
+                  {/* state accent — reading-start edge (left in LTR, right in
+                    this app's hand-rolled RTL) */}
+                  <View
+                    style={[
+                      styles.rowAccent,
+                      dir.isRTL ? { right: 0 } : { left: 0 },
+                      { backgroundColor: stateColor },
+                    ]}
+                  />
+                  <View style={[styles.rowTop, dir.row]}>
+                    <View
+                      style={[
+                        styles.kindIcon,
+                        { backgroundColor: `${stateColor}18` },
+                      ]}
+                    >
+                      <Ionicons
+                        name={
+                          KIND_ICON[offer.discountType] ?? "pricetag-outline"
+                        }
+                        size={16}
+                        color={stateColor}
+                      />
+                    </View>
+                    <Pill
+                      text={t(`offerState_${offer.state}`)}
+                      tone={STATE_TONE[offer.state]}
+                    />
+                    <View style={{ flex: 1 }} />
+                    <Switch
+                      value={offer.active !== false}
+                      disabled={!canEdit}
+                      onValueChange={(v) => toggleActive(offer, v)}
+                      trackColor={{ true: C.teal, false: C.borderStrong }}
+                      thumbColor={C.white}
                     />
                   </View>
-                  <Pill text={t(`offerState_${offer.state}`)} tone={STATE_TONE[offer.state]} />
-                  <View style={{ flex: 1 }} />
-                  <Switch
-                    value={offer.active !== false}
-                    disabled={!canEdit}
-                    onValueChange={(v) => toggleActive(offer, v)}
-                    trackColor={{ true: C.teal, false: C.borderStrong }}
-                    thumbColor={C.white}
-                  />
-                </View>
-                <Text style={[styles.rowName, dir.text]} numberOfLines={1}>
-                  {offer.title}
-                </Text>
-                <Text style={[styles.rowMeta, dir.text]} numberOfLines={1}>
-                  {[describeValue(offer), describeTarget(offer)].filter(Boolean).join(" · ")}
-                </Text>
-                {(offer.startsAt || offer.endsAt) && (
-                  <Text style={[styles.rowDates, dir.text]}>
-                    {offer.startsAt && offer.endsAt
-                      ? t("offerDateRange", { start: fmtDate(offer.startsAt), end: fmtDate(offer.endsAt) })
-                      : offer.startsAt
-                        ? t("offerFromDate", { start: fmtDate(offer.startsAt) })
-                        : t("offerUntilDate", { end: fmtDate(offer.endsAt) })}
+                  <Text style={[styles.rowName, dir.text]} numberOfLines={1}>
+                    {offer.title}
                   </Text>
-                )}
-              </Pressable>
+                  <Text style={[styles.rowMeta, dir.text]} numberOfLines={1}>
+                    {[
+                      describeValue(offer),
+                      describeTarget(offer),
+                      offer.durationMinutes
+                        ? t("offerTimedBadge", {
+                            minutes: offer.durationMinutes,
+                          })
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </Text>
+                  {(offer.startsAt || offer.endsAt) && (
+                    <Text style={[styles.rowDates, dir.text]}>
+                      {offer.startsAt && offer.endsAt
+                        ? t("offerDateRange", {
+                            start: fmtDate(offer.startsAt),
+                            end: fmtDate(offer.endsAt),
+                          })
+                        : offer.startsAt
+                          ? t("offerFromDate", {
+                              start: fmtDate(offer.startsAt),
+                            })
+                          : t("offerUntilDate", { end: fmtDate(offer.endsAt) })}
+                    </Text>
+                  )}
+                </Pressable>
               );
             })}
 
@@ -356,14 +448,29 @@ export default function AdminOffers() {
       </ScrollView>
 
       {canAdd && (
-        <Pressable onPress={openNew} style={({ pressed }) => [styles.fab, dir.row, pressed && styles.pressed]}>
+        <Pressable
+          onPress={openNew}
+          style={({ pressed }) => [
+            styles.fab,
+            dir.row,
+            pressed && styles.pressed,
+          ]}
+        >
           <Ionicons name="add" size={22} color={C.white} />
           <Text style={styles.fabText}>{t("newOffer")}</Text>
         </Pressable>
       )}
 
-      <Modal visible={editing !== null} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
-        <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <Modal
+        visible={editing !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditing(null)}
+      >
+        <KeyboardAvoidingView
+          style={styles.backdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
           <View style={styles.sheet}>
             <View style={styles.sheetGrip} />
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -385,20 +492,32 @@ export default function AdminOffers() {
                 multiline
               />
 
-              <Text style={[styles.fieldLabel, dir.text]}>{t("fieldOfferKind")}</Text>
+              <Text style={[styles.fieldLabel, dir.text]}>
+                {t("fieldOfferKind")}
+              </Text>
               <View style={[styles.chips, dir.row]}>
                 {["percent", "fixed"].map((kind) => {
                   const on = editing?.kind === kind;
                   return (
-                    <Pressable key={kind} onPress={() => patch({ kind })} style={[styles.chip, on && styles.chipOn]}>
-                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{t(`offerKind_${kind}`)}</Text>
+                    <Pressable
+                      key={kind}
+                      onPress={() => patch({ kind })}
+                      style={[styles.chip, on && styles.chipOn]}
+                    >
+                      <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                        {t(`offerKind_${kind}`)}
+                      </Text>
                     </Pressable>
                   );
                 })}
               </View>
 
               <Field
-                label={editing?.kind === "fixed" ? t("fieldFixedValue") : t("fieldPercentValue")}
+                label={
+                  editing?.kind === "fixed"
+                    ? t("fieldFixedValue")
+                    : t("fieldPercentValue")
+                }
                 value={editing?.value ?? ""}
                 onChangeText={(v) => patch({ value: v })}
                 keyboardType="decimal-pad"
@@ -432,6 +551,17 @@ export default function AdminOffers() {
                 autoCapitalize="none"
                 style={{ textAlign: "left", writingDirection: "ltr" }}
               />
+              <Field
+                label={t("fieldOfferDuration")}
+                value={editing?.durationMinutes ?? ""}
+                onChangeText={(v) =>
+                  patch({ durationMinutes: v.replace(/[^0-9]/g, "") })
+                }
+                placeholder="30"
+                keyboardType="number-pad"
+                hint={t("offerDurationHint")}
+                style={{ textAlign: "left", writingDirection: "ltr" }}
+              />
 
               <ToggleRow
                 label={t("offerActiveLabel")}
@@ -443,11 +573,29 @@ export default function AdminOffers() {
               <Banner value={banner} />
 
               <View style={{ gap: 9, marginTop: 6 }}>
-                {canEdit && <Btn title={t("save")} icon="checkmark" onPress={save} loading={saving} />}
-                {canEdit && !!editing?.id && (
-                  <Btn title={t("deleteOffer")} variant="danger" icon="trash-outline" onPress={confirmDelete} disabled={saving} />
+                {canEdit && (
+                  <Btn
+                    title={t("save")}
+                    icon="checkmark"
+                    onPress={save}
+                    loading={saving}
+                  />
                 )}
-                <Btn title={t("cancel")} variant="ghost" onPress={() => setEditing(null)} disabled={saving} />
+                {canEdit && !!editing?.id && (
+                  <Btn
+                    title={t("deleteOffer")}
+                    variant="danger"
+                    icon="trash-outline"
+                    onPress={confirmDelete}
+                    disabled={saving}
+                  />
+                )}
+                <Btn
+                  title={t("cancel")}
+                  variant="ghost"
+                  onPress={() => setEditing(null)}
+                  disabled={saving}
+                />
               </View>
             </ScrollView>
           </View>
@@ -463,22 +611,41 @@ function OfferItemPicker({ categories, selected, onChange, search, onSearch }) {
   const { t, pick } = useI18n();
   const dir = useDirection();
   const q = search.trim().toLowerCase();
-  const matches = (i) => !q || [i.name, i.nameEn].some((n) => n && String(n).toLowerCase().includes(q));
-  const toggle = (id) => onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+  const matches = (i) =>
+    !q ||
+    [i.name, i.nameEn].some((n) => n && String(n).toLowerCase().includes(q));
+  const toggle = (id) =>
+    onChange(
+      selected.includes(id)
+        ? selected.filter((x) => x !== id)
+        : [...selected, id],
+    );
 
   return (
     <View style={pickerStyles.wrap}>
       <View style={[pickerStyles.head, dir.row]}>
-        <Text style={[pickerStyles.label, dir.text]}>{t("fieldOfferItems")}</Text>
+        <Text style={[pickerStyles.label, dir.text]}>
+          {t("fieldOfferItems")}
+        </Text>
         {selected.length > 0 && (
-          <Pressable onPress={() => onChange([])} hitSlop={8} style={[pickerStyles.countChip, dir.row]}>
-            <Text style={pickerStyles.countText}>{t("offerItemsSelected", { count: selected.length })}</Text>
+          <Pressable
+            onPress={() => onChange([])}
+            hitSlop={8}
+            style={[pickerStyles.countChip, dir.row]}
+          >
+            <Text style={pickerStyles.countText}>
+              {t("offerItemsSelected", { count: selected.length })}
+            </Text>
             <Text style={pickerStyles.clearText}>{t("offerItemsClear")}</Text>
           </Pressable>
         )}
       </View>
 
-      <Field value={search} onChangeText={onSearch} placeholder={t("offerItemsSearch")} />
+      <Field
+        value={search}
+        onChangeText={onSearch}
+        placeholder={t("offerItemsSearch")}
+      />
 
       {categories.map((c) => {
         const items = (c.items ?? []).filter(matches);
@@ -489,18 +656,33 @@ function OfferItemPicker({ categories, selected, onChange, search, onSearch }) {
         return (
           <View key={c.id} style={pickerStyles.group}>
             <View style={[pickerStyles.groupHead, dir.row]}>
-              <Text style={[pickerStyles.groupName, dir.text]} numberOfLines={1}>
+              <Text
+                style={[pickerStyles.groupName, dir.text]}
+                numberOfLines={1}
+              >
                 {pick(c)}
-                <Text style={pickerStyles.groupCount}>  {onCount}/{items.length}</Text>
+                <Text style={pickerStyles.groupCount}>
+                  {" "}
+                  {onCount}/{items.length}
+                </Text>
               </Text>
               <Pressable
                 onPress={() =>
-                  onChange(allOn ? selected.filter((id) => !ids.includes(id)) : [...new Set([...selected, ...ids])])
+                  onChange(
+                    allOn
+                      ? selected.filter((id) => !ids.includes(id))
+                      : [...new Set([...selected, ...ids])],
+                  )
                 }
                 hitSlop={6}
                 style={[pickerStyles.allBtn, allOn && pickerStyles.allBtnOn]}
               >
-                <Text style={[pickerStyles.allText, allOn && pickerStyles.allTextOn]}>
+                <Text
+                  style={[
+                    pickerStyles.allText,
+                    allOn && pickerStyles.allTextOn,
+                  ]}
+                >
                   {t(allOn ? "offerItemsNone" : "offerItemsAll")}
                 </Text>
               </Pressable>
@@ -513,21 +695,42 @@ function OfferItemPicker({ categories, selected, onChange, search, onSearch }) {
                   <Pressable
                     key={i.id}
                     onPress={() => toggle(i.id)}
-                    style={({ pressed }) => [pickerStyles.tile, on && pickerStyles.tileOn, pressed && { opacity: 0.8 }]}
+                    style={({ pressed }) => [
+                      pickerStyles.tile,
+                      on && pickerStyles.tileOn,
+                      pressed && { opacity: 0.8 },
+                    ]}
                   >
                     <View style={pickerStyles.thumb}>
                       {i.imageUrl ? (
-                        <Image source={{ uri: imageUrl(i.imageUrl) }} style={pickerStyles.thumbImg} />
+                        <Image
+                          source={{ uri: imageUrl(i.imageUrl) }}
+                          style={pickerStyles.thumbImg}
+                        />
                       ) : (
-                        <Ionicons name="fast-food-outline" size={22} color={C.placeholder} />
+                        <Ionicons
+                          name="fast-food-outline"
+                          size={22}
+                          color={C.placeholder}
+                        />
                       )}
                       {on && (
                         <View style={pickerStyles.check}>
-                          <Ionicons name="checkmark" size={14} color={C.white} />
+                          <Ionicons
+                            name="checkmark"
+                            size={14}
+                            color={C.white}
+                          />
                         </View>
                       )}
                     </View>
-                    <Text style={[pickerStyles.tileName, on && pickerStyles.tileNameOn]} numberOfLines={2}>
+                    <Text
+                      style={[
+                        pickerStyles.tileName,
+                        on && pickerStyles.tileNameOn,
+                      ]}
+                      numberOfLines={2}
+                    >
                       {pick(i)}
                     </Text>
                     <Text style={pickerStyles.tilePrice}>
@@ -546,7 +749,12 @@ function OfferItemPicker({ categories, selected, onChange, search, onSearch }) {
 
 const pickerStyles = StyleSheet.create({
   wrap: { marginBottom: 8 },
-  head: { alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 8 },
+  head: {
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    gap: 8,
+  },
   label: { flex: 1, color: C.text, fontSize: fs(15.5), fontWeight: "600" },
   countChip: {
     alignItems: "center",
@@ -559,7 +767,12 @@ const pickerStyles = StyleSheet.create({
   countText: { color: C.teal, fontSize: fs(14.5), fontWeight: "700" },
   clearText: { color: C.orange, fontSize: fs(14.5), fontWeight: "700" },
   group: { marginBottom: 14 },
-  groupHead: { alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 },
+  groupHead: {
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 8,
+  },
   groupName: { flex: 1, color: C.dark, fontSize: fs(17), fontWeight: "700" },
   groupCount: { color: C.subtle, fontSize: fs(14.5), fontWeight: "600" },
   allBtn: {
@@ -608,7 +821,13 @@ const pickerStyles = StyleSheet.create({
     borderWidth: 2,
     borderColor: C.white,
   },
-  tileName: { color: C.text, fontSize: fs(14.5), fontWeight: "600", textAlign: "center", minHeight: 30 },
+  tileName: {
+    color: C.text,
+    fontSize: fs(14.5),
+    fontWeight: "600",
+    textAlign: "center",
+    minHeight: 30,
+  },
   tileNameOn: { color: C.teal, fontWeight: "700" },
   tilePrice: { color: C.muted, fontSize: fs(14), fontWeight: "600" },
 });
@@ -647,13 +866,34 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   rowTop: { alignItems: "center", gap: 8, marginBottom: 8 },
-  rowName: { color: C.dark, fontSize: fs(16.5), fontWeight: "800", marginBottom: 3 },
+  rowName: {
+    color: C.dark,
+    fontSize: fs(16.5),
+    fontWeight: "800",
+    marginBottom: 3,
+  },
   rowMeta: { color: C.teal, fontSize: fs(15), fontWeight: "800" },
-  rowDates: { color: C.muted, fontSize: fs(14), fontWeight: "700", marginTop: 4 },
+  rowDates: {
+    color: C.muted,
+    fontSize: fs(14),
+    fontWeight: "700",
+    marginTop: 4,
+  },
 
-  fieldLabel: { color: C.muted, fontSize: fs(13.5), fontWeight: "800", letterSpacing: 1, marginBottom: 8 },
+  fieldLabel: {
+    color: C.muted,
+    fontSize: fs(13.5),
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
-  chip: { backgroundColor: C.surfaceAlt, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 9 },
+  chip: {
+    backgroundColor: C.surfaceAlt,
+    borderRadius: 13,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
   chipOn: { backgroundColor: C.teal },
   chipText: { color: C.muted, fontSize: fs(14.5), fontWeight: "800" },
   chipTextOn: { color: C.white },
@@ -675,9 +915,18 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
   },
-  fabText: { color: C.white, fontSize: fs(15), fontWeight: "800", letterSpacing: 0.5 },
+  fabText: {
+    color: C.white,
+    fontSize: fs(15),
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
 
-  backdrop: { flex: 1, backgroundColor: "rgba(23,32,31,0.45)", justifyContent: "flex-end" },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(23,32,31,0.45)",
+    justifyContent: "flex-end",
+  },
   sheet: {
     backgroundColor: C.white,
     borderTopLeftRadius: 28,
@@ -687,8 +936,20 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     maxHeight: "90%",
   },
-  sheetGrip: { width: 40, height: 4, borderRadius: 2, backgroundColor: C.borderStrong, alignSelf: "center", marginBottom: 14 },
-  sheetTitle: { color: C.dark, fontSize: fs(22), fontWeight: "800", marginBottom: 18 },
+  sheetGrip: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.borderStrong,
+    alignSelf: "center",
+    marginBottom: 14,
+  },
+  sheetTitle: {
+    color: C.dark,
+    fontSize: fs(22),
+    fontWeight: "800",
+    marginBottom: 18,
+  },
 
   pressed: { opacity: 0.65, transform: [{ scale: 0.985 }] },
 });

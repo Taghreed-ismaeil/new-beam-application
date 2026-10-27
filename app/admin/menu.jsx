@@ -39,6 +39,7 @@ import {
   updateMenuItem,
 } from "@/lib/admin-api";
 import { imageUrl } from "@/lib/api-client";
+import { findMenuCategory } from "@/lib/menu-category";
 import { useStaff } from "@/context/StaffContext";
 import { useDirection, useI18n } from "@/lib/i18n";
 import { Text, TextInput } from "@/lib/arabic-font";
@@ -163,6 +164,19 @@ export default function AdminMenu() {
    * back open, so every patch is a no-op once the draft is closed.
    */
   const patchItem = (patch) => setEditing((e) => (e ? { ...e, ...patch } : e));
+
+  // The "إضافاتنا" items an item's page can offer; each item keeps its own pick (extraIds)
+  const extrasCategory = useMemo(() => findMenuCategory(categories, "extras"), [categories]);
+  const extraOptions = extrasCategory?.items ?? [];
+  const toggleExtra = (extraId) =>
+    setEditing((e) => {
+      if (!e) return e;
+      const current = e.extraIds ?? [];
+      return {
+        ...e,
+        extraIds: current.includes(extraId) ? current.filter((x) => x !== extraId) : [...current, extraId],
+      };
+    });
   const patchCat = (patch) => setCatDraft((c) => (c ? { ...c, ...patch } : c));
 
   /** A blank or zero amount removes the ingredient from the recipe rather than storing 0. */
@@ -234,6 +248,7 @@ export default function AdminMenu() {
       price,
       imageUrl: editing.imageUrl ?? null,
       isAvailable: editing.isAvailable !== false,
+      extraIds: editing.extraIds ?? [],
       recipe: (editing.recipe ?? [])
         .filter((r) => r.quantity > 0)
         .map((r) => ({ ingredientId: r.ingredientId, quantity: Math.round(r.quantity * 1000) / 1000 })),
@@ -655,6 +670,35 @@ export default function AdminMenu() {
                 onValueChange={(v) => patchItem({ isAvailable: v })}
               />
 
+              {/* ----- which extras its page offers ----- */}
+              {extraOptions.length > 0 && editing?.categoryId !== extrasCategory?.id && (
+                <>
+                  <Text style={[styles.fieldLabel, dir.text]}>{t("itemExtrasTitle")}</Text>
+                  <Text style={[styles.recipeStock, dir.text, { marginBottom: 8 }]}>
+                    {t("itemExtrasHint")}
+                  </Text>
+                  <View style={[styles.chips, dir.row]}>
+                    {extraOptions.map((x) => {
+                      const on = (editing?.extraIds ?? []).includes(x.id);
+                      return (
+                        <Pressable
+                          key={x.id}
+                          onPress={() => toggleExtra(x.id)}
+                          style={[styles.chip, styles.extraChip, dir.row, on && styles.chipOn]}
+                        >
+                          <Ionicons
+                            name={on ? "checkmark-circle" : "ellipse-outline"}
+                            size={16}
+                            color={on ? C.white : C.muted}
+                          />
+                          <Text style={[styles.chipText, on && styles.chipTextOn]}>{pick(x)}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
+
               {/* ----- what it consumes ----- */}
               {ingredients.length > 0 && (
                 <>
@@ -993,6 +1037,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   chipOn: { backgroundColor: C.teal },
+  extraChip: { alignItems: "center", gap: 6 },
   chipText: { color: C.muted, fontSize: fs(14.5), fontWeight: "800" },
   chipTextOn: { color: C.white },
 

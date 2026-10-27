@@ -1,5 +1,5 @@
-import { Ionicons } from "@expo/vector-icons";
 import { fs } from "@/lib/admin-font";
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -37,17 +37,15 @@ import {
   fetchLoyaltyItems,
   fetchLoyaltyStats,
   fetchScans,
-  fetchSettings,
   fetchVouchers,
   redeemVoucher,
   regenerateQrToken,
   updateLoyaltyItem,
-  updateSettings,
   uploadImage,
 } from "@/lib/admin-api";
 import { imageUrl } from "@/lib/api-client";
-import { useDirection, useI18n } from "@/lib/i18n";
 import { Text, TextInput } from "@/lib/arabic-font";
+import { useDirection, useI18n } from "@/lib/i18n";
 
 const EMPTY = {
   menuItemId: null,
@@ -62,7 +60,8 @@ const EMPTY = {
 };
 
 const TIERS = ["normal", "rare", "super"];
-const TIER_REVEALS = { normal: 1, rare: 2, super: 3 };
+// Pieces each scan colours in — fixed on the server (GIFT_TIERS in routes/loyalty.ts).
+const TIER_REVEALS = { normal: 1, rare: 3, super: 5 };
 const TIER_TONE = { normal: "gray", rare: "orange", super: "teal" };
 const TIER_COLOR = { normal: C.muted, rare: C.orange, super: C.teal };
 /** The highest tier a collectible has a QR set up for — used to give each
@@ -88,8 +87,15 @@ export default function AdminRewards() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <AdminHeader eyebrow={t("admin")} title={t("rewardsTitle")} subtitle={t("rewardsSubtitle")} />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+      >
+        <AdminHeader
+          eyebrow={t("admin")}
+          title={t("rewardsTitle")}
+          subtitle={t("rewardsSubtitle")}
+        />
 
         <View style={styles.body}>
           <Banner value={banner} />
@@ -99,7 +105,11 @@ export default function AdminRewards() {
 
           <View style={[styles.tabs, dir.row]}>
             {TABS.map((key) => (
-              <Pressable key={key} onPress={() => setTab(key)} style={[styles.tab, tab === key && styles.tabOn]}>
+              <Pressable
+                key={key}
+                onPress={() => setTab(key)}
+                style={[styles.tab, tab === key && styles.tabOn]}
+              >
                 <Text style={[styles.tabText, tab === key && styles.tabTextOn]}>
                   {t(`rewardsTab_${key}`)}
                 </Text>
@@ -108,7 +118,13 @@ export default function AdminRewards() {
           </View>
 
           {tab === "collectibles" && (
-            <CollectiblesTab canEdit={canEdit} setBanner={setBanner} setConfirm={setConfirm} saving={saving} setSaving={setSaving} />
+            <CollectiblesTab
+              canEdit={canEdit}
+              setBanner={setBanner}
+              setConfirm={setConfirm}
+              saving={saving}
+              setSaving={setSaving}
+            />
           )}
           {tab === "scans" && <ScansTab />}
           {tab === "vouchers" && <VouchersTab setBanner={setBanner} />}
@@ -125,7 +141,13 @@ export default function AdminRewards() {
 //  Collectibles — the QR-per-tier editor
 // ============================================================
 
-function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) {
+function CollectiblesTab({
+  canEdit,
+  setBanner,
+  setConfirm,
+  saving,
+  setSaving,
+}) {
   const { t, tn, pick } = useI18n();
   const dir = useDirection();
 
@@ -136,52 +158,13 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
   const [qrFor, setQrFor] = useState(null);
   const [addingLayer, setAddingLayer] = useState(false);
 
-  // How many pieces each QR tier reveals — owner-configurable, read once here so both the
-  // settings card below and the QR viewer's "reveals per scan" label agree with each other.
-  const [tierReveals, setTierReveals] = useState(null);
-  const [tierDraft, setTierDraft] = useState(null);
-  const [tierSaving, setTierSaving] = useState(false);
-  const [tierBanner, setTierBanner] = useState(null);
-
-  useEffect(() => {
-    fetchSettings()
-      .then((d) => {
-        const tiers = d.settings.loyaltyTiers ?? TIER_REVEALS;
-        setTierReveals(tiers);
-        setTierDraft({ normal: String(tiers.normal), rare: String(tiers.rare), super: String(tiers.super) });
-      })
-      .catch(() => {
-        setTierReveals(TIER_REVEALS);
-        setTierDraft({ normal: "1", rare: "2", super: "3" });
-      });
-  }, []);
-
-  async function saveTiers() {
-    const parsed = {};
-    for (const tier of TIERS) {
-      const n = Number(tierDraft[tier]);
-      if (!Number.isInteger(n) || n < 1) {
-        setTierBanner({ text: t("errTierRevealsInvalid") });
-        return;
-      }
-      parsed[tier] = n;
-    }
-    setTierSaving(true);
-    setTierBanner(null);
-    try {
-      const res = await updateSettings({ loyaltyTiers: parsed });
-      setTierReveals(res.settings.loyaltyTiers ?? parsed);
-      setTierBanner({ tone: "success", text: t("settingsSaved") });
-    } catch (e) {
-      setTierBanner({ text: failure(e, t("errSaveFailed")) });
-    } finally {
-      setTierSaving(false);
-    }
-  }
+  // How many pieces each QR tier reveals — shown in the card below and the QR viewer.
+  const tierReveals = TIER_REVEALS;
 
   const patchDraft = (patch) => setEditing((e) => (e ? { ...e, ...patch } : e));
 
-  const failure = (e, fallback) => (e?.status === 404 ? t("errRouteMissing") : (e?.message ?? fallback));
+  const failure = (e, fallback) =>
+    e?.status === 404 ? t("errRouteMissing") : (e?.message ?? fallback);
 
   const load = useCallback(() => {
     setError(null);
@@ -192,7 +175,7 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
           (d.items ?? []).map((i) => ({
             ...i,
             layers: i.layers ?? [],
-            requiredPieces: i.requiredPieces ?? (i.layers?.length ?? 0),
+            requiredPieces: i.requiredPieces ?? i.layers?.length ?? 0,
           })),
         ),
       )
@@ -201,7 +184,9 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
         setItems([]);
       });
     fetchAdminMenu()
-      .then((d) => setMenuItems((d.categories ?? []).flatMap((c) => c.items ?? [])))
+      .then((d) =>
+        setMenuItems((d.categories ?? []).flatMap((c) => c.items ?? [])),
+      )
       .catch(() => setMenuItems([]));
   }, []);
 
@@ -223,11 +208,15 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
     setAddingLayer(true);
     try {
       const paths = [];
-      for (const asset of res.assets) paths.push(await uploadImage(asset, "rewards"));
+      for (const asset of res.assets)
+        paths.push(await uploadImage(asset, "rewards"));
       setEditing((e) => {
         if (!e) return e;
         const layers = [...e.layers, ...paths];
-        const pieces = e.requiredPieces === e.layers.length ? layers.length : e.requiredPieces;
+        const pieces =
+          e.requiredPieces === e.layers.length
+            ? layers.length
+            : e.requiredPieces;
         return { ...e, layers, requiredPieces: pieces };
       });
     } catch (err) {
@@ -241,20 +230,30 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
     setEditing((e) => {
       if (!e) return e;
       const layers = e.layers.filter((_, i) => i !== index);
-      const pieces = e.requiredPieces === e.layers.length ? layers.length : e.requiredPieces;
+      const pieces =
+        e.requiredPieces === e.layers.length ? layers.length : e.requiredPieces;
       return { ...e, layers, requiredPieces: pieces };
     });
   }
 
   async function save() {
-    if (!editing.nameEn?.trim() && !editing.name?.trim()) return setBanner({ text: t("errRewardName") });
-    if (!editing.rewardValue?.trim()) return setBanner({ text: t("errRewardValue") });
+    if (!editing.nameEn?.trim() && !editing.name?.trim())
+      return setBanner({ text: t("errRewardName") });
+    if (!editing.rewardValue?.trim())
+      return setBanner({ text: t("errRewardValue") });
     const pieces = Number(editing.requiredPieces);
-    if (!Number.isInteger(pieces) || pieces < 1) return setBanner({ text: t("errPiecesMin") });
+    if (!Number.isInteger(pieces) || pieces < 1)
+      return setBanner({ text: t("errPiecesMin") });
     if (editing.layers.length < pieces) {
-      return setBanner({ text: t("errNotEnoughLayers", { pieces, layers: editing.layers.length }) });
+      return setBanner({
+        text: t("errNotEnoughLayers", {
+          pieces,
+          layers: editing.layers.length,
+        }),
+      });
     }
-    const validDays = editing.voucherValidDays === "" ? null : Number(editing.voucherValidDays);
+    const validDays =
+      editing.voucherValidDays === "" ? null : Number(editing.voucherValidDays);
     if (validDays !== null && (!Number.isInteger(validDays) || validDays < 1)) {
       return setBanner({ text: t("errVoucherDays") });
     }
@@ -313,7 +312,9 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
       onConfirm: async () => {
         try {
           const res = await regenerateQrToken(item.id, tier);
-          setQrFor((q) => (q ? { ...q, qrTokens: res.qrTokens, qrToken: res.qrToken } : q));
+          setQrFor((q) =>
+            q ? { ...q, qrTokens: res.qrTokens, qrToken: res.qrToken } : q,
+          );
           load();
         } catch (e) {
           setBanner({ text: failure(e, t("errRegenerateFailed")) });
@@ -323,11 +324,15 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
   }
 
   async function toggleActive(item, next) {
-    setItems((arr) => arr.map((i) => (i.id === item.id ? { ...i, isActive: next } : i)));
+    setItems((arr) =>
+      arr.map((i) => (i.id === item.id ? { ...i, isActive: next } : i)),
+    );
     try {
       await updateLoyaltyItem(item.id, { isActive: next });
     } catch {
-      setItems((arr) => arr.map((i) => (i.id === item.id ? { ...i, isActive: !next } : i)));
+      setItems((arr) =>
+        arr.map((i) => (i.id === item.id ? { ...i, isActive: !next } : i)),
+      );
       setBanner({ text: t("errRewardUnchanged") });
     }
   }
@@ -341,28 +346,26 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
     <>
       {canEdit && (
         <View style={styles.tierCard}>
-          <Text style={[styles.fieldLabel, dir.text]}>{t("tierRevealsTitle")}</Text>
-          <Text style={[styles.layerHint, dir.text]}>{t("tierRevealsHint")}</Text>
-
-          <Banner value={tierBanner} />
+          <Text style={[styles.fieldLabel, dir.text]}>
+            {t("tierRevealsTitle")}
+          </Text>
+          <Text style={[styles.layerHint, dir.text]}>
+            {t("tierRevealsHint")}
+          </Text>
 
           <View style={[styles.tierInputRow, dir.row]}>
             {TIERS.map((tier) => (
               <View key={tier} style={styles.tierInputCell}>
                 <Pill text={t(`tier_${tier}`)} tone={TIER_TONE[tier]} />
+                {/* read-only: the server decides how many pieces each tier reveals */}
                 <TextInput
-                  value={tierDraft?.[tier] ?? ""}
-                  onChangeText={(v) =>
-                    setTierDraft((d) => ({ ...d, [tier]: v.replace(/\D/g, "") }))
-                  }
-                  keyboardType="number-pad"
+                  value={String(TIER_REVEALS[tier])}
+                  editable={false}
                   style={styles.tierInput}
                 />
               </View>
             ))}
           </View>
-
-          <Btn title={t("save")} icon="checkmark" onPress={saveTiers} loading={tierSaving} />
         </View>
       )}
 
@@ -373,78 +376,116 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
         items?.map((item) => {
           const tierColor = TIER_COLOR[topTierOf(item)];
           return (
-          <View key={item.id} style={[styles.card, { shadowColor: tierColor }]}>
             <View
-              style={[
-                styles.cardAccent,
-                dir.isRTL ? { right: 0 } : { left: 0 },
-                { backgroundColor: tierColor },
-              ]}
-            />
-            <Pressable
-              onPress={() =>
-                setEditing({
-                  ...item,
-                  layers: item.layers ?? [],
-                  requiredPieces: item.requiredPieces ?? (item.layers?.length ?? 0),
-                  voucherValidDays: item.voucherValidDays ? String(item.voucherValidDays) : "",
-                })
-              }
-              style={({ pressed }) => [styles.cardMain, pressed && styles.pressed]}
+              key={item.id}
+              style={[styles.card, { shadowColor: tierColor }]}
             >
-              <View style={[styles.thumb, { shadowColor: tierColor }]}>
-                {item.grayImage ? (
-                  <Image source={{ uri: imageUrl(item.grayImage) }} style={styles.thumbImg} />
-                ) : (
-                  <Ionicons name="color-palette-outline" size={20} color={C.placeholder} />
-                )}
-              </View>
-
-              <View style={styles.cardText}>
-                <Text style={[styles.cardName, dir.text]} numberOfLines={1}>
-                  {pick(item)}
-                </Text>
-                <Text style={[styles.cardReward, dir.text]} numberOfLines={1}>
-                  🎁 {item.rewardValue}
-                </Text>
-                <View style={[styles.badges, dir.row]}>
-                  <Pill text={t(`tier_${topTierOf(item)}`)} tone={TIER_TONE[topTierOf(item)]} />
-                  <Pill text={t("scansPill", { count: item.requiredPieces ?? 0 })} tone="orange" />
-                  {!!item.menuItemId && linkedName(item.menuItemId) && (
-                    <Pill text={linkedName(item.menuItemId)} tone="gray" />
-                  )}
-                  {item.stats?.completions != null && (
-                    <Pill text={t("wonPill", { count: item.stats.completions })} tone="teal" />
+              <View
+                style={[
+                  styles.cardAccent,
+                  dir.isRTL ? { right: 0 } : { left: 0 },
+                  { backgroundColor: tierColor },
+                ]}
+              />
+              <Pressable
+                onPress={() =>
+                  setEditing({
+                    ...item,
+                    layers: item.layers ?? [],
+                    requiredPieces:
+                      item.requiredPieces ?? item.layers?.length ?? 0,
+                    voucherValidDays: item.voucherValidDays
+                      ? String(item.voucherValidDays)
+                      : "",
+                  })
+                }
+                style={({ pressed }) => [
+                  styles.cardMain,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <View style={[styles.thumb, { shadowColor: tierColor }]}>
+                  {item.grayImage ? (
+                    <Image
+                      source={{ uri: imageUrl(item.grayImage) }}
+                      style={styles.thumbImg}
+                    />
+                  ) : (
+                    <Ionicons
+                      name="color-palette-outline"
+                      size={20}
+                      color={C.placeholder}
+                    />
                   )}
                 </View>
-              </View>
 
-              <Switch
-                value={item.isActive !== false}
-                disabled={!canEdit}
-                onValueChange={(v) => toggleActive(item, v)}
-                trackColor={{ true: C.teal, false: C.borderStrong }}
-                thumbColor={C.white}
-              />
-            </Pressable>
+                <View style={styles.cardText}>
+                  <Text style={[styles.cardName, dir.text]} numberOfLines={1}>
+                    {pick(item)}
+                  </Text>
+                  <Text style={[styles.cardReward, dir.text]} numberOfLines={1}>
+                    🎁 {item.rewardValue}
+                  </Text>
+                  <View style={[styles.badges, dir.row]}>
+                    <Pill
+                      text={t(`tier_${topTierOf(item)}`)}
+                      tone={TIER_TONE[topTierOf(item)]}
+                    />
+                    <Pill
+                      text={t("scansPill", { count: item.requiredPieces ?? 0 })}
+                      tone="orange"
+                    />
+                    {!!item.menuItemId && linkedName(item.menuItemId) && (
+                      <Pill text={linkedName(item.menuItemId)} tone="gray" />
+                    )}
+                    {item.stats?.completions != null && (
+                      <Pill
+                        text={t("wonPill", { count: item.stats.completions })}
+                        tone="teal"
+                      />
+                    )}
+                  </View>
+                </View>
 
-            <Pressable onPress={() => setQrFor(item)} style={({ pressed }) => [styles.qrStrip, dir.row, pressed && styles.pressed]}>
-              <Ionicons name="qr-code-outline" size={15} color={C.teal} />
-              <Text style={styles.qrToken} numberOfLines={1}>
-                {item.qrTokens?.normal ?? item.qrToken ?? t("noToken")}
-              </Text>
-              <Text style={styles.qrCta}>{t("showQr")}</Text>
-            </Pressable>
-          </View>
+                <Switch
+                  value={item.isActive !== false}
+                  disabled={!canEdit}
+                  onValueChange={(v) => toggleActive(item, v)}
+                  trackColor={{ true: C.teal, false: C.borderStrong }}
+                  thumbColor={C.white}
+                />
+              </Pressable>
+
+              <Pressable
+                onPress={() => setQrFor(item)}
+                style={({ pressed }) => [
+                  styles.qrStrip,
+                  dir.row,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ionicons name="qr-code-outline" size={15} color={C.teal} />
+                <Text style={styles.qrToken} numberOfLines={1}>
+                  {item.qrTokens?.normal ?? item.qrToken ?? t("noToken")}
+                </Text>
+                <Text style={styles.qrCta}>{t("showQr")}</Text>
+              </Pressable>
+            </View>
           );
         })}
 
-      {!error && items?.length === 0 && <Text style={[styles.empty, dir.text]}>{t("noRewards")}</Text>}
+      {!error && items?.length === 0 && (
+        <Text style={[styles.empty, dir.text]}>{t("noRewards")}</Text>
+      )}
 
       {canEdit && editing === null && qrFor === null && (
         <Pressable
           onPress={() => setEditing({ ...EMPTY, layers: [] })}
-          style={({ pressed }) => [styles.fab, dir.row, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.fab,
+            dir.row,
+            pressed && styles.pressed,
+          ]}
         >
           <Ionicons name="add" size={22} color={C.white} />
           <Text style={styles.fabText}>{t("newReward")}</Text>
@@ -452,12 +493,22 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
       )}
 
       {/* ---------- editor ---------- */}
-      <Modal visible={editing !== null} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
-        <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <Modal
+        visible={editing !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditing(null)}
+      >
+        <KeyboardAvoidingView
+          style={styles.backdrop}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
           <View style={styles.sheet}>
             <View style={styles.sheetGrip} />
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={[styles.sheetTitle, dir.text]}>{editing?.id ? t("editReward") : t("newRewardTitle")}</Text>
+              <Text style={[styles.sheetTitle, dir.text]}>
+                {editing?.id ? t("editReward") : t("newRewardTitle")}
+              </Text>
 
               <Field
                 label={t("fieldRewardValue")}
@@ -466,8 +517,16 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
                 placeholder={t("fieldRewardValue")}
                 hint={t("rewardValueHint")}
               />
-              <Field label={t("fieldCollectibleNameEn")} value={editing?.nameEn ?? ""} onChangeText={(v) => patchDraft({ nameEn: v })} />
-              <Field label={t("fieldCollectibleNameAr")} value={editing?.name ?? ""} onChangeText={(v) => patchDraft({ name: v })} />
+              <Field
+                label={t("fieldCollectibleNameEn")}
+                value={editing?.nameEn ?? ""}
+                onChangeText={(v) => patchDraft({ nameEn: v })}
+              />
+              <Field
+                label={t("fieldCollectibleNameAr")}
+                value={editing?.name ?? ""}
+                onChangeText={(v) => patchDraft({ name: v })}
+              />
 
               <ImageField
                 label={t("fieldLockedArt")}
@@ -477,14 +536,25 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
                 hint={t("lockedArtHint")}
               />
 
-              <Text style={[styles.fieldLabel, dir.text]}>{t("revealLayers")}</Text>
-              <Text style={[styles.layerHint, dir.text]}>{t("revealLayersHint")}</Text>
+              <Text style={[styles.fieldLabel, dir.text]}>
+                {t("revealLayers")}
+              </Text>
+              <Text style={[styles.layerHint, dir.text]}>
+                {t("revealLayersHint")}
+              </Text>
               <View style={[styles.layerRow, dir.row]}>
                 {(editing?.layers ?? []).map((path, i) => (
                   <View key={`${path}-${i}`} style={styles.layer}>
-                    <Image source={{ uri: imageUrl(path) }} style={styles.layerImg} />
+                    <Image
+                      source={{ uri: imageUrl(path) }}
+                      style={styles.layerImg}
+                    />
                     <Text style={styles.layerIndex}>{i + 1}</Text>
-                    <Pressable onPress={() => removeLayer(i)} style={styles.layerRemove} hitSlop={6}>
+                    <Pressable
+                      onPress={() => removeLayer(i)}
+                      style={styles.layerRemove}
+                      hitSlop={6}
+                    >
                       <Ionicons name="close" size={12} color={C.white} />
                     </Pressable>
                   </View>
@@ -492,16 +562,28 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
                 <Pressable
                   onPress={addLayer}
                   disabled={addingLayer}
-                  style={({ pressed }) => [styles.layerAdd, pressed && styles.pressed, addingLayer && { opacity: 0.5 }]}
+                  style={({ pressed }) => [
+                    styles.layerAdd,
+                    pressed && styles.pressed,
+                    addingLayer && { opacity: 0.5 },
+                  ]}
                 >
-                  <Ionicons name={addingLayer ? "cloud-upload-outline" : "add"} size={20} color={C.teal} />
+                  <Ionicons
+                    name={addingLayer ? "cloud-upload-outline" : "add"}
+                    size={20}
+                    color={C.teal}
+                  />
                 </Pressable>
               </View>
 
               <Field
                 label={t("fieldScansNeeded")}
                 value={String(editing?.requiredPieces ?? 0)}
-                onChangeText={(v) => patchDraft({ requiredPieces: Number(v.replace(/\D/g, "")) || 0 })}
+                onChangeText={(v) =>
+                  patchDraft({
+                    requiredPieces: Number(v.replace(/\D/g, "")) || 0,
+                  })
+                }
                 keyboardType="number-pad"
                 hint={tn("layersUploaded", editing?.layers?.length ?? 0)}
               />
@@ -509,41 +591,86 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
               <Field
                 label={t("fieldVoucherDays")}
                 value={editing?.voucherValidDays ?? ""}
-                onChangeText={(v) => patchDraft({ voucherValidDays: v.replace(/\D/g, "") })}
+                onChangeText={(v) =>
+                  patchDraft({ voucherValidDays: v.replace(/\D/g, "") })
+                }
                 keyboardType="number-pad"
                 placeholder="30"
                 hint={t("voucherDaysHint")}
               />
 
-              <Text style={[styles.fieldLabel, dir.text]}>{t("linkedItem")}</Text>
-              <Text style={[styles.layerHint, dir.text]}>{t("linkedItemHint")}</Text>
+              <Text style={[styles.fieldLabel, dir.text]}>
+                {t("linkedItem")}
+              </Text>
+              <Text style={[styles.layerHint, dir.text]}>
+                {t("linkedItemHint")}
+              </Text>
               <View style={[styles.chips, dir.row]}>
                 <Pressable
                   onPress={() => patchDraft({ menuItemId: null })}
                   style={[styles.chip, !editing?.menuItemId && styles.chipOn]}
                 >
-                  <Text style={[styles.chipText, !editing?.menuItemId && styles.chipTextOn]}>{t("none")}</Text>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      !editing?.menuItemId && styles.chipTextOn,
+                    ]}
+                  >
+                    {t("none")}
+                  </Text>
                 </Pressable>
                 {menuItems.map((m) => {
                   const on = editing?.menuItemId === m.id;
                   return (
-                    <Pressable key={m.id} onPress={() => patchDraft({ menuItemId: m.id })} style={[styles.chip, on && styles.chipOn]}>
-                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{pick(m)}</Text>
+                    <Pressable
+                      key={m.id}
+                      onPress={() => patchDraft({ menuItemId: m.id })}
+                      style={[styles.chip, on && styles.chipOn]}
+                    >
+                      <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                        {pick(m)}
+                      </Text>
                     </Pressable>
                   );
                 })}
               </View>
 
-              <ToggleRow label={t("active")} value={editing?.isActive !== false} onValueChange={(v) => patchDraft({ isActive: v })} />
+              <ToggleRow
+                label={t("active")}
+                value={editing?.isActive !== false}
+                onValueChange={(v) => patchDraft({ isActive: v })}
+              />
 
-              {!editing?.id && <Text style={[styles.tokenNote, dir.text]}>{t("tokenNote")}</Text>}
+              {!editing?.id && (
+                <Text style={[styles.tokenNote, dir.text]}>
+                  {t("tokenNote")}
+                </Text>
+              )}
 
               <View style={{ gap: 9, marginTop: 6 }}>
-                {canEdit && <Btn title={t("save")} icon="checkmark" onPress={save} loading={saving} />}
-                {canEdit && !!editing?.id && (
-                  <Btn title={t("deleteReward")} variant="danger" icon="trash-outline" onPress={confirmDelete} disabled={saving} />
+                {canEdit && (
+                  <Btn
+                    title={t("save")}
+                    icon="checkmark"
+                    onPress={save}
+                    loading={saving}
+                  />
                 )}
-                <Btn title={t("cancel")} variant="ghost" onPress={() => setEditing(null)} disabled={saving} />
+                {canEdit && !!editing?.id && (
+                  <Btn
+                    title={t("deleteReward")}
+                    variant="danger"
+                    icon="trash-outline"
+                    onPress={confirmDelete}
+                    disabled={saving}
+                  />
+                )}
+                <Btn
+                  title={t("cancel")}
+                  variant="ghost"
+                  onPress={() => setEditing(null)}
+                  disabled={saving}
+                />
               </View>
             </ScrollView>
           </View>
@@ -551,25 +678,45 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
       </Modal>
 
       {/* ---------- QR viewer: all three tiers ---------- */}
-      <Modal visible={qrFor !== null} transparent animationType="fade" onRequestClose={() => setQrFor(null)}>
+      <Modal
+        visible={qrFor !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setQrFor(null)}
+      >
         <View style={styles.qrBackdrop}>
           <View style={styles.qrSheet}>
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "100%" }}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: "100%" }}
+            >
               <Text style={styles.qrTitle}>{pick(qrFor)}</Text>
               <Text style={styles.qrSub}>{qrFor?.rewardValue}</Text>
 
               {TIERS.map((tier) => {
-                const token = qrFor?.qrTokens?.[tier] ?? (tier === "normal" ? qrFor?.qrToken : null);
+                const token =
+                  qrFor?.qrTokens?.[tier] ??
+                  (tier === "normal" ? qrFor?.qrToken : null);
                 return (
                   <View key={tier} style={styles.tierBlock}>
                     <View style={[styles.tierHead, dir.row]}>
                       <Pill text={t(`tier_${tier}`)} tone={TIER_TONE[tier]} />
-                      <Text style={styles.tierReveals}>{tn("revealsPerScan", (tierReveals ?? TIER_REVEALS)[tier])}</Text>
+                      <Text style={styles.tierReveals}>
+                        {tn(
+                          "revealsPerScan",
+                          (tierReveals ?? TIER_REVEALS)[tier],
+                        )}
+                      </Text>
                     </View>
 
                     <View style={styles.qrBox}>
                       {token ? (
-                        <QRCode value={token} size={140} backgroundColor="#fff" color={C.dark} />
+                        <QRCode
+                          value={token}
+                          size={140}
+                          backgroundColor="#fff"
+                          color={C.dark}
+                        />
                       ) : (
                         <Text style={styles.qrMissing}>{t("qrMissing")}</Text>
                       )}
@@ -593,7 +740,11 @@ function CollectiblesTab({ canEdit, setBanner, setConfirm, saving, setSaving }) 
               <Text style={styles.qrHelp}>{t("qrPrintHint")}</Text>
 
               <View style={{ marginTop: 16, marginBottom: 4 }}>
-                <Btn title={t("close")} variant="ghost" onPress={() => setQrFor(null)} />
+                <Btn
+                  title={t("close")}
+                  variant="ghost"
+                  onPress={() => setQrFor(null)}
+                />
               </View>
             </ScrollView>
           </View>
@@ -630,16 +781,37 @@ function ScansTab() {
 
   const when = (iso) => new Date(iso).toLocaleString();
 
-  const RESULT_TONE = { revealed: "orange", completed: "teal", unknown_code: "danger", inactive: "gray" };
-  const RESULT_COLOR = { revealed: C.orange, completed: C.teal, unknown_code: C.danger, inactive: C.muted };
+  const RESULT_TONE = {
+    revealed: "orange",
+    completed: "teal",
+    unknown_code: "danger",
+    inactive: "gray",
+  };
+  const RESULT_COLOR = {
+    revealed: C.orange,
+    completed: C.teal,
+    unknown_code: C.danger,
+    inactive: C.muted,
+  };
 
   return (
     <>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.filters, dir.row]}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={[styles.filters, dir.row]}
+      >
         {SCAN_FILTERS.map((key) => (
-          <Pressable key={key} onPress={() => setFilter(key)} style={[styles.filter, filter === key && styles.filterOn]}>
-            <Text style={[styles.filterText, filter === key && styles.filterTextOn]}>
-              {t(`scanFilter_${key}`)} {data?.counts?.[key] != null ? data.counts[key] : ""}
+          <Pressable
+            key={key}
+            onPress={() => setFilter(key)}
+            style={[styles.filter, filter === key && styles.filterOn]}
+          >
+            <Text
+              style={[styles.filterText, filter === key && styles.filterTextOn]}
+            >
+              {t(`scanFilter_${key}`)}{" "}
+              {data?.counts?.[key] != null ? data.counts[key] : ""}
             </Text>
           </Pressable>
         ))}
@@ -652,32 +824,43 @@ function ScansTab() {
         data?.scans?.map((s) => {
           const resultColor = RESULT_COLOR[s.result] ?? C.muted;
           return (
-          <View key={s.id} style={[styles.logRow, { shadowColor: resultColor }]}>
             <View
-              style={[
-                styles.logAccent,
-                dir.isRTL ? { right: 0 } : { left: 0 },
-                { backgroundColor: resultColor },
-              ]}
-            />
-            <View style={[styles.logTop, dir.row]}>
-              <Text style={[styles.logMain, dir.text]} numberOfLines={1}>
-                {s.customer?.name ?? t("unknownScanner")}
+              key={s.id}
+              style={[styles.logRow, { shadowColor: resultColor }]}
+            >
+              <View
+                style={[
+                  styles.logAccent,
+                  dir.isRTL ? { right: 0 } : { left: 0 },
+                  { backgroundColor: resultColor },
+                ]}
+              />
+              <View style={[styles.logTop, dir.row]}>
+                <Text style={[styles.logMain, dir.text]} numberOfLines={1}>
+                  {s.customer?.name ?? t("unknownScanner")}
+                </Text>
+                <Pill
+                  text={t(`scanResult_${s.result}`)}
+                  tone={RESULT_TONE[s.result] ?? "gray"}
+                />
+                {!!s.tier && (
+                  <Pill text={t(`tier_${s.tier}`)} tone={TIER_TONE[s.tier]} />
+                )}
+              </View>
+              <Text style={[styles.logDetail, dir.text]}>
+                {s.item ? pick(s.item) : s.token}
+                {(s.result === "revealed" || s.result === "completed") &&
+                  ` · ${s.from}→${s.to}`}
+                {!!s.voucherCode && ` · ${t("voucherWon")} ${s.voucherCode}`}
               </Text>
-              <Pill text={t(`scanResult_${s.result}`)} tone={RESULT_TONE[s.result] ?? "gray"} />
-              {!!s.tier && <Pill text={t(`tier_${s.tier}`)} tone={TIER_TONE[s.tier]} />}
+              <Text style={[styles.logWhen, dir.text]}>{when(s.at)}</Text>
             </View>
-            <Text style={[styles.logDetail, dir.text]}>
-              {s.item ? pick(s.item) : s.token}
-              {(s.result === "revealed" || s.result === "completed") && ` · ${s.from}→${s.to}`}
-              {!!s.voucherCode && ` · ${t("voucherWon")} ${s.voucherCode}`}
-            </Text>
-            <Text style={[styles.logWhen, dir.text]}>{when(s.at)}</Text>
-          </View>
           );
         })}
 
-      {!error && data?.scans?.length === 0 && <Text style={[styles.empty, dir.text]}>{t("scansEmpty")}</Text>}
+      {!error && data?.scans?.length === 0 && (
+        <Text style={[styles.empty, dir.text]}>{t("scansEmpty")}</Text>
+      )}
     </>
   );
 }
@@ -685,6 +868,86 @@ function ScansTab() {
 // ============================================================
 //  Vouchers
 // ============================================================
+
+const RESULT_LOOK = {
+  ok: {
+    icon: "checkmark-circle",
+    color: C.teal,
+    bg: "#E8F5F2",
+    title: "redeemOkTitle",
+  },
+  used: {
+    icon: "alert-circle",
+    color: C.danger,
+    bg: "#FDECEA",
+    title: "redeemUsedTitle",
+  },
+  missing: {
+    icon: "help-circle",
+    color: C.muted,
+    bg: "#F2F2F0",
+    title: "voucherNotFound",
+  },
+};
+
+/** The card under the redeem box: what happened to the code just entered. */
+function RedeemResult({ result, onClose }) {
+  const { t, dir } = useI18nAndDir();
+  const look = RESULT_LOOK[result.kind];
+  const at = (iso) =>
+    iso
+      ? new Date(iso).toLocaleString(undefined, {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "—";
+  return (
+    <View
+      style={[
+        styles.result,
+        { backgroundColor: look.bg, borderColor: look.color },
+      ]}
+    >
+      <View style={[styles.resultHead, dir.row]}>
+        <Ionicons name={look.icon} size={26} color={look.color} />
+        <Text style={[styles.resultTitle, dir.text, { color: look.color }]}>
+          {t(look.title)}
+        </Text>
+        <Pressable onPress={onClose} hitSlop={10}>
+          <Ionicons name="close" size={20} color={C.muted} />
+        </Pressable>
+      </View>
+
+      <Text style={[styles.resultCode, dir.text]}>{result.code}</Text>
+
+      {result.kind !== "missing" && (
+        <>
+          {!!result.reward && (
+            <Text style={[styles.resultLine, dir.text]}>
+              🎁 {result.reward}
+            </Text>
+          )}
+          <Text style={[styles.resultLine, dir.text]}>
+            👤 {result.user?.name ?? t("unnamed")} · {result.user?.phone ?? ""}
+          </Text>
+          <Text style={[styles.resultLine, dir.text]}>
+            {result.kind === "ok"
+              ? t("redeemOkAt", { when: at(result.redeemedAt) })
+              : t("redeemUsedAt", { when: at(result.redeemedAt) })}
+          </Text>
+          {result.kind === "used" && (
+            <Text style={[styles.resultWarn, dir.text]}>
+              {t("redeemUsedWarn")}
+            </Text>
+          )}
+        </>
+      )}
+    </View>
+  );
+}
 
 const VOUCHER_FILTERS = ["all", "valid", "redeemed", "expired"];
 
@@ -701,6 +964,8 @@ function VouchersTab({ setBanner }) {
   const [redeeming, setRedeeming] = useState(null);
   const [lookup, setLookup] = useState("");
   const [lookupBusy, setLookupBusy] = useState(false);
+  // what the last redeem attempt found: { kind: "ok" | "used" | "missing", ... }
+  const [result, setResult] = useState(null);
 
   const timer = useRef(null);
   useEffect(() => {
@@ -726,7 +991,9 @@ function VouchersTab({ setBanner }) {
       })
         .then((res) => {
           setData((prev) =>
-            page === 1 || !prev ? res : { ...res, vouchers: [...prev.vouchers, ...res.vouchers] },
+            page === 1 || !prev
+              ? res
+              : { ...res, vouchers: [...prev.vouchers, ...res.vouchers] },
           );
         })
         .catch((e) => {
@@ -746,20 +1013,29 @@ function VouchersTab({ setBanner }) {
 
   const hasMore = (data?.vouchers?.length ?? 0) < (data?.total ?? 0);
 
+  // Every attempt ends in a clear card under the box: handed over now, already
+  // handed over before (when, to whom — so the same prize can't be claimed twice),
+  // or no such code.
   async function doRedeem(code) {
     setRedeeming(code);
     setBanner(null);
+    setResult(null);
     try {
-      await redeemVoucher(code);
+      const res = await redeemVoucher(code);
+      setResult({ kind: "ok", ...res });
       load(1);
     } catch (e) {
-      const map = {
-        voucher_not_found: t("voucherNotFound"),
-        already_redeemed: t("voucherAlreadyRedeemed"),
-        voucher_expired: t("voucherExpiredErr"),
-        role_cannot_redeem: t("roleCannotRedeem"),
-      };
-      setBanner({ text: map[e?.data?.error] ?? t("errSaveFailed") });
+      const err = e?.data?.error;
+      if (err === "already_redeemed") setResult({ kind: "used", ...e.data });
+      else if (err === "voucher_not_found")
+        setResult({ kind: "missing", code: e.data?.code ?? code });
+      else {
+        const map = {
+          voucher_expired: t("voucherExpiredErr"),
+          role_cannot_redeem: t("roleCannotRedeem"),
+        };
+        setBanner({ text: map[err] ?? t("errSaveFailed") });
+      }
     } finally {
       setRedeeming(null);
     }
@@ -774,9 +1050,18 @@ function VouchersTab({ setBanner }) {
   }
 
   const when = (iso) => new Date(iso).toLocaleDateString();
-  const timeOnly = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const timeOnly = (iso) =>
+    new Date(iso).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   const dayHeader = (iso) =>
-    new Date(iso).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    new Date(iso).toLocaleDateString(undefined, {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
   const STATE_TONE = { valid: "teal", redeemed: "gray", expired: "danger" };
   const STATE_COLOR = { valid: C.teal, redeemed: C.muted, expired: C.danger };
 
@@ -791,7 +1076,9 @@ function VouchersTab({ setBanner }) {
       groups.get(key).push(v);
     }
     return [...groups.values()]
-      .map((items) => items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)))
+      .map((items) =>
+        items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+      )
       .sort((a, b) => new Date(b[0].createdAt) - new Date(a[0].createdAt));
   }, [data]);
 
@@ -808,8 +1095,17 @@ function VouchersTab({ setBanner }) {
             autoCapitalize="characters"
             style={styles.redeemInput}
           />
-          <Btn title={t("redeem")} icon="checkmark" onPress={submitLookup} loading={lookupBusy} />
+          <Btn
+            title={t("redeem")}
+            icon="checkmark"
+            onPress={submitLookup}
+            loading={lookupBusy}
+          />
         </View>
+
+        {result && (
+          <RedeemResult result={result} onClose={() => setResult(null)} />
+        )}
       </View>
 
       <View style={[styles.searchBox, dir.row]}>
@@ -824,11 +1120,22 @@ function VouchersTab({ setBanner }) {
         />
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.filters, dir.row]}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={[styles.filters, dir.row]}
+      >
         {VOUCHER_FILTERS.map((key) => (
-          <Pressable key={key} onPress={() => setFilter(key)} style={[styles.filter, filter === key && styles.filterOn]}>
-            <Text style={[styles.filterText, filter === key && styles.filterTextOn]}>
-              {t(`voucherFilter_${key}`)} {data?.counts?.[key] != null ? data.counts[key] : ""}
+          <Pressable
+            key={key}
+            onPress={() => setFilter(key)}
+            style={[styles.filter, filter === key && styles.filterOn]}
+          >
+            <Text
+              style={[styles.filterText, filter === key && styles.filterTextOn]}
+            >
+              {t(`voucherFilter_${key}`)}{" "}
+              {data?.counts?.[key] != null ? data.counts[key] : ""}
             </Text>
           </Pressable>
         ))}
@@ -841,55 +1148,80 @@ function VouchersTab({ setBanner }) {
         byDay.map((items) => (
           <View key={items[0].createdAt}>
             <View style={[styles.dateHeaderRow, dir.row]}>
-              <Text style={[styles.dateHeader, dir.text]}>{dayHeader(items[0].createdAt)}</Text>
+              <Text style={[styles.dateHeader, dir.text]}>
+                {dayHeader(items[0].createdAt)}
+              </Text>
               <Pill text={tn("wonCount", items.length)} tone="gray" />
             </View>
 
             {items.map((v) => {
               const stateColor = STATE_COLOR[v.state] ?? C.muted;
               return (
-              <View key={v.id} style={[styles.card, { shadowColor: stateColor }]}>
                 <View
-                  style={[
-                    styles.cardAccent,
-                    dir.isRTL ? { right: 0 } : { left: 0 },
-                    { backgroundColor: stateColor },
-                  ]}
-                />
-                <View style={[styles.cardMain, dir.row]}>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <View style={[styles.voucherTop, dir.row]}>
-                      <Text style={styles.voucherCode}>{v.code}</Text>
-                      <Pill text={t(`voucherState_${v.state}`)} tone={STATE_TONE[v.state]} />
+                  key={v.id}
+                  style={[styles.card, { shadowColor: stateColor }]}
+                >
+                  <View
+                    style={[
+                      styles.cardAccent,
+                      dir.isRTL ? { right: 0 } : { left: 0 },
+                      { backgroundColor: stateColor },
+                    ]}
+                  />
+                  <View style={[styles.cardMain, dir.row]}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={[styles.voucherTop, dir.row]}>
+                        <Text style={styles.voucherCode}>{v.code}</Text>
+                        <Pill
+                          text={t(`voucherState_${v.state}`)}
+                          tone={STATE_TONE[v.state]}
+                        />
+                      </View>
+                      <Text
+                        style={[styles.cardReward, dir.text]}
+                        numberOfLines={1}
+                      >
+                        🎁 {v.reward}
+                      </Text>
+                      <Text style={[styles.logDetail, dir.text]}>
+                        {v.customer?.name ?? t("unnamed")} ·{" "}
+                        {v.customer?.phone ?? ""}
+                      </Text>
+                      <Text style={[styles.logWhen, dir.text]}>
+                        {t("wonAt", { when: timeOnly(v.createdAt) })}
+                        {v.state === "redeemed"
+                          ? ` · ${
+                              v.redeemedBy?.name
+                                ? t("redeemedOn", {
+                                    when: when(v.redeemedAt),
+                                    by: v.redeemedBy.name,
+                                  })
+                                : t("redeemedOnUnknown", {
+                                    when: when(v.redeemedAt),
+                                  })
+                            }`
+                          : v.expiresAt
+                            ? ` · ${t("expiresOn", { when: when(v.expiresAt) })}`
+                            : ""}
+                      </Text>
                     </View>
-                    <Text style={[styles.cardReward, dir.text]} numberOfLines={1}>
-                      🎁 {v.reward}
-                    </Text>
-                    <Text style={[styles.logDetail, dir.text]}>
-                      {v.customer?.name ?? t("unnamed")} · {v.customer?.phone ?? ""}
-                    </Text>
-                    <Text style={[styles.logWhen, dir.text]}>
-                      {t("wonAt", { when: timeOnly(v.createdAt) })}
-                      {v.state === "redeemed"
-                        ? ` · ${
-                            v.redeemedBy?.name
-                              ? t("redeemedOn", { when: when(v.redeemedAt), by: v.redeemedBy.name })
-                              : t("redeemedOnUnknown", { when: when(v.redeemedAt) })
-                          }`
-                        : ` · ${t("expiresOn", { when: when(v.expiresAt) })}`}
-                    </Text>
+                    {v.can?.redeem && (
+                      <Btn
+                        title={t("redeem")}
+                        onPress={() => doRedeem(v.code)}
+                        loading={redeeming === v.code}
+                      />
+                    )}
                   </View>
-                  {v.can?.redeem && (
-                    <Btn title={t("redeem")} onPress={() => doRedeem(v.code)} loading={redeeming === v.code} />
-                  )}
                 </View>
-              </View>
               );
             })}
           </View>
         ))}
 
-      {!error && data?.vouchers?.length === 0 && <Text style={[styles.empty, dir.text]}>{t("vouchersEmpty")}</Text>}
+      {!error && data?.vouchers?.length === 0 && (
+        <Text style={[styles.empty, dir.text]}>{t("vouchersEmpty")}</Text>
+      )}
 
       {!error && hasMore && (
         <View style={{ marginTop: 4 }}>
@@ -897,7 +1229,12 @@ function VouchersTab({ setBanner }) {
             <ActivityIndicator size="small" color={C.teal} />
           ) : (
             <Btn
-              title={t("loadMore", { count: Math.min(VOUCHERS_PAGE_SIZE, (data?.total ?? 0) - (data?.vouchers?.length ?? 0)) })}
+              title={t("loadMore", {
+                count: Math.min(
+                  VOUCHERS_PAGE_SIZE,
+                  (data?.total ?? 0) - (data?.vouchers?.length ?? 0),
+                ),
+              })}
               variant="ghost"
               icon="chevron-down"
               onPress={() => load((data?.page ?? 1) + 1)}
@@ -921,9 +1258,7 @@ function StatsTab() {
   const load = useCallback(() => {
     setError(null);
     setStats(null);
-    fetchLoyaltyStats()
-      .then(setStats)
-      .catch(setError);
+    fetchLoyaltyStats().then(setStats).catch(setError);
   }, []);
 
   useEffect(load, [load]);
@@ -951,7 +1286,9 @@ function StatsTab() {
         ))}
       </View>
 
-      <Text style={[styles.blockLabel, dir.text, { marginTop: 16 }]}>{t("statByTier")}</Text>
+      <Text style={[styles.blockLabel, dir.text, { marginTop: 16 }]}>
+        {t("statByTier")}
+      </Text>
       <View style={[styles.tierStats, dir.row]}>
         {TIERS.map((tier) => (
           <View key={tier} style={styles.tierStatCell}>
@@ -961,21 +1298,36 @@ function StatsTab() {
         ))}
       </View>
 
-      <Text style={[styles.blockLabel, dir.text, { marginTop: 16 }]}>{t("statByItem")}</Text>
-      {stats.items.length === 0 && <Text style={[styles.empty, dir.text]}>{t("noRewards")}</Text>}
+      <Text style={[styles.blockLabel, dir.text, { marginTop: 16 }]}>
+        {t("statByItem")}
+      </Text>
+      {stats.items.length === 0 && (
+        <Text style={[styles.empty, dir.text]}>{t("noRewards")}</Text>
+      )}
       {stats.items.map((item) => (
         <View key={item.id} style={styles.itemStatRow}>
           <View style={[styles.itemStatHead, dir.row]}>
             <Text style={[styles.itemStatName, dir.text]} numberOfLines={1}>
               {pick(item)}
             </Text>
-            <Text style={styles.itemStatMeta}>{t("statCompletionsShort", { count: item.completions })}</Text>
+            <Text style={styles.itemStatMeta}>
+              {t("statCompletionsShort", { count: item.completions })}
+            </Text>
           </View>
           <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${Math.round(item.averageProgress * 100)}%` }]} />
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${Math.round(item.averageProgress * 100)}%` },
+              ]}
+            />
           </View>
           <Text style={[styles.itemStatMeta, dir.text]}>
-            {t("statItemDetail", { collectors: item.collectors, scans: item.scans, redeemed: item.redeemed })}
+            {t("statItemDetail", {
+              collectors: item.collectors,
+              scans: item.scans,
+              redeemed: item.redeemed,
+            })}
           </Text>
         </View>
       ))}
@@ -996,13 +1348,24 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 20, paddingTop: 6 },
 
   tabs: { gap: 8, marginBottom: 16 },
-  tab: { flex: 1, paddingVertical: 10, borderRadius: 13, backgroundColor: C.surfaceAlt, alignItems: "center" },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 13,
+    backgroundColor: C.surfaceAlt,
+    alignItems: "center",
+  },
   tabOn: { backgroundColor: C.teal },
   tabText: { color: C.muted, fontSize: fs(14), fontWeight: "800" },
   tabTextOn: { color: C.white },
 
   filters: { gap: 7, paddingBottom: 14 },
-  filter: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 12, backgroundColor: C.surfaceAlt },
+  filter: {
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: C.surfaceAlt,
+  },
   filterOn: { backgroundColor: C.teal },
   filterText: { color: C.muted, fontSize: fs(15), fontWeight: "800" },
   filterTextOn: { color: C.white },
@@ -1027,7 +1390,13 @@ const styles = StyleSheet.create({
     width: 3,
     borderRadius: 2,
   },
-  cardMain: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 12, gap: 11 },
+  cardMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 11,
+  },
   thumb: {
     width: 56,
     height: 56,
@@ -1043,15 +1412,47 @@ const styles = StyleSheet.create({
   },
   thumbImg: { width: "100%", height: "100%" },
   cardText: { flex: 1, minWidth: 0 },
-  cardName: { color: C.dark, fontSize: fs(16), fontWeight: "800", marginBottom: 2 },
-  cardReward: { color: C.muted, fontSize: fs(15), fontWeight: "700", marginBottom: 6 },
+  cardName: {
+    color: C.dark,
+    fontSize: fs(16),
+    fontWeight: "800",
+    marginBottom: 2,
+  },
+  cardReward: {
+    color: C.muted,
+    fontSize: fs(15),
+    fontWeight: "700",
+    marginBottom: 6,
+  },
   badges: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
 
-  qrStrip: { alignItems: "center", gap: 8, backgroundColor: C.lightTeal, paddingHorizontal: 13, paddingVertical: 10 },
-  qrToken: { flex: 1, color: C.teal, fontSize: fs(15), fontWeight: "800", letterSpacing: 0.4 },
-  qrCta: { color: C.teal, fontSize: fs(13.5), fontWeight: "800", letterSpacing: 1 },
+  qrStrip: {
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: C.lightTeal,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+  },
+  qrToken: {
+    flex: 1,
+    color: C.teal,
+    fontSize: fs(15),
+    fontWeight: "800",
+    letterSpacing: 0.4,
+  },
+  qrCta: {
+    color: C.teal,
+    fontSize: fs(13.5),
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
 
-  empty: { color: C.subtle, fontSize: fs(15), lineHeight: fs(21), marginTop: 6 },
+  empty: {
+    color: C.subtle,
+    fontSize: fs(15),
+    lineHeight: fs(21),
+    marginTop: 6,
+  },
 
   fab: {
     position: "absolute",
@@ -1070,9 +1471,18 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
   },
-  fabText: { color: C.white, fontSize: fs(15), fontWeight: "800", letterSpacing: 0.5 },
+  fabText: {
+    color: C.white,
+    fontSize: fs(15),
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
 
-  backdrop: { flex: 1, backgroundColor: "rgba(23,32,31,0.45)", justifyContent: "flex-end" },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(23,32,31,0.45)",
+    justifyContent: "flex-end",
+  },
   sheet: {
     backgroundColor: C.white,
     borderTopLeftRadius: 28,
@@ -1082,11 +1492,34 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     maxHeight: "90%",
   },
-  sheetGrip: { width: 40, height: 4, borderRadius: 2, backgroundColor: C.borderStrong, alignSelf: "center", marginBottom: 14 },
-  sheetTitle: { color: C.dark, fontSize: fs(22), fontWeight: "800", marginBottom: 18 },
+  sheetGrip: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.borderStrong,
+    alignSelf: "center",
+    marginBottom: 14,
+  },
+  sheetTitle: {
+    color: C.dark,
+    fontSize: fs(22),
+    fontWeight: "800",
+    marginBottom: 18,
+  },
 
-  fieldLabel: { color: C.muted, fontSize: fs(13.5), fontWeight: "800", letterSpacing: 1, marginBottom: 5 },
-  layerHint: { color: C.subtle, fontSize: fs(14), lineHeight: fs(18), marginBottom: 10 },
+  fieldLabel: {
+    color: C.muted,
+    fontSize: fs(13.5),
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginBottom: 5,
+  },
+  layerHint: {
+    color: C.subtle,
+    fontSize: fs(14),
+    lineHeight: fs(18),
+    marginBottom: 10,
+  },
 
   tierCard: {
     borderRadius: 20,
@@ -1116,7 +1549,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  layerRow: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginBottom: 16 },
+  layerRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
+    marginBottom: 16,
+  },
   layer: {
     width: 62,
     height: 62,
@@ -1164,14 +1602,30 @@ const styles = StyleSheet.create({
   },
 
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
-  chip: { backgroundColor: C.surfaceAlt, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 9 },
+  chip: {
+    backgroundColor: C.surfaceAlt,
+    borderRadius: 13,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
   chipOn: { backgroundColor: C.teal },
   chipText: { color: C.muted, fontSize: fs(14.5), fontWeight: "800" },
   chipTextOn: { color: C.white },
 
-  tokenNote: { color: C.subtle, fontSize: fs(14), lineHeight: fs(19), marginBottom: 12 },
+  tokenNote: {
+    color: C.subtle,
+    fontSize: fs(14),
+    lineHeight: fs(19),
+    marginBottom: 12,
+  },
 
-  qrBackdrop: { flex: 1, backgroundColor: "rgba(23,32,31,0.55)", alignItems: "center", justifyContent: "center", padding: 22 },
+  qrBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(23,32,31,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 22,
+  },
   qrSheet: {
     backgroundColor: C.white,
     borderRadius: 28,
@@ -1181,8 +1635,20 @@ const styles = StyleSheet.create({
     maxWidth: 380,
     maxHeight: "88%",
   },
-  qrTitle: { color: C.dark, fontSize: fs(20), fontWeight: "800", textAlign: "center" },
-  qrSub: { color: C.muted, fontSize: fs(14.5), fontWeight: "700", marginTop: 3, marginBottom: 14, textAlign: "center" },
+  qrTitle: {
+    color: C.dark,
+    fontSize: fs(20),
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  qrSub: {
+    color: C.muted,
+    fontSize: fs(14.5),
+    fontWeight: "700",
+    marginTop: 3,
+    marginBottom: 14,
+    textAlign: "center",
+  },
 
   tierBlock: {
     alignItems: "center",
@@ -1206,9 +1672,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  qrMissing: { color: C.muted, fontSize: fs(15), textAlign: "center", paddingHorizontal: 16 },
-  qrCode: { color: C.dark, fontSize: fs(14.5), fontWeight: "800", letterSpacing: 1, marginTop: 10 },
-  qrHelp: { color: C.subtle, fontSize: fs(14), lineHeight: fs(19), textAlign: "center", marginTop: 16 },
+  qrMissing: {
+    color: C.muted,
+    fontSize: fs(15),
+    textAlign: "center",
+    paddingHorizontal: 16,
+  },
+  qrCode: {
+    color: C.dark,
+    fontSize: fs(14.5),
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginTop: 10,
+  },
+  qrHelp: {
+    color: C.subtle,
+    fontSize: fs(14),
+    lineHeight: fs(19),
+    textAlign: "center",
+    marginTop: 16,
+  },
 
   logRow: {
     position: "relative",
@@ -1233,10 +1716,48 @@ const styles = StyleSheet.create({
   },
   logTop: { alignItems: "center", gap: 7, flexWrap: "wrap" },
   logMain: { flex: 1, color: C.dark, fontSize: fs(15), fontWeight: "800" },
-  logDetail: { color: C.muted, fontSize: fs(14), marginTop: 5, lineHeight: fs(18) },
-  logWhen: { color: C.placeholder, fontSize: fs(13.5), marginTop: 5, fontWeight: "700" },
+  logDetail: {
+    color: C.muted,
+    fontSize: fs(14),
+    marginTop: 5,
+    lineHeight: fs(18),
+  },
+  logWhen: {
+    color: C.placeholder,
+    fontSize: fs(13.5),
+    marginTop: 5,
+    fontWeight: "700",
+  },
 
-  redeemBox: { backgroundColor: C.surface, borderRadius: 16, padding: 13, marginBottom: 14 },
+  result: {
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    padding: 12,
+    gap: 4,
+  },
+  resultHead: { alignItems: "center", gap: 8 },
+  resultTitle: { flex: 1, fontSize: fs(15), fontWeight: "900" },
+  resultCode: {
+    fontSize: fs(18),
+    fontWeight: "900",
+    color: C.text,
+    letterSpacing: 2,
+    marginTop: 2,
+  },
+  resultLine: { fontSize: fs(13), fontWeight: "700", color: "#3D4644" },
+  resultWarn: {
+    fontSize: fs(12.5),
+    fontWeight: "800",
+    color: C.danger,
+    marginTop: 4,
+  },
+  redeemBox: {
+    backgroundColor: C.surface,
+    borderRadius: 16,
+    padding: 13,
+    marginBottom: 14,
+  },
   redeemRow: { gap: 9, marginTop: 8 },
   redeemInput: {
     flex: 1,
@@ -1264,13 +1785,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     marginBottom: 12,
   },
-  searchInput: { flex: 1, color: C.dark, fontSize: fs(15.5), fontWeight: "600" },
+  searchInput: {
+    flex: 1,
+    color: C.dark,
+    fontSize: fs(15.5),
+    fontWeight: "600",
+  },
 
   voucherTop: { alignItems: "center", gap: 8, marginBottom: 2 },
-  voucherCode: { color: C.dark, fontSize: fs(16.5), fontWeight: "800", letterSpacing: 1 },
+  voucherCode: {
+    color: C.dark,
+    fontSize: fs(16.5),
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
 
-  blockLabel: { color: C.muted, fontSize: fs(13.5), fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" },
-  dateHeaderRow: { alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 16, marginBottom: 8 },
+  blockLabel: {
+    color: C.muted,
+    fontSize: fs(13.5),
+    fontWeight: "800",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  dateHeaderRow: {
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 8,
+  },
   dateHeader: { color: C.dark, fontSize: fs(15), fontWeight: "800" },
 
   statGrid: { flexWrap: "wrap", gap: 10 },
@@ -1288,7 +1831,14 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   statValue: { color: C.dark, fontSize: fs(22), fontWeight: "800" },
-  statLabel: { color: C.muted, fontSize: fs(13.5), fontWeight: "800", letterSpacing: 0.5, marginTop: 3, textAlign: "center" },
+  statLabel: {
+    color: C.muted,
+    fontSize: fs(13.5),
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    marginTop: 3,
+    textAlign: "center",
+  },
 
   tierStats: { gap: 10, marginTop: 8 },
   tierStatCell: {
@@ -1306,10 +1856,20 @@ const styles = StyleSheet.create({
   },
 
   itemStatRow: { marginTop: 12 },
-  itemStatHead: { alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 },
+  itemStatHead: {
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 5,
+  },
   itemStatName: { flex: 1, color: C.dark, fontSize: fs(15), fontWeight: "800" },
   itemStatMeta: { color: C.muted, fontSize: fs(14), fontWeight: "700" },
-  progressTrack: { height: 6, borderRadius: 3, backgroundColor: C.surfaceAlt, overflow: "hidden" },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: C.surfaceAlt,
+    overflow: "hidden",
+  },
   progressFill: { height: 6, borderRadius: 3, backgroundColor: C.teal },
 
   pressed: { opacity: 0.65, transform: [{ scale: 0.985 }] },

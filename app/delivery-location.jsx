@@ -36,7 +36,7 @@ export default function DeliveryLocationScreen() {
   const geocodeSeq = useRef(0);
 
   useEffect(() => {
-    if (!initialLat) useCurrentLocation();
+    if (!initialLat) locateMe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -64,7 +64,7 @@ export default function DeliveryLocationScreen() {
     reverseGeocode(lat, lng);
   }
 
-  async function useCurrentLocation() {
+  async function locateMe() {
     setLocating(true);
     try {
       const perm = await Location.requestForegroundPermissionsAsync();
@@ -113,7 +113,7 @@ export default function DeliveryLocationScreen() {
 
       <TouchableOpacity
         style={styles.currentLocationBtn}
-        onPress={useCurrentLocation}
+        onPress={locateMe}
         disabled={locating}
       >
         {locating ? (

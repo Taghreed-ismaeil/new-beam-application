@@ -1,11 +1,43 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 
 // Both web and native talk to the deployed backend so testing doesn't depend on a local
 // server or being on the same Wi-Fi network as the dev machine.
 // EXPO_PUBLIC_API_BASE (e.g. in a gitignored .env.local) points a dev build at a local backend.
 export const API_BASE = process.env.EXPO_PUBLIC_API_BASE || "https://model-restaurant-app.onrender.com";
 // Free-tier Render sleeps after 15min idle — first request after that can take 30-50s to wake up.
+// keepServerAwake() below pings it from app launch so customers rarely hit that wait.
+
+// Long enough to ride out a cold start, short enough that nothing spins forever.
+const REQUEST_TIMEOUT_MS = 60_000;
+const KEEP_AWAKE_MS = 10 * 60_000;
+
+/**
+ * Wakes the backend as soon as the app opens (it runs while the intro video
+ * plays) and keeps pinging it every 10 minutes while the app is in the
+ * foreground, so Render's free tier doesn't fall asleep mid-session.
+ * Returns a cleanup function.
+ */
+export function keepServerAwake(): () => void {
+  const ping = () => {
+    fetch(`${API_BASE}/health`).catch(() => {});
+  };
+  ping();
+  let timer: ReturnType<typeof setInterval> | null = setInterval(ping, KEEP_AWAKE_MS);
+  const sub = AppState.addEventListener("change", (state) => {
+    if (state === "active") {
+      ping();
+      if (!timer) timer = setInterval(ping, KEEP_AWAKE_MS);
+    } else if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  });
+  return () => {
+    if (timer) clearInterval(timer);
+    sub.remove();
+  };
+}
 
 // Images (menu photos, QR codes, loyalty reveal images) live on Cloudflare R2, not on the API server.
 // A local backend (R2_ACCOUNT_ID=local) serves images itself and forwards the rest to R2.
@@ -89,13 +121,22 @@ export async function apiRequest<T = any>(
     // XMLHttpRequest still streams those parts straight from the file.
     ({ status, data } = await xhrRequest(`${API_BASE}${path}`, opts.method ?? "POST", headers, body));
   } else {
-    const res = await fetch(`${API_BASE}${path}`, {
-      method: opts.method ?? "GET",
-      headers,
-      body,
-    });
-    status = res.status;
-    data = await res.json().catch(() => ({}));
+    // A request that never answers would leave its screen spinning forever —
+    // give up after REQUEST_TIMEOUT_MS so the screen can show its error instead.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: opts.method ?? "GET",
+        headers,
+        body,
+        signal: controller.signal,
+      });
+      status = res.status;
+      data = await res.json().catch(() => ({}));
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   if (status < 200 || status >= 300) {
@@ -131,6 +172,8 @@ function xhrRequest(
     };
     xhr.onerror = () => reject(new TypeError("Network request failed"));
     xhr.ontimeout = () => reject(new TypeError("Network request timed out"));
+    // photo uploads get longer than other requests — they may be sending megabytes
+    xhr.timeout = REQUEST_TIMEOUT_MS * 2;
     xhr.send(body as any);
   });
 }
@@ -232,4 +275,16 @@ export function apiRequestCached<T = any>(
       if (onError) onError(error);
       else console.warn(`[api] refresh of ${path} failed, keeping cached data`, error);
     });
+}
+
+/**
+ * Pull-to-refresh: always hits the network, updates the cache that
+ * apiRequestCached reads, and resolves with the fresh data (or rejects).
+ */
+export async function refreshCached<T = any>(path: string, opts: { cacheKey?: string } = {}): Promise<T> {
+  const key = opts.cacheKey ?? path;
+  const fresh = await apiRequest<T>(path);
+  fetchedAt.set(key, Date.now());
+  await setCachedJson(key, fresh);
+  return fresh;
 }

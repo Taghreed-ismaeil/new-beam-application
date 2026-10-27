@@ -1,3 +1,4 @@
+import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
 import { router, useFocusEffect } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -73,8 +74,20 @@ export default function AboutScreen() {
   // underneath other screens it steals CPU/GPU and makes animations stutter.
   useFocusEffect(
     useCallback(() => {
-      player.play();
-      return () => player.pause();
+      try {
+        player.play();
+      } catch {
+        // player already released
+      }
+      // When the screen closes, useVideoPlayer may free the native player before
+      // this cleanup runs — pausing it then throws, so ignore that case.
+      return () => {
+        try {
+          player.pause();
+        } catch {
+          // already released
+        }
+      };
     }, [player]),
   );
 
@@ -361,6 +374,7 @@ export default function AboutScreen() {
           </View>
         </View>
         */}
+        <MadeBy />
       </ScrollView>
     </View>
   );
@@ -380,6 +394,7 @@ const baseStyles = {
   },
 
   scrollContent: {
+    flexGrow: 1,
     paddingBottom: 110,
   },
 
