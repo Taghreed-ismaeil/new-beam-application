@@ -11,6 +11,9 @@ import { Text } from "@/lib/arabic-font";
    FOOD CARD
    Vertical card: image → name → description → price + add.
    Used two-per-row on the category pages and in search.
+   On the Offers page it also gets the photo to show and the
+   deal: a discount sticker on the photo, and the price after
+   the discount with the old one crossed out.
 ========================================================= */
 
 const ORANGE = "#FC4A14";
@@ -35,6 +38,10 @@ export default function FoodCard({
   onDecrease,
   onOpen = undefined,
   index,
+  // optional: image source to use instead of the item's own / the fallback
+  photo = null,
+  // optional: { label: "-30%", offerPrice: 1.92 | null }
+  deal = null,
 }) {
   const { t, pick, pickDesc, dir } = useAppLang();
 
@@ -43,6 +50,10 @@ export default function FoodCard({
   const itemDescription = pickDesc(item);
 
   const price = Number(item.price).toFixed(2);
+  const dealPrice =
+    deal?.offerPrice != null && deal.offerPrice < Number(item.price)
+      ? deal.offerPrice.toFixed(2)
+      : null;
 
   const accent = index % 2 === 0 ? ORANGE : TEAL;
 
@@ -63,18 +74,22 @@ export default function FoodCard({
       >
       {/* IMAGE */}
 
-      <Image
-        source={
-          isUsableImagePath(item.imageUrl)
-            ? {
-                uri: imageUrl(item.imageUrl),
-              }
-            : FALLBACK_IMAGE
-        }
-        cachePolicy="memory-disk"
-        transition={120}
-        style={[styles.foodImage, { width: imageSize, height: imageSize }]}
-      />
+      <View>
+        <Image
+          source={
+            photo ??
+            (isUsableImagePath(item.imageUrl)
+              ? {
+                  uri: imageUrl(item.imageUrl),
+                }
+              : FALLBACK_IMAGE)
+          }
+          cachePolicy="memory-disk"
+          transition={120}
+          style={[styles.foodImage, { width: imageSize, height: imageSize }]}
+        />
+        {!!deal && <Text style={styles.dealSticker}>{deal.label}</Text>}
+      </View>
 
       {/* NAME */}
 
@@ -93,9 +108,15 @@ export default function FoodCard({
 
       <View style={[styles.bottomRow, dir.row]}>
         <View style={[styles.priceRow, dir.row]}>
-          <Text style={[styles.price, { color: accent }]}>{price}</Text>
+          <Text style={[styles.price, { color: dealPrice ? ORANGE : accent }]}>
+            {dealPrice ?? price}
+          </Text>
 
-          <Text style={[styles.currency, { color: accent }]}>{t("jd")}</Text>
+          <Text style={[styles.currency, { color: dealPrice ? ORANGE : accent }]}>
+            {t("jd")}
+          </Text>
+
+          {!!dealPrice && <Text style={styles.oldPrice}>{price}</Text>}
         </View>
 
         {quantity === 0 ? (
@@ -243,6 +264,31 @@ const styles = StyleSheet.create({
     fontSize: 8.5,
     fontWeight: "900",
     marginHorizontal: 2,
+  },
+
+  oldPrice: {
+    color: "#9AA5A3",
+    fontSize: 11,
+    fontWeight: "700",
+    textDecorationLine: "line-through",
+  },
+
+  dealSticker: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    backgroundColor: ORANGE,
+    color: WHITE,
+    fontSize: 12,
+    fontWeight: "900",
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: WHITE,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    overflow: "hidden",
+    writingDirection: "ltr",
+    transform: [{ rotate: "-8deg" }],
   },
 
   addButton: {

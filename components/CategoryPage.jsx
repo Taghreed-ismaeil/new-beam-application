@@ -19,8 +19,16 @@ import { useCart } from "@/context/CartContext";
 import { apiRequestCached, refreshCached } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { AnimatedText, Text } from "@/lib/arabic-font";
+import { itemPhoto } from "@/lib/category-images";
 import { findMenuCategory } from "@/lib/menu-category";
-import { getMenuSections } from "@/lib/menu-sections";
+import { allMenuItems, getMenuSections } from "@/lib/menu-sections";
+import {
+  discountLabel,
+  discountedPrice,
+  itemsOnOffer,
+  refreshOffers,
+  useOffers,
+} from "@/lib/offers";
 import { enterDown } from "@/lib/motion";
 import Animated from "react-native-reanimated";
 
@@ -60,7 +68,9 @@ const GRID_GAP = 12;
 /* =========================================================
    CATEGORY PAGE
    Shared by every app/menu-food/* page. Pass either a
-   categoryKey (matched by name) or a categoryId.
+   categoryKey (matched by name) or a categoryId — or
+   offersOnly, for the Offers page: every item a live offer
+   covers, with its category's photo and the discounted price.
    The header color follows the category's position in the
    menu, so it always matches the card the user tapped
    (menu: even = orange, odd = teal).
@@ -72,6 +82,7 @@ const GRID_GAP = 12;
  *   categoryId?: string | string[],
  *   title?: string,
  *   emoji?: string,
+ *   offersOnly?: boolean,
  * }} props
  */
 export default function CategoryPage({
@@ -79,6 +90,7 @@ export default function CategoryPage({
   categoryId,
   title,
   emoji = "🍽️",
+  offersOnly = false,
 }) {
   const { width } = useWindowDimensions();
 
@@ -90,6 +102,9 @@ export default function CategoryPage({
   const [extrasId, setExtrasId] = useState(null);
   const [menuIndex, setMenuIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  // Offers page: the whole menu, to find the items the live offers cover
+  const [allCategories, setAllCategories] = useState([]);
+  const offers = useOffers();
 
   const scrollRef = useRef(null);
   const sectionY = useRef({});
@@ -107,6 +122,13 @@ export default function CategoryPage({
     (data) => {
       const categories = data.categories ?? [];
 
+      if (offersOnly) {
+        setAllCategories(categories);
+        setExtrasId(findMenuCategory(categories, "extras")?.id ?? null);
+        setLoading(false);
+        return;
+      }
+
       const foundCategory = categoryKey
         ? findMenuCategory(categories, categoryKey)
         : categories.find((c) => String(c.id) === String(categoryId));
@@ -116,7 +138,7 @@ export default function CategoryPage({
       setMenuIndex(Math.max(categories.indexOf(foundCategory), 0));
       setLoading(false);
     },
-    [categoryKey, categoryId],
+    [categoryKey, categoryId, offersOnly],
   );
 
   // Cached first (warmed during the intro), so the page paints instantly; the
@@ -124,6 +146,7 @@ export default function CategoryPage({
   // menu changes show up without restarting the app.
   useFocusEffect(
     useCallback(() => {
+      if (offersOnly) refreshOffers();
       let painted = false;
       apiRequestCached(
         "/api/menu",
@@ -136,7 +159,7 @@ export default function CategoryPage({
           setLoading(false);
         },
       );
-    }, [applyMenu]),
+    }, [applyMenu, offersOnly]),
   );
 
   // Pull down to refresh
@@ -144,6 +167,7 @@ export default function CategoryPage({
   async function onRefresh() {
     setRefreshing(true);
     try {
+      if (offersOnly) refreshOffers();
       applyMenu(await refreshCached("/api/menu"));
     } catch {
       // keep what's on screen
@@ -203,9 +227,20 @@ export default function CategoryPage({
     );
   }
 
-  const items = category?.items ?? [];
+  // Offers page: one flat grid of the items on offer, each knowing its deal
+  const onOffer = offersOnly
+    ? itemsOnOffer(offers, allMenuItems(allCategories))
+    : [];
+  const dealFor = new Map(onOffer.map(({ item, offer }) => [item.id, offer]));
+  const categoriesById = new Map(allCategories.map((c) => [c.id, c]));
 
-  const pageTitle = pick(category) || title || t("tabMenu");
+  const items = offersOnly
+    ? onOffer.map(({ item }) => item)
+    : (category?.items ?? []);
+
+  const pageTitle = offersOnly
+    ? t("offersPageTitle")
+    : pick(category) || title || t("tabMenu");
 
   const isOrange = menuIndex % 2 === 0;
   const headerColor = isOrange ? SOFT_ORANGE : SOFT_TEAL;
@@ -213,7 +248,7 @@ export default function CategoryPage({
   // Side of the 3D section keys — a deeper shade of the header color.
   const chipDepth = isOrange ? "#C8481F" : "#1F5753";
 
-  const sections = getMenuSections(category);
+  const sections = offersOnly ? null : getMenuSections(category);
 
   // The menu's category pills stay on top of every category page: the one
   // you're on is filled in, the others switch straight to their page.
@@ -253,6 +288,18 @@ export default function CategoryPage({
           quantity={getQuantity(item.id)}
           onAdd={() => handleAdd(item)}
           onDecrease={() => decreaseQuantity(item)}
+          {...(offersOnly && {
+            photo: itemPhoto(item, categoriesById.get(item.categoryId)),
+            deal: dealFor.has(item.id)
+              ? {
+                  label: discountLabel(dealFor.get(item.id), t("jd")),
+                  // same rule as everywhere: only a discount the checkout applies
+                  offerPrice: dealFor.get(item.id).appliesAtCheckout
+                    ? discountedPrice(Number(item.price), dealFor.get(item.id))
+                    : null,
+                }
+              : null,
+          })}
           onOpen={() =>
             router.push({
               pathname: "/item/[id]",
@@ -463,9 +510,13 @@ export default function CategoryPage({
                   <Text style={styles.emptyEmoji}>{emoji}</Text>
                 </View>
 
-                <Text style={styles.emptyTitle}>{t("categoryEmpty")}</Text>
+                <Text style={styles.emptyTitle}>
+                  {t(offersOnly ? "offersEmptyTitle" : "categoryEmpty")}
+                </Text>
 
-                <Text style={styles.emptyText}>{t("categoryEmptyText")}</Text>
+                <Text style={styles.emptyText}>
+                  {t(offersOnly ? "offersEmptyText" : "categoryEmptyText")}
+                </Text>
               </View>
             ) : (
               renderGrid(items)

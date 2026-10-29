@@ -1,16 +1,17 @@
-import {
-  OfferCountdownChip,
-  TimedOfferBanner,
-} from "@/components/OfferCountdown";
-import {
-  apiRequestCached,
-  imageUrl,
-  isUsableImagePath,
-} from "@/lib/api-client";
+import { OfferCountdownChip } from "@/components/OfferCountdown";
+import { apiRequestCached } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
+import { itemPhoto } from "@/lib/category-images";
 import { RNAnimatedText, Text } from "@/lib/arabic-font";
 import { allMenuItems } from "@/lib/menu-sections";
-import { discountedPrice, refreshOffers, useOffers } from "@/lib/offers";
+import {
+  discountedPrice,
+  itemsOnOffer,
+  offerEndsAt,
+  spreadByCategory,
+  refreshOffers,
+  useOffers,
+} from "@/lib/offers";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
@@ -35,6 +36,9 @@ const FALLBACK_IMAGE = require("../../assets/img/menu-1.jpg");
 const CIRCLE_SIZE = 96;
 
 const OFFERS_POLL_MS = 15000;
+
+// most circles the ring holds before they start covering each other
+const RING_MAX = 12;
 
 const RADIUS_X = Math.min(Dimensions.get("window").width, 480) * 0.4;
 
@@ -88,6 +92,8 @@ export default function Menu({ refreshKey = 0 }) {
   // covers gets a slot, newest offer first. With no live offers it falls back
   // to the loyalty items so the section is never empty.
   const [menuItems, setMenuItems] = useState(null);
+  // top-level categories by id — items without a photo of their own show their category's
+  const [categoriesById, setCategoriesById] = useState(() => new Map());
   // shared live offers (lib/offers) — a timed offer's countdown starts the first
   // time they are read for this customer, i.e. when they open the app
   const offers = useOffers();
@@ -96,6 +102,7 @@ export default function Menu({ refreshKey = 0 }) {
   useEffect(() => {
     apiRequestCached("/api/menu", (data) => {
       setMenuItems(allMenuItems(data.categories));
+      setCategoriesById(new Map((data.categories ?? []).map((c) => [c.id, c])));
     });
   }, [refreshKey]);
 
@@ -113,25 +120,14 @@ export default function Menu({ refreshKey = 0 }) {
 
   useEffect(() => {
     if (!menuItems) return;
-    const byId = new Map(menuItems.map((item) => [item.id, item]));
-    const seen = new Set();
-    const fromOffers = [];
-    // timed offers first (soonest to end first), then the newest normal offers
-    const ordered = [...offers].sort(
-      (a, b) =>
-        Number(!!b.expiresAt) - Number(!!a.expiresAt) ||
-        (a.expiresAt && b.expiresAt
-          ? new Date(a.expiresAt) - new Date(b.expiresAt)
-          : b.id - a.id),
-    );
-    for (const offer of ordered) {
-      for (const id of offer.menuItemIds ?? []) {
-        const item = byId.get(id);
-        if (!item || seen.has(id) || item.isAvailable === false) continue;
-        seen.add(id);
-        fromOffers.push({ ...item, offer });
-      }
-    }
+    // the Offers page's items, taking turns between categories, so every category the admin picked gets a circle
+    const fromOffers = spreadByCategory(
+      itemsOnOffer(offers, menuItems),
+      RING_MAX,
+    ).map(({ item, offer }) => ({
+      ...item,
+      offer,
+    }));
     // No live offers → loyalty items → otherwise a spread of the menu (one per
     // section, photos first) so the ring is never empty.
     const loyalty = menuItems.filter((item) => item.hasLoyalty);
@@ -146,7 +142,7 @@ export default function Menu({ refreshKey = 0 }) {
       });
     setDeals(
       fromOffers.length
-        ? fromOffers.slice(0, 10)
+        ? fromOffers
         : (loyalty.length ? loyalty : spread).slice(0, 8),
     );
   }, [menuItems, offers]);
@@ -284,13 +280,6 @@ export default function Menu({ refreshKey = 0 }) {
      RENDER
   ====================================================== */
 
-  // Offers that are this customer's for a limited time get a big countdown card.
-  const byId = new Map((menuItems ?? []).map((item) => [item.id, item]));
-  const timedOffers = offers
-    .filter((o) => o.expiresAt)
-    .sort((a, b) => new Date(a.expiresAt) - new Date(b.expiresAt))
-    .slice(0, 2);
-
   const activePrice = Number(activeItem?.price ?? 0);
   const activeOfferPrice = activeItem?.offer?.appliesAtCheckout
     ? discountedPrice(activePrice, activeItem.offer)
@@ -310,27 +299,6 @@ export default function Menu({ refreshKey = 0 }) {
       {/* SEE TODAY'S BEST DEAL lives in the Hero now (bottom of the video),
           so it's never hidden behind the video on iOS. */}
 
-      {timedOffers.map((offer) => {
-        const firstItem = (offer.menuItemIds ?? [])
-          .map((id) => byId.get(id))
-          .find(Boolean);
-        return (
-          <TimedOfferBanner
-            key={offer.id}
-            offer={offer}
-            itemName={firstItem ? pick(firstItem) : null}
-            onPress={() =>
-              firstItem
-                ? router.push({
-                    pathname: "/item/[id]",
-                    params: { id: String(firstItem.id) },
-                  })
-                : router.push("/menu")
-            }
-          />
-        );
-      })}
-
       {/* =================================================
           FOOD CAROUSEL
       ================================================= */}
@@ -340,6 +308,7 @@ export default function Menu({ refreshKey = 0 }) {
           <RingItem
             key={item.id}
             item={item}
+            photo={itemPhoto(item, categoriesById.get(item.categoryId), FALLBACK_IMAGE)}
             index={index}
             n={n}
             rotation={rotation}
@@ -369,9 +338,7 @@ export default function Menu({ refreshKey = 0 }) {
                   <Text style={[styles.offerTitle, dir.text]} numberOfLines={1}>
                     {activeItem.offer.title}
                   </Text>
-                  {!!activeItem.offer.expiresAt && (
-                    <OfferCountdownChip endsAt={activeItem.offer.expiresAt} />
-                  )}
+                  <OfferCountdownChip endsAt={offerEndsAt(activeItem.offer)} />
                 </View>
               ) : activeItem.rewardValue ? (
                 <Text style={[styles.dealReward, dir.text]} numberOfLines={1}>
@@ -405,6 +372,7 @@ export default function Menu({ refreshKey = 0 }) {
 // its position on the ring is computed on the animation thread.
 const RingItem = memo(function RingItem({
   item,
+  photo,
   index,
   n,
   rotation,
@@ -429,13 +397,7 @@ const RingItem = memo(function RingItem({
     <Reanimated.View style={[styles.slot, slotStyle]} pointerEvents="none">
       <View style={[styles.card, isActive && styles.cardActive]}>
         <Image
-          source={
-            isUsableImagePath(item.imageUrl)
-              ? {
-                  uri: imageUrl(item.imageUrl),
-                }
-              : FALLBACK_IMAGE
-          }
+          source={photo}
           cachePolicy="memory-disk"
           transition={120}
           style={styles.image}

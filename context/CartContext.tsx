@@ -12,6 +12,7 @@ import { useAuth } from "@/context/AuthContext";
 import {
   checkoutOfferFor,
   clearOffers,
+  offerEndsAt,
   refreshOffers,
   useOffers,
 } from "@/lib/offers";
@@ -259,7 +260,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
               ...l,
               basePrice: l.price,
               price: best.price,
-              offerEndsAt: best.offer.expiresAt ?? null,
+              offerEndsAt: offerEndsAt(best.offer),
             }
           : { ...l, basePrice: l.price, offerEndsAt: null };
       }),

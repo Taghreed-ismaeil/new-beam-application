@@ -425,6 +425,11 @@ const en: Record<string, string> = {
   fieldTargetItem: "Item",
   fieldStartDate: "Start date",
   dateFieldHint: "Optional — e.g. 2026-09-29 or 29/9/2026",
+  fieldStartTime: "Start time",
+  fieldEndTime: "End time",
+  dateTimeFieldHint: "Optional. Date like 2026-09-29, time like 18:30 (Jordan time). No time = the whole day.",
+  errOfferTimeInvalid: "Enter a valid time, like 18:30.",
+  errOfferTimeNeedsDate: "Add the date for that time too.",
   fieldEndDate: "End date",
   fieldOfferDuration: "Time per customer (minutes)",
   offerDurationHint:
@@ -1092,6 +1097,11 @@ const ar: Record<string, string> = {
   fieldTargetItem: "الصنف",
   fieldStartDate: "تاريخ البداية",
   dateFieldHint: "اختياري — مثال: 2026/9/29 أو 29/9/2026",
+  fieldStartTime: "وقت البداية",
+  fieldEndTime: "وقت النهاية",
+  dateTimeFieldHint: "اختياري. التاريخ مثل 2026/9/29 والوقت مثل 18:30 (بتوقيت الأردن). بدون وقت = اليوم كامل.",
+  errOfferTimeInvalid: "أدخل وقتًا صحيحًا، مثل 18:30.",
+  errOfferTimeNeedsDate: "أضف التاريخ لهذا الوقت كمان.",
   fieldEndDate: "تاريخ النهاية",
   fieldOfferDuration: "مدة العرض لكل زبون (بالدقائق)",
   offerDurationHint:

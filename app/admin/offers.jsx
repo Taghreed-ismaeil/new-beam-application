@@ -34,8 +34,8 @@ import {
   fetchOffers,
   updateOffer,
 } from "@/lib/admin-api";
-import { imageUrl } from "@/lib/api-client";
 import { Text } from "@/lib/arabic-font";
+import { itemPhoto } from "@/lib/category-images";
 import { useDirection, useI18n } from "@/lib/i18n";
 
 // The real backend (backend/src/routes/offers.ts) stores a single `title`
@@ -51,7 +51,9 @@ const EMPTY_OFFER = {
   value: "",
   menuItemIds: [],
   startsAt: "",
+  startTime: "",
   endsAt: "",
+  endTime: "",
   // minutes each customer gets from when they first see it; "" = a normal offer
   durationMinutes: "",
   isActive: true,
@@ -72,6 +74,7 @@ const STATE_COLOR = {
 // Live offers are the ones a manager actually needs to see right now — everything
 // else (upcoming, expired, switched off) matters progressively less at a glance.
 const STATE_ORDER = { live: 0, scheduled: 1, off: 2, expired: 3 };
+const LTR_INPUT = { textAlign: "left", writingDirection: "ltr" };
 const KIND_ICON = { percentage: "pricetag-outline", fixed: "cash-outline" };
 
 /** The backend only stores `active` + start/end dates — "live/scheduled/
@@ -116,11 +119,42 @@ function normalizeDate(input) {
   return `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-const toStartIso = (d) =>
-  normalizeDate(d) ? `${normalizeDate(d)}T00:00:00.000Z` : null;
-const toEndIso = (d) =>
-  normalizeDate(d) ? `${normalizeDate(d)}T23:59:59.999Z` : null;
-const isoToDate = (iso) => (iso ? String(iso).slice(0, 10) : "");
+/** "18:30", "6:30" or "٦:٣٠" → "18:30"; null if it isn't a real time. */
+function normalizeTime(input) {
+  const ascii = String(input ?? "")
+    .trim()
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
+  const m = /^(\d{1,2})[:.](\d{2})$/.exec(ascii);
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
+  return `${m[1].padStart(2, "0")}:${m[2]}`;
+}
+
+// Times are typed in restaurant time — Jordan, UTC+3 all year — whatever timezone
+// the manager's phone is in. No time = the whole day (from 00:00 / until 23:59:59).
+const JORDAN_OFFSET = "+03:00";
+const JORDAN_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+function toIso(date, time, endOfDay) {
+  const d = normalizeDate(date);
+  if (!d) return null;
+  const t = normalizeTime(time);
+  const clock = t ? `${t}:00` : endOfDay ? "23:59:59.999" : "00:00:00";
+  return new Date(`${d}T${clock}${JORDAN_OFFSET}`).toISOString();
+}
+
+/** Stored ISO → { date, time } as typed. Offers saved before times existed were whole UTC
+ * days (T00:00:00.000Z / T23:59:59.999Z) — those still read back as just the date. */
+function isoToParts(iso, endOfDay) {
+  if (!iso) return { date: "", time: "" };
+  const s = String(iso);
+  if (/T00:00:00(\.000)?Z$|T23:59:59\.999Z$/.test(s))
+    return { date: s.slice(0, 10), time: "" };
+  const local = new Date(new Date(s).getTime() + JORDAN_OFFSET_MS).toISOString();
+  const time = local.slice(11, 16);
+  const wholeDay = endOfDay ? local.slice(11, 19) === "23:59:59" : time === "00:00";
+  return { date: local.slice(0, 10), time: wholeDay ? "" : time };
+}
 
 export default function AdminOffers() {
   const { can } = useStaff();
@@ -189,8 +223,10 @@ export default function AdminOffers() {
       kind: offer.discountType === "fixed" ? "fixed" : "percent",
       value: String(offer.discountValue ?? ""),
       menuItemIds: offer.menuItemIds ?? [],
-      startsAt: isoToDate(offer.startsAt),
-      endsAt: isoToDate(offer.endsAt),
+      startsAt: isoToParts(offer.startsAt, false).date,
+      startTime: isoToParts(offer.startsAt, false).time,
+      endsAt: isoToParts(offer.endsAt, true).date,
+      endTime: isoToParts(offer.endsAt, true).time,
       durationMinutes: offer.durationMinutes
         ? String(offer.durationMinutes)
         : "",
@@ -231,8 +267,17 @@ export default function AdminOffers() {
     const end = normalizeDate(editing.endsAt);
     if (editing.startsAt && !start) return t("errOfferDateInvalid");
     if (editing.endsAt && !end) return t("errOfferDateInvalid");
-    // both are zero-padded YYYY-MM-DD, so plain string order is date order; same day is allowed
-    if (start && end && start > end) return t("errOfferDateRange");
+    if (editing.startTime && !normalizeTime(editing.startTime))
+      return t("errOfferTimeInvalid");
+    if (editing.endTime && !normalizeTime(editing.endTime))
+      return t("errOfferTimeInvalid");
+    // a time without its date means nothing
+    if ((editing.startTime && !start) || (editing.endTime && !end))
+      return t("errOfferTimeNeedsDate");
+    // same-shape UTC ISO strings, so string order is time order
+    const startIso = toIso(editing.startsAt, editing.startTime, false);
+    const endIso = toIso(editing.endsAt, editing.endTime, true);
+    if (startIso && endIso && startIso >= endIso) return t("errOfferDateRange");
     if (editing.durationMinutes) {
       const minutes = Number(editing.durationMinutes);
       if (!Number.isInteger(minutes) || minutes < 1 || minutes > 10080)
@@ -256,8 +301,8 @@ export default function AdminOffers() {
       menuItemIds: JSON.stringify(editing.menuItemIds ?? []),
       // "" rather than null for an empty field: the schema is `.optional()` (null fails it), and
       // on update the PUT route treats "" as "clear this date" — so removing a date sticks.
-      startsAt: toStartIso(editing.startsAt) ?? "",
-      endsAt: toEndIso(editing.endsAt) ?? "",
+      startsAt: toIso(editing.startsAt, editing.startTime, false) ?? "",
+      endsAt: toIso(editing.endsAt, editing.endTime, true) ?? "",
       // empty = a normal offer: left out on create, "" clears it on update
       durationMinutes: editing.durationMinutes
         ? Number(editing.durationMinutes)
@@ -322,11 +367,11 @@ export default function AdminOffers() {
       : "";
   };
 
-  // Dates are stored as UTC day boundaries (see toStartIso/toEndIso), so they must be
-  // *displayed* in UTC too — otherwise Amman's +3 offset pushes 23:59:59 UTC on the end date
-  // into the small hours of the next day, and the list shows a day later than what was typed.
-  const fmtDate = (iso) =>
-    new Date(iso).toLocaleDateString(undefined, { timeZone: "UTC" });
+  // Shown exactly as typed (Jordan time, see isoToParts) — with the time when there is one.
+  const fmtDate = (iso, endOfDay) => {
+    const { date, time } = isoToParts(iso, endOfDay);
+    return time ? `${date} ${time}` : date;
+  };
 
   const canAdd = canEdit && editing === null;
 
@@ -428,14 +473,14 @@ export default function AdminOffers() {
                     <Text style={[styles.rowDates, dir.text]}>
                       {offer.startsAt && offer.endsAt
                         ? t("offerDateRange", {
-                            start: fmtDate(offer.startsAt),
-                            end: fmtDate(offer.endsAt),
+                            start: fmtDate(offer.startsAt, false),
+                            end: fmtDate(offer.endsAt, true),
                           })
                         : offer.startsAt
                           ? t("offerFromDate", {
-                              start: fmtDate(offer.startsAt),
+                              start: fmtDate(offer.startsAt, false),
                             })
-                          : t("offerUntilDate", { end: fmtDate(offer.endsAt) })}
+                          : t("offerUntilDate", { end: fmtDate(offer.endsAt, true) })}
                     </Text>
                   )}
                 </Pressable>
@@ -534,23 +579,54 @@ export default function AdminOffers() {
                 onSearch={setItemSearch}
               />
 
-              <Field
-                label={t("fieldStartDate")}
-                value={editing?.startsAt ?? ""}
-                onChangeText={(v) => patch({ startsAt: v.trim() })}
-                placeholder="2026-08-20"
-                autoCapitalize="none"
-                hint={t("dateFieldHint")}
-                style={{ textAlign: "left", writingDirection: "ltr" }}
-              />
-              <Field
-                label={t("fieldEndDate")}
-                value={editing?.endsAt ?? ""}
-                onChangeText={(v) => patch({ endsAt: v.trim() })}
-                placeholder="2026-08-27"
-                autoCapitalize="none"
-                style={{ textAlign: "left", writingDirection: "ltr" }}
-              />
+              {/* date + time side by side; the time is optional (empty = whole day) */}
+              <View style={[styles.whenRow, dir.row]}>
+                <View style={styles.whenDate}>
+                  <Field
+                    label={t("fieldStartDate")}
+                    value={editing?.startsAt ?? ""}
+                    onChangeText={(v) => patch({ startsAt: v.trim() })}
+                    placeholder="2026-08-20"
+                    autoCapitalize="none"
+                    style={LTR_INPUT}
+                  />
+                </View>
+                <View style={styles.whenTime}>
+                  <Field
+                    label={t("fieldStartTime")}
+                    value={editing?.startTime ?? ""}
+                    onChangeText={(v) => patch({ startTime: v.trim() })}
+                    placeholder="18:00"
+                    keyboardType="numbers-and-punctuation"
+                    style={LTR_INPUT}
+                  />
+                </View>
+              </View>
+              <View style={[styles.whenRow, dir.row]}>
+                <View style={styles.whenDate}>
+                  <Field
+                    label={t("fieldEndDate")}
+                    value={editing?.endsAt ?? ""}
+                    onChangeText={(v) => patch({ endsAt: v.trim() })}
+                    placeholder="2026-08-27"
+                    autoCapitalize="none"
+                    style={LTR_INPUT}
+                  />
+                </View>
+                <View style={styles.whenTime}>
+                  <Field
+                    label={t("fieldEndTime")}
+                    value={editing?.endTime ?? ""}
+                    onChangeText={(v) => patch({ endTime: v.trim() })}
+                    placeholder="23:00"
+                    keyboardType="numbers-and-punctuation"
+                    style={LTR_INPUT}
+                  />
+                </View>
+              </View>
+              <Text style={[styles.whenHint, dir.text]}>
+                {t("dateTimeFieldHint")}
+              </Text>
               <Field
                 label={t("fieldOfferDuration")}
                 value={editing?.durationMinutes ?? ""}
@@ -611,6 +687,13 @@ function OfferItemPicker({ categories, selected, onChange, search, onSearch }) {
   const { t, pick } = useI18n();
   const dir = useDirection();
   const q = search.trim().toLowerCase();
+  // Only what customers can actually see: the admin list also has hidden categories
+  // (and sub-categories of hidden ones) and switched-off items — an offer on those
+  // never shows up in the app.
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const visible = (c) =>
+    c.isActive !== false &&
+    (!c.parentId || byId.get(c.parentId)?.isActive !== false);
   const matches = (i) =>
     !q ||
     [i.name, i.nameEn].some((n) => n && String(n).toLowerCase().includes(q));
@@ -648,11 +731,17 @@ function OfferItemPicker({ categories, selected, onChange, search, onSearch }) {
       />
 
       {categories.map((c) => {
-        const items = (c.items ?? []).filter(matches);
+        if (!visible(c)) return null;
+        const items = (c.items ?? []).filter(
+          (i) => i.isAvailable !== false && matches(i),
+        );
         if (!items.length) return null;
         const ids = items.map((i) => i.id);
         const allOn = ids.every((id) => selected.includes(id));
         const onCount = ids.filter((id) => selected.includes(id)).length;
+        // a sub-category takes its parent's photo (photos are per top-level category)
+        const topCategory =
+          (c.parentId && categories.find((p) => p.id === c.parentId)) || c;
         return (
           <View key={c.id} style={pickerStyles.group}>
             <View style={[pickerStyles.groupHead, dir.row]}>
@@ -691,6 +780,7 @@ function OfferItemPicker({ categories, selected, onChange, search, onSearch }) {
             <View style={[pickerStyles.grid, dir.row]}>
               {items.map((i) => {
                 const on = selected.includes(i.id);
+                const photo = itemPhoto(i, topCategory);
                 return (
                   <Pressable
                     key={i.id}
@@ -702,9 +792,9 @@ function OfferItemPicker({ categories, selected, onChange, search, onSearch }) {
                     ]}
                   >
                     <View style={pickerStyles.thumb}>
-                      {i.imageUrl ? (
+                      {photo ? (
                         <Image
-                          source={{ uri: imageUrl(i.imageUrl) }}
+                          source={photo}
                           style={pickerStyles.thumbImg}
                         />
                       ) : (
@@ -878,6 +968,17 @@ const styles = StyleSheet.create({
     fontSize: fs(14),
     fontWeight: "700",
     marginTop: 4,
+  },
+
+  whenRow: { gap: 10 },
+  whenDate: { flex: 1.4 },
+  whenTime: { flex: 1 },
+  whenHint: {
+    color: C.muted,
+    fontSize: fs(13.5),
+    fontWeight: "600",
+    marginTop: -6,
+    marginBottom: 14,
   },
 
   fieldLabel: {

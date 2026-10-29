@@ -18,7 +18,7 @@ import {
   getMenuSections,
 } from "@/lib/menu-sections";
 import { enterDown, enterUp } from "@/lib/motion";
-import { checkoutOfferFor, useOffers } from "@/lib/offers";
+import { checkoutOfferFor, offerEndsAt, useOffers } from "@/lib/offers";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
@@ -291,9 +291,7 @@ export default function ItemDetails() {
                 <Text style={styles.dealOld}>
                   {money(item.price)} {t("jd")}
                 </Text>
-                {!!deal.offer.expiresAt && (
-                  <OfferCountdownChip endsAt={deal.offer.expiresAt} light />
-                )}
+                <OfferCountdownChip endsAt={offerEndsAt(deal.offer)} light />
               </View>
             )}
           </Animated.View>

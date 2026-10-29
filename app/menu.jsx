@@ -25,6 +25,7 @@ import Animated, {
 import CartIcon from "@/components/CartIcon";
 import FoodCard from "@/components/FoodCard";
 import MadeBy from "@/components/MadeBy";
+import MenuOffersCard from "@/components/MenuOffersCard";
 import QuickCategoryPills from "@/components/QuickCategoryPills";
 import { useCart } from "@/context/CartContext";
 import {
@@ -35,8 +36,10 @@ import {
 } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { Text, TextInput } from "@/lib/arabic-font";
+import { itemPhoto } from "@/lib/category-images";
 import { findMenuCategory } from "@/lib/menu-category";
-import { categoryItems } from "@/lib/menu-sections";
+import { allMenuItems, categoryItems } from "@/lib/menu-sections";
+import { itemsOnOffer, refreshOffers, useOffers } from "@/lib/offers";
 import { enterDown, enterFromLeft, enterFromRight } from "@/lib/motion";
 
 // White logo made for the teal background (same one as the home hero)
@@ -211,6 +214,9 @@ export default function Menu() {
   // Search runs right here on the menu (no separate page)
   const [query, setQuery] = useState("");
 
+  // live offers → the Offers card above the first category
+  const offers = useOffers();
+
   const cart = useCart();
   const cartCount = cart.lines.reduce((n, l) => n + l.quantity, 0);
 
@@ -231,6 +237,7 @@ export default function Menu() {
   // changes made in the admin panel show up without restarting the app.
   useFocusEffect(
     useCallback(() => {
+      refreshOffers();
       apiRequestCached("/api/menu", (data) => {
         setCategories(data.categories ?? []);
         setLoading(false);
@@ -242,6 +249,7 @@ export default function Menu() {
   const [refreshing, setRefreshing] = useState(false);
   async function onRefresh() {
     setRefreshing(true);
+    refreshOffers();
     try {
       const data = await refreshCached("/api/menu");
       setCategories(data.categories ?? []);
@@ -265,6 +273,14 @@ export default function Menu() {
   });
 
   const hasQuery = !!query.trim();
+
+  const categoriesById = new Map(categories.map((c) => [c.id, c]));
+  const onOffer = itemsOnOffer(offers, allMenuItems(categories)).map(
+    (entry) => ({
+      ...entry,
+      photo: itemPhoto(entry.item, categoriesById.get(entry.item.categoryId)),
+    }),
+  );
 
   const results = useMemo(() => {
     // Every typed word must appear somewhere, in any order ("برغر بيم" finds "بيم برغر")
@@ -520,6 +536,16 @@ export default function Menu() {
           )
         ) : (
           <View style={styles.list}>
+            {/* only while something is on offer (the list gap would leave a hole) */}
+            {onOffer.length > 0 && (
+              <Animated.View entering={enterDown(4)}>
+                <MenuOffersCard
+                  onOffer={onOffer}
+                  onPress={() => router.push("/menu-food/offers")}
+                />
+              </Animated.View>
+            )}
+
             {allCategories.map((item, index) => {
               const categoryName = pick(item) || t("menuCategory");
 
