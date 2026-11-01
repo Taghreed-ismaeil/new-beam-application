@@ -158,8 +158,9 @@ export default function ItemDetails() {
   }, [menu, id]);
 
   // Every item page looks the same: teal on top (photo backdrop + the
-  // ingredients card), orange at the bottom (quantity + add to cart).
-  const buttonColor = ORANGE;
+  // ingredients card) and teal quantity + add to cart at the bottom; only the
+  // cart box next to them stays orange, like its bag icon.
+  const buttonColor = TEAL;
   const headerColor = SOFT_TEAL;
   const fade = FADE_TEAL;
 
@@ -586,13 +587,13 @@ export default function ItemDetails() {
           accessibilityLabel={t("cartTitle")}
           style={({ pressed }) => [
             styles.cartBox,
-            { borderColor: buttonColor },
+            { borderColor: ORANGE },
             pressed && styles.pressed,
           ]}
         >
           <CartIcon size={30} />
           {cartCount > 0 && (
-            <View style={[styles.cartBadge, { backgroundColor: buttonColor }]}>
+            <View style={[styles.cartBadge, { backgroundColor: ORANGE }]}>
               <Text style={styles.cartBadgeText}>
                 {cartCount > 99 ? "99+" : cartCount}
               </Text>
