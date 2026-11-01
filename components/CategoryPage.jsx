@@ -18,7 +18,7 @@ import QuickCategoryPills from "@/components/QuickCategoryPills";
 import { useCart } from "@/context/CartContext";
 import { apiRequestCached, refreshCached } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
-import { AnimatedText, Text } from "@/lib/arabic-font";
+import { Text } from "@/lib/arabic-font";
 import { itemPhoto } from "@/lib/category-images";
 import { findMenuCategory } from "@/lib/menu-category";
 import { allMenuItems, getMenuSections } from "@/lib/menu-sections";
@@ -30,14 +30,17 @@ import {
   useOffers,
 } from "@/lib/offers";
 import { enterDown } from "@/lib/motion";
-import Animated from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 
 // How far above a section to stop when a chip scrolls to it, so its band
 // isn't hidden under the floating back button.
-const SECTION_SCROLL_OFFSET = 70;
+const SECTION_SCROLL_OFFSET = 160;
 
-// More section keys than this turn into a sideways-scrolling row.
-const CHIPS_CENTERED_MAX = 3;
+// The pinned section bar: the back / language buttons' row on top (they float
+// over it), then a full-width row of section tabs.
+const PINNED_BAR_HEIGHT = 150;
+const PINNED_TABS_HEIGHT = 50;
+
 
 /* =========================================================
    BEAM COLORS
@@ -95,7 +98,7 @@ export default function CategoryPage({
   const { width } = useWindowDimensions();
 
   const cart = useCart();
-  const { t, pick, dir, lang } = useAppLang();
+  const { t, pick, dir } = useAppLang();
 
   const [category, setCategory] = useState(null);
   // the extras category has no page file of its own — its pill opens it by id
@@ -108,6 +111,14 @@ export default function CategoryPage({
 
   const scrollRef = useRef(null);
   const sectionY = useRef({});
+  // section tabs: which one is underlined, and where each tab sits in its row
+  const [currentSection, setCurrentSection] = useState(null);
+  const tabsRef = useRef(null);
+  const pinnedTabsRef = useRef(null);
+  const tabX = useRef({});
+  // where the header's tab row ends, and whether it has scrolled under the pinned bar
+  const tabsBottom = useRef(0);
+  const [pinned, setPinned] = useState(false);
 
   const isSmall = width < 360;
 
@@ -245,10 +256,14 @@ export default function CategoryPage({
   const isOrange = menuIndex % 2 === 0;
   const headerColor = isOrange ? SOFT_ORANGE : SOFT_TEAL;
   const fade = isOrange ? FADE_ORANGE : FADE_TEAL;
-  // Side of the 3D section keys — a deeper shade of the header color.
-  const chipDepth = isOrange ? "#C8481F" : "#1F5753";
 
   const sections = offersOnly ? null : getMenuSections(category);
+  const shownSection = currentSection ?? sections?.[0]?.key ?? null;
+  const itemCount = sections
+    ? sections.reduce((n, s) => n + s.items.length, 0)
+    : items.length;
+  // the section underline stands out from either header colour
+  const lineColor = isOrange ? WHITE : ORANGE;
 
   // The menu's category pills stay on top of every category page: the one
   // you're on is filled in, the others switch straight to their page.
@@ -269,6 +284,24 @@ export default function CategoryPage({
     if (route) router.replace(route);
   }
 
+  // Underline the section you've scrolled to, and bring its tab into view.
+  function onPageScroll(e) {
+    if (!sections || sections.length < 2) return;
+    const top = e.nativeEvent.contentOffset.y;
+    const shouldPin = top > tabsBottom.current - PINNED_BAR_HEIGHT;
+    if (shouldPin !== pinned) setPinned(shouldPin);
+    const y = top + SECTION_SCROLL_OFFSET + 20;
+    let key = sections[0].key;
+    for (const s of sections) {
+      if ((sectionY.current[s.key] ?? Infinity) <= y) key = s.key;
+    }
+    if (key === shownSection) return;
+    setCurrentSection(key);
+    const x = Math.max((tabX.current[key] ?? 0) - PAGE_GUTTER, 0);
+    tabsRef.current?.scrollTo({ x, animated: true });
+    pinnedTabsRef.current?.scrollTo({ x, animated: true });
+  }
+
   function scrollToSection(key) {
     const y = sectionY.current[key];
     if (y == null) return;
@@ -277,6 +310,42 @@ export default function CategoryPage({
       animated: true,
     });
   }
+
+  // The section tabs, drawn in the header and again in the bar that stays
+  // pinned at the top once the header has scrolled away.
+  const renderTabs = (ref) => (
+    <ScrollView
+      ref={ref}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.tabsScroll}
+      contentContainerStyle={[styles.tabs, dir.row]}
+    >
+      {sections.map((s) => {
+        const on = s.key === shownSection;
+        return (
+          <Pressable
+            key={s.key}
+            onPress={() => {
+              setCurrentSection(s.key);
+              scrollToSection(s.key);
+            }}
+            onLayout={(e) => {
+              tabX.current[s.key] = e.nativeEvent.layout.x;
+            }}
+            style={styles.tabHit}
+          >
+            <Text style={[styles.tabText, on && styles.tabTextOn]}>
+              {pick(s)}
+            </Text>
+            <View
+              style={[styles.tabLine, on && { backgroundColor: lineColor }]}
+            />
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
 
   const renderGrid = (list) => (
     <View style={[styles.grid, dir.row]}>
@@ -323,11 +392,11 @@ export default function CategoryPage({
 
   return (
     <View style={styles.screen}>
-      <BackButton />
-
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
+        onScroll={onPageScroll}
+        scrollEventThrottle={64}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -345,85 +414,41 @@ export default function CategoryPage({
         <View style={[styles.topArea, { backgroundColor: headerColor }]}>
           <View style={styles.pillsWrap}>
             <QuickCategoryPills
+              bubbles
               gutter={PAGE_GUTTER}
               activeTarget={activeTarget}
               onPress={openCategory}
             />
           </View>
 
-          <AnimatedText
-            entering={enterDown(0)}
-            style={[
-              styles.topBrand,
-              dir.noSpacing,
-              lang === "ar" && styles.topBrandAr,
-            ]}
-          >
-            {t("brandUpper")}
-          </AnimatedText>
+          {/* the category's name, and how many dishes are in it */}
+          <Animated.View entering={enterDown(0)} style={styles.titleBlock}>
+            <Text
+              style={[styles.topTitle, { fontSize: isSmall ? 30 : 34 }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {pageTitle}
+            </Text>
+            {itemCount > 0 && (
+              <Text style={styles.topCount}>
+                {t("categoryItemsCount", { count: itemCount })}
+              </Text>
+            )}
+          </Animated.View>
 
-          <AnimatedText
-            entering={enterDown(1)}
-            style={[
-              styles.topTitle,
-              {
-                fontSize: isSmall ? 34 : 40,
-              },
-            ]}
-          >
-            {pageTitle}
-          </AnimatedText>
-
-          {/* Section shortcuts — tap one to jump down to its band */}
+          {/* Section tabs — tap one to jump to its band; the orange line follows
+              whichever section you've scrolled to */}
           {sections && sections.length > 1 && (
-            <Animated.View entering={enterDown(2)} style={styles.chipsWrap}>
-              {/* Up to 3 keys sit centered; more than that become one row you
-                swipe sideways, instead of piling up into several lines. */}
-              <ScrollView
-                horizontal
-                scrollEnabled={sections.length > CHIPS_CENTERED_MAX}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={[
-                  styles.chips,
-                  dir.row,
-                  sections.length > CHIPS_CENTERED_MAX && styles.chipsScroll,
-                ]}
-              >
-                {sections.map((s) => (
-                  // 3D key: a darker base shows under the white face like the side
-                  // of a button; pressing pushes the face down onto it.
-                  <Pressable
-                    key={s.key}
-                    onPress={() => scrollToSection(s.key)}
-                    style={styles.chipHit}
-                  >
-                    {({ pressed }) => (
-                      <View
-                        style={[
-                          styles.chipBase,
-                          { backgroundColor: chipDepth },
-                        ]}
-                      >
-                        <LinearGradient
-                          colors={[WHITE, "#FFF4EE"]}
-                          style={[
-                            styles.chipFace,
-                            pressed && styles.chipFacePressed,
-                          ]}
-                        >
-                          <View style={styles.chipShine} pointerEvents="none" />
-                          <Text
-                            style={[styles.chipText, { color: headerColor }]}
-                            numberOfLines={1}
-                          >
-                            {pick(s)}
-                          </Text>
-                        </LinearGradient>
-                      </View>
-                    )}
-                  </Pressable>
-                ))}
-              </ScrollView>
+            <Animated.View
+              entering={enterDown(1)}
+              style={styles.tabsWrap}
+              onLayout={(e) => {
+                const { y, height } = e.nativeEvent.layout;
+                tabsBottom.current = y + height;
+              }}
+            >
+              {renderTabs(tabsRef)}
             </Animated.View>
           )}
         </View>
@@ -472,7 +497,7 @@ export default function CategoryPage({
               <View style={styles.sectionHead}>
                 <Text
                   style={[styles.sectionTitle, dir.noSpacing]}
-                  numberOfLines={1}
+                  numberOfLines={2}
                 >
                   {pick(s)}
                 </Text>
@@ -526,6 +551,20 @@ export default function CategoryPage({
 
         <MadeBy />
       </ScrollView>
+
+      {/* Section tabs pinned at the top once the header scrolls away, so you
+          can jump to another section without scrolling back up */}
+      {pinned && sections && sections.length > 1 && (
+        <Animated.View
+          entering={FadeIn.duration(160)}
+          exiting={FadeOut.duration(120)}
+          style={[styles.pinnedBar, { backgroundColor: headerColor }]}
+        >
+          <View style={styles.pinnedTabs}>{renderTabs(pinnedTabsRef)}</View>
+        </Animated.View>
+      )}
+
+      <BackButton />
     </View>
   );
 }
@@ -594,34 +633,30 @@ const styles = StyleSheet.create({
   topArea: {
     // clears the status bar + back button
     paddingTop: 100,
-    paddingBottom: 10,
-    alignItems: "center",
+    paddingBottom: 6,
     zIndex: 2,
   },
 
   pillsWrap: {
-    alignSelf: "stretch",
-    marginBottom: 16,
+    marginBottom: 12,
   },
 
-  topBrand: {
-    color: WHITE,
-    fontSize: 13,
-    fontWeight: "900",
-    letterSpacing: 5,
-    marginBottom: 2,
-  },
-
-  // "بيم" has no letter-spacing to spread it out like BEAM, so at 13 it reads tiny
-  topBrandAr: {
-    fontSize: 22,
-    lineHeight: 30,
+  titleBlock: {
+    alignItems: "center",
+    paddingHorizontal: PAGE_GUTTER + 4,
   },
 
   topTitle: {
     color: WHITE,
     fontWeight: "900",
-    letterSpacing: -1,
+    letterSpacing: -0.5,
+  },
+
+  topCount: {
+    marginTop: 1,
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 13,
+    fontWeight: "700",
   },
 
   // Overlap by 1px so no hairline shows between header and fade
@@ -635,69 +670,69 @@ const styles = StyleSheet.create({
      SECTION CHIPS + BANDS
   ========================================================= */
 
-  chipsWrap: {
-    alignSelf: "stretch",
-    marginTop: 12,
+  pinnedBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: PINNED_BAR_HEIGHT,
+    justifyContent: "flex-end",
+    zIndex: 10,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
 
-  // Room above/below so the ScrollView doesn't clip the keys' shadows.
-  chips: {
-    flexGrow: 1,
+  pinnedTabs: {
+    height: PINNED_TABS_HEIGHT,
+    justifyContent: "flex-end",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.18)",
+  },
+
+  tabsWrap: {
+    marginTop: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.22)",
+  },
+
+  // keeps its own height instead of stretching to fill the pinned bar
+  tabsScroll: {
+    flexGrow: 0,
+  },
+
+  tabs: {
     flexDirection: "row",
-    justifyContent: "center",
-    gap: 10,
-    paddingTop: 6,
-    paddingBottom: 16,
-    paddingHorizontal: PAGE_GUTTER,
+    gap: 22,
+    paddingHorizontal: PAGE_GUTTER + 4,
   },
 
-  chipsScroll: {
-    justifyContent: "flex-start",
-  },
-
-  chipHit: {
+  tabHit: {
+    paddingTop: 4,
     // web: no black focus ring after a tap
     outlineStyle: "none",
   },
 
-  chipBase: {
-    borderRadius: 18,
-    paddingBottom: 5,
-    shadowColor: "#5A1E08",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.28,
-    shadowRadius: 12,
-    elevation: 7,
+  tabText: {
+    color: "rgba(255,255,255,0.68)",
+    fontSize: 16.5,
+    fontWeight: "700",
+    paddingBottom: 9,
   },
 
-  chipFace: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: 18,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    overflow: "hidden",
-  },
-
-  chipFacePressed: {
-    transform: [{ translateY: 4 }],
-  },
-
-  // Glossy light catching the top edge of the key.
-  chipShine: {
-    position: "absolute",
-    top: 0,
-    left: 10,
-    right: 10,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: "rgba(255,255,255,0.95)",
-  },
-
-  chipText: {
-    fontSize: 16,
+  tabTextOn: {
+    color: WHITE,
     fontWeight: "900",
+  },
+
+  // sits on the row's bottom border; coloured only under the current section
+  tabLine: {
+    height: 3.5,
+    borderRadius: 2,
+    marginBottom: -1,
+    backgroundColor: "transparent",
   },
 
   // The header fade overlaps the content by 40px; the first title sits just
@@ -727,12 +762,15 @@ const styles = StyleSheet.create({
     paddingBottom: 22,
   },
 
+  // long names ("Chicken Shawarma Sandwiches") wrap onto a second line instead of "…"
   sectionTitle: {
     color: DARK,
-    fontSize: 30,
+    fontSize: 26,
+    lineHeight: 31,
     fontWeight: "900",
     letterSpacing: -0.2,
     textAlign: "center",
+    paddingHorizontal: PAGE_GUTTER,
   },
 
   sectionAccent: {

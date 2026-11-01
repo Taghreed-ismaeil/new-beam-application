@@ -18,6 +18,9 @@ import { enterFromRight } from "@/lib/motion";
    The pills follow the menu's own order (as set in the admin)
    and take turns orange / teal exactly like the menu cards, so
    each pill matches its card.
+   `bubbles` (category pages): a small round icon with the name under
+   it; the page you're on is filled in its colour with a white ring
+   and a dot under its name, and the row scrolls to show it.
 ========================================================= */
 
 // the menu cards' colours (app/menu.jsx): even = orange, odd = teal
@@ -73,6 +76,7 @@ export default function QuickCategoryPills({
   onPress,
   gutter = 0,
   activeTarget = null,
+  bubbles = false,
 }) {
   const { t, dir } = useAppLang();
   const scrollRef = useRef(null);
@@ -99,6 +103,7 @@ export default function QuickCategoryPills({
       style={styles.quickScroll}
       contentContainerStyle={[
         styles.quickCategories,
+        bubbles && styles.bubbleRow,
         dir.row,
         { paddingHorizontal: gutter },
       ]}
@@ -108,6 +113,57 @@ export default function QuickCategoryPills({
         const active = activeTarget === item.target;
         // the pill you're on is filled in its colour, with white icon and name
         const ink = active ? WHITE : color;
+
+        if (bubbles)
+          return (
+            <Animated.View
+              key={item.id}
+              entering={enterFromRight(index + 1)}
+              onLayout={(e) => {
+                // bring the page you're on into view
+                if (active)
+                  scrollRef.current?.scrollTo({
+                    x: Math.max(e.nativeEvent.layout.x - gutter, 0),
+                    animated: false,
+                  });
+              }}
+            >
+              <Pressable
+                onPress={() => onPress(item)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                style={({ pressed }) => [
+                  styles.bubbleHit,
+                  pressed && styles.quickPressed,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.bubble,
+                    { borderColor: color },
+                    active && [styles.bubbleOn, { backgroundColor: color }],
+                  ]}
+                >
+                  {item.ion ? (
+                    <Ionicons name={item.icon} size={28} color={ink} />
+                  ) : (
+                    <MaterialCommunityIcons
+                      name={item.icon}
+                      size={28}
+                      color={ink}
+                    />
+                  )}
+                </View>
+                <Text
+                  style={[styles.bubbleText, active && styles.bubbleTextOn]}
+                  numberOfLines={1}
+                >
+                  {t(item.name)}
+                </Text>
+                <View style={[styles.bubbleDot, active && styles.bubbleDotOn]} />
+              </Pressable>
+            </Animated.View>
+          );
 
         return (
           <Animated.View key={item.id} entering={enterFromRight(index + 1)}>
@@ -173,6 +229,57 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.2,
+  },
+
+  bubbleRow: {
+    alignItems: "flex-start",
+    gap: 10,
+  },
+
+  // sized by its name, so the whole word always shows ("Breakfast", "Shawerma")
+  bubbleHit: {
+    minWidth: 68,
+    paddingHorizontal: 2,
+    alignItems: "center",
+  },
+
+  bubble: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 2,
+    backgroundColor: WHITE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // the page you're on: filled in its colour, with a white ring
+  bubbleOn: {
+    borderWidth: 3,
+    borderColor: WHITE,
+  },
+
+  bubbleText: {
+    marginTop: 5,
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 12.5,
+    fontWeight: "700",
+  },
+
+  bubbleTextOn: {
+    color: WHITE,
+    fontWeight: "900",
+  },
+
+  bubbleDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    marginTop: 3,
+  },
+
+  bubbleDotOn: {
+    backgroundColor: WHITE,
   },
 
   quickPressed: {

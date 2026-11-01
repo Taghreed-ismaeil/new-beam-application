@@ -114,10 +114,14 @@ export const STRINGS = {
   cdDayShort: ["d", "ي"],
   offersPageTitle: ["Offers", "العروض"],
   offersEmptyTitle: ["No offers right now", "ما في عروض هلأ"],
-  offersEmptyText: ["Check back soon, new deals drop all the time", "ارجعلنا بعد شوي، العروض بتنزل دايمًا"],
+  offersEmptyText: [
+    "Check back soon, new deals drop all the time",
+    "ارجعلنا بعد شوي، العروض بتنزل دايمًا",
+  ],
   menuOffersKicker: ["Hot deals", "عروض نار"],
   menuOffersCount: ["{count} items on offer", "{count} أصناف عليها خصم"],
   menuOffersUpTo: ["up to", "لحد"],
+  categoryItemsCount: ["{count} items", "{count} صنف"],
   mediaAddReply: ["Write a reply...", "اكتب رد..."],
   mediaReply: ["Reply", "رد"],
   mediaLikeComment: ["Like comment", "لايك على التعليق"],
@@ -475,9 +479,9 @@ export const STRINGS = {
   menuItem: ["Menu item", "صنف"],
   menuFooter: ["PICK YOUR FAVORITE", "اختار أكلتك المفضّلة"],
   catBreakfast: ["Breakfast", "فطور"],
+  catShawerma: ["Shawerma", "شاورما"],
   catSnaks: ["Snaks", "سناكات"],
   catBurger: ["Burger", "برغر"],
-  catShawerma: ["Shawerma", "شاورما"],
   catFattah: ["Fattah", "فتّة"],
   catSalad: ["Salad", "سلطات"],
   catExtras: ["Extras", "إضافات"],
@@ -494,10 +498,7 @@ export const STRINGS = {
   /* ================= CART ================= */
   cartTitle: ["Your Cart", "سلّتك"],
   cartEmpty: ["Your cart is empty", "سلّتك فاضية"],
-  cartEmptyText: [
-    "Add something delicious from the menu and it will appear here.",
-    "ضيف إشي طيب من المنيو ليبين هون .",
-  ],
+  cartEmptyText: ["", "    "],
   cartTotal: ["Total", "المجموع"],
   cartConfirm: ["Confirm", "تأكيد"],
   // editing a placed order (opened from the WhatsApp receipt link)
@@ -524,6 +525,8 @@ export const STRINGS = {
     "طلبك الحالي بضل زي ما هو",
   ],
   cartTrackOrder: ["Track order", "تتبّع الطلب"],
+  cartOrderNumber: ["Order #{id}", "طلب رقم #{id}"],
+  cartBrowseMenu: ["Beam Menu", " بيم منيو"],
   cartNowAddOnly: [
     "Order #{id} is now being prepared, so it can't be changed — but you can still add to it.",
     "الطلب #{id} صار قيد التجهيز وما بنقدر نعدّله، بس لسا بتقدر تضيف عليه.",

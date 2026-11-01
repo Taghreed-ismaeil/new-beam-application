@@ -45,6 +45,20 @@ const STATUS_LABEL = {
   cancelled: "statusCancelled",
 };
 
+// The order tracker on the active-order card: order sent → kitchen → ready /
+// on the way → delivered. Which step is lit comes from the order's status.
+const TRACK_STEPS = [
+  { icon: "receipt-outline", statuses: ["pending", "accepted"] },
+  { icon: "restaurant-outline", statuses: ["preparing"] },
+  { icon: "bicycle-outline", statuses: ["ready", "out_for_delivery"] },
+  { icon: "home-outline", statuses: ["completed"] },
+];
+
+function trackStep(status) {
+  const at = TRACK_STEPS.findIndex((s) => s.statuses.includes(status));
+  return at < 0 ? 0 : at;
+}
+
 export default function CartScreen() {
   const {
     lines,
@@ -278,52 +292,85 @@ export default function CartScreen() {
 
       {showActive && (
         <View style={styles.activeBox}>
-          {/* "Order #28 · waiting"  ...  [Track] */}
+          {/* "Order #28"  ...  "Track ›" */}
           <View style={[styles.activeTop, dir.row]}>
-            <View style={styles.activeInfo}>
-              <Text style={[styles.activeTitle, dir.text]} numberOfLines={1}>
-                {t("cartActiveOrder", { id: activeOrder.id })}
-              </Text>
-              <View style={[styles.activeStatusRow, dir.row]}>
-                <Ionicons name="time-outline" size={13} color={TEAL} />
-                <Text style={styles.activeStatus}>
-                  {t(STATUS_LABEL[activeOrder.status] ?? "statusPending")}
-                </Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.trackPill}
-              onPress={() => router.push(`/order-tracking/${activeOrder.id}`)}
-              activeOpacity={0.8}
-              hitSlop={6}
-            >
-              <Text style={styles.trackPillText}>{t("cartTrackOrder")}</Text>
-            </TouchableOpacity>
+            <Text style={[styles.activeTitle, dir.text]} numberOfLines={1}>
+              {t("cartOrderNumber", { id: activeOrder.id })}
+            </Text>
+            {/* tracking only opens from here while the cart has something in it */}
+            {lines.length > 0 && (
+              <TouchableOpacity
+                style={[styles.trackLink, dir.row]}
+                onPress={() => router.push(`/order-tracking/${activeOrder.id}`)}
+                activeOpacity={0.7}
+                hitSlop={8}
+              >
+                <Text style={styles.trackLinkText}>{t("cartTrackOrder")}</Text>
+                <Ionicons name="chevron-forward" size={14} color="#9FE1CB" />
+              </TouchableOpacity>
+            )}
           </View>
+
+          {/* the steps: done ones white, the current one orange, the rest faint */}
+          <View style={styles.tracker}>
+            {TRACK_STEPS.map((step, i) => {
+              const at = trackStep(activeOrder.status);
+              const done = i < at;
+              const now = i === at;
+              return (
+                <View
+                  key={step.icon}
+                  style={[styles.trackPart, i > 0 && styles.trackPartLined]}
+                >
+                  {i > 0 && (
+                    <View
+                      style={[styles.trackLine, i <= at && styles.trackLineDone]}
+                    />
+                  )}
+                  <View
+                    style={[
+                      styles.trackDot,
+                      done && styles.trackDotDone,
+                      now && styles.trackDotNow,
+                    ]}
+                  >
+                    <Ionicons
+                      name={step.icon}
+                      size={now ? 17 : 15}
+                      color={now ? WHITE : done ? TEAL : "#9FE1CB"}
+                    />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+
+          <Text style={[styles.activeStatus, dir.text]}>
+            {t(STATUS_LABEL[activeOrder.status] ?? "statusPending")}…
+          </Text>
 
           {/* before the kitchen starts: change the order or add to it; after: add only */}
           {(activeOrder.can?.edit || activeOrder.can?.add) && (
             <View style={[styles.activeActions, dir.row]}>
               {activeOrder.can?.edit && (
                 <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionBtnLight]}
+                  style={[styles.actionBtn, styles.actionBtnGhost]}
                   onPress={editActive}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="create-outline" size={16} color={ORANGE} />
-                  <Text style={[styles.actionBtnText, { color: ORANGE }]}>
+                  <Ionicons name="create-outline" size={16} color={WHITE} />
+                  <Text style={[styles.actionBtnText, { color: WHITE }]}>
                     {t("cartChooseEdit")}
                   </Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                style={[styles.actionBtn, styles.actionBtnTeal]}
+                style={[styles.actionBtn, styles.actionBtnWhite]}
                 onPress={addToActive}
                 activeOpacity={0.8}
               >
-                <Ionicons name="add" size={17} color={WHITE} />
-                <Text style={[styles.actionBtnText, { color: WHITE }]}>
+                <Ionicons name="add" size={17} color={TEAL} />
+                <Text style={[styles.actionBtnText, { color: TEAL }]}>
                   {t("cartChooseAdd")}
                 </Text>
               </TouchableOpacity>
@@ -339,12 +386,21 @@ export default function CartScreen() {
         {lines.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIconCircle}>
-              <Text style={styles.emptyIcon}>🛒</Text>
+              <Ionicons name="bag-handle-outline" size={42} color={ORANGE} />
             </View>
 
             <Text style={styles.emptyTitle}>{t("cartEmpty")}</Text>
 
             <Text style={styles.emptyText}>{t("cartEmptyText")}</Text>
+
+            <TouchableOpacity
+              style={[styles.browseBtn, dir.row]}
+              onPress={() => router.push("/menu")}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="restaurant-outline" size={17} color={WHITE} />
+              <Text style={styles.browseBtnText}>{t("cartBrowseMenu")}</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           lines.map((l) => (
@@ -518,49 +574,90 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 12.5,
   },
-  // design A: light-teal strip, "Order #28 · waiting  [Track]", two buttons under it
+  // design هـ: a teal card — "Order #28 / Track ›", a row of step icons that
+  // light up as the order moves along, the status under it, then the buttons
   activeBox: {
     marginHorizontal: 16,
     marginTop: 4,
     marginBottom: 8,
-    padding: 14,
-    borderRadius: 18,
-    backgroundColor: LIGHT_TEAL,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 22,
+    backgroundColor: TEAL,
     zIndex: 2,
+    shadowColor: TEAL,
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
   },
   activeTop: {
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 10,
   },
-  activeInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
   activeTitle: {
-    color: DARK,
-    fontSize: 15,
+    flexShrink: 1,
+    color: WHITE,
+    fontSize: 17,
     fontWeight: "900",
   },
-  activeStatusRow: {
+  trackLink: {
     alignItems: "center",
-    gap: 4,
-    marginTop: 3,
+    gap: 2,
+  },
+  trackLinkText: {
+    color: "#9FE1CB",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  tracker: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 14,
+  },
+  // each step after the first carries the line leading up to it
+  trackPart: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  trackPartLined: {
+    flex: 1,
+  },
+  trackLine: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    marginHorizontal: 4,
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  trackLineDone: {
+    backgroundColor: WHITE,
+  },
+  trackDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.14)",
+  },
+  trackDotDone: {
+    backgroundColor: WHITE,
+  },
+  trackDotNow: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: ORANGE,
+    borderWidth: 2.5,
+    borderColor: WHITE,
   },
   activeStatus: {
-    color: TEAL,
-    fontSize: 12.5,
+    marginTop: 10,
+    color: WHITE,
+    fontSize: 13.5,
     fontWeight: "700",
-  },
-  trackPill: {
-    backgroundColor: WHITE,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-  },
-  trackPillText: {
-    color: TEAL,
-    fontSize: 12.5,
-    fontWeight: "800",
   },
   activeActions: {
     gap: 10,
@@ -575,11 +672,11 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 14,
   },
-  actionBtnLight: {
-    backgroundColor: WHITE,
+  actionBtnGhost: {
+    backgroundColor: "rgba(255,255,255,0.15)",
   },
-  actionBtnTeal: {
-    backgroundColor: TEAL,
+  actionBtnWhite: {
+    backgroundColor: WHITE,
   },
   actionBtnText: {
     fontSize: 13.5,
@@ -708,8 +805,25 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
 
-  emptyIcon: {
-    fontSize: 38,
+  browseBtn: {
+    marginTop: 18,
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: ORANGE,
+    borderRadius: 999,
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    shadowColor: ORANGE,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
+  },
+
+  browseBtnText: {
+    color: WHITE,
+    fontSize: 14.5,
+    fontWeight: "900",
   },
 
   emptyTitle: {

@@ -1,6 +1,5 @@
 import { usePathname } from "expo-router";
 import { Pressable, StyleSheet } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAppLang } from "@/lib/app-lang";
 import { Text } from "@/lib/arabic-font";
@@ -19,7 +18,6 @@ const HIDDEN_ON = ["/admin"];
 export default function LangToggle() {
   const { lang, setLang } = useAppLang();
   const pathname = usePathname();
-  const insets = useSafeAreaInsets();
 
   if (HIDDEN_ON.some((p) => pathname.startsWith(p))) return null;
 
@@ -33,7 +31,9 @@ export default function LangToggle() {
       hitSlop={8}
       style={({ pressed }) => [
         styles.button,
-        { top: insets.top + 18 },
+        // level with the back button (components/BackButton: top 50, 38 tall),
+        // so it never sits on a page's own header content
+        { top: 48 },
         pressed && styles.pressed,
       ]}
     >
@@ -48,9 +48,9 @@ const styles = StyleSheet.create({
     right: 16,
     zIndex: 50,
     elevation: 10,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: ORANGE,
     borderWidth: 3,
     borderColor: "#FFFFFF",
