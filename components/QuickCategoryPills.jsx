@@ -1,10 +1,12 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import Animated from "react-native-reanimated";
 
+import { apiRequestCached } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { Text } from "@/lib/arabic-font";
+import { findMenuCategory } from "@/lib/menu-category";
 import { enterFromRight } from "@/lib/motion";
 
 /* =========================================================
@@ -13,18 +15,29 @@ import { enterFromRight } from "@/lib/motion";
    the name). Used on the menu (scrolls to the category), in
    menu search, and on top of every category page (opens the
    other categories; `activeTarget` marks the one you're on).
+   The pills follow the menu's own order (as set in the admin)
+   and take turns orange / teal exactly like the menu cards, so
+   each pill matches its card.
 ========================================================= */
 
-const ORANGE = "#FC4A14";
-const TEAL = "#005751";
+// the menu cards' colours (app/menu.jsx): even = orange, odd = teal
+const ORANGE = "#FC6E43";
+const TEAL = "#337974";
 const WHITE = "#FFFFFF";
 
+// In today's menu order — used until the menu loads, then the menu's order wins.
 export const QUICK_CATEGORIES = [
   {
     id: "breakfast",
     name: "catBreakfast",
     target: "breakfast",
     icon: "egg-fried",
+  },
+  {
+    id: "shawerma",
+    name: "catShawerma",
+    target: "shawerma",
+    icon: "food-drumstick-outline",
   },
   { id: "snaks", name: "catSnaks", target: "snaks", icon: "french-fries" },
   {
@@ -33,12 +46,6 @@ export const QUICK_CATEGORIES = [
     target: "burger",
     icon: "fast-food-outline",
     ion: true,
-  },
-  {
-    id: "shawerma",
-    name: "catShawerma",
-    target: "shawerma",
-    icon: "food-drumstick-outline",
   },
   {
     id: "fattah",
@@ -70,6 +77,19 @@ export default function QuickCategoryPills({
   const { t, dir } = useAppLang();
   const scrollRef = useRef(null);
 
+  // re-sort by where each category sits on the menu; ones not on it go last
+  const [pills, setPills] = useState(QUICK_CATEGORIES);
+  useEffect(() => {
+    apiRequestCached("/api/menu", (data) => {
+      const categories = data.categories ?? [];
+      const position = (pill) => {
+        const at = categories.indexOf(findMenuCategory(categories, pill.target));
+        return at < 0 ? 999 : at;
+      };
+      setPills([...QUICK_CATEGORIES].sort((a, b) => position(a) - position(b)));
+    });
+  }, []);
+
   return (
     <ScrollView
       ref={scrollRef}
@@ -83,7 +103,7 @@ export default function QuickCategoryPills({
         { paddingHorizontal: gutter },
       ]}
     >
-      {QUICK_CATEGORIES.map((item, index) => {
+      {pills.map((item, index) => {
         const color = index % 2 === 0 ? ORANGE : TEAL;
         const active = activeTarget === item.target;
         // the pill you're on is filled in its colour, with white icon and name
