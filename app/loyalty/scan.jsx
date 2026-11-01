@@ -508,8 +508,11 @@ export default function LoyaltyScanScreen() {
     setPendingRarity(null);
   }
 
+  // Back to the Gifts page it came from — pushing a new one each time stacked
+  // Gifts → Scan → Gifts → Scan… and after a few scans the camera stopped opening.
   function goToRarityItem() {
-    router.push("/loyalty");
+    if (router.canGoBack()) router.back();
+    else router.replace("/loyalty");
   }
 
   if (activeRarity) {
@@ -519,6 +522,7 @@ export default function LoyaltyScanScreen() {
         itemName={activeRarity.item.itemName}
         apiResult={activeRarity.apiResult}
         onContinue={goToRarityItem}
+        inline
       />
     );
   }
@@ -604,7 +608,9 @@ export default function LoyaltyScanScreen() {
 
                 {result.completed && (
                   <View style={styles.voucherBox}>
-                    <Text style={styles.voucherTitle}>{t("loyCongratsWon")}</Text>
+                    <Text style={styles.voucherTitle}>
+                      {t("loyCongratsWon")}
+                    </Text>
 
                     <Text style={styles.voucherReward}>
                       {result.item.rewardValue}

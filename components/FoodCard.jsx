@@ -1,6 +1,18 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useEffect } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
-import Animated from "react-native-reanimated";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 
 import { imageUrl, isUsableImagePath } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
@@ -9,7 +21,9 @@ import { Text } from "@/lib/arabic-font";
 
 /* =========================================================
    FOOD CARD
-   Vertical card: image → name → description → price + add.
+   Vertical card: image → name → description → price + arrow.
+   The arrow opens the item: dishes are added from their own
+   page, where the customer picks size and extras.
    Used two-per-row on the category pages and in search.
    On the Offers page it also gets the photo to show and the
    deal: a discount sticker on the photo, and the price after
@@ -43,7 +57,7 @@ export default function FoodCard({
   // optional: { label: "-30%", offerPrice: 1.92 | null }
   deal = null,
 }) {
-  const { t, pick, pickDesc, dir } = useAppLang();
+  const { t, pick, pickDesc, dir, lang } = useAppLang();
 
   const itemName = pick(item) || t("menuItem");
 
@@ -70,38 +84,41 @@ export default function FoodCard({
       <Pressable
         onPress={onOpen}
         disabled={!onOpen}
-        style={({ pressed }) => [styles.openArea, pressed && styles.openPressed]}
+        style={({ pressed }) => [
+          styles.openArea,
+          pressed && styles.openPressed,
+        ]}
       >
-      {/* IMAGE */}
+        {/* IMAGE */}
 
-      <View>
-        <Image
-          source={
-            photo ??
-            (isUsableImagePath(item.imageUrl)
-              ? {
-                  uri: imageUrl(item.imageUrl),
-                }
-              : FALLBACK_IMAGE)
-          }
-          cachePolicy="memory-disk"
-          transition={120}
-          style={[styles.foodImage, { width: imageSize, height: imageSize }]}
-        />
-        {!!deal && <Text style={styles.dealSticker}>{deal.label}</Text>}
-      </View>
+        <View>
+          <Image
+            source={
+              photo ??
+              (isUsableImagePath(item.imageUrl)
+                ? {
+                    uri: imageUrl(item.imageUrl),
+                  }
+                : FALLBACK_IMAGE)
+            }
+            cachePolicy="memory-disk"
+            transition={120}
+            style={[styles.foodImage, { width: imageSize, height: imageSize }]}
+          />
+          {!!deal && <Text style={styles.dealSticker}>{deal.label}</Text>}
+        </View>
 
-      {/* NAME */}
+        {/* NAME */}
 
-      <Text style={styles.foodName} numberOfLines={2}>
-        {itemName}
-      </Text>
+        <Text style={styles.foodName} numberOfLines={2}>
+          {itemName}
+        </Text>
 
-      {/* DESCRIPTION */}
+        {/* DESCRIPTION */}
 
-      <Text style={styles.itemDescription} numberOfLines={2}>
-        {itemDescription || " "}
-      </Text>
+        <Text style={styles.itemDescription} numberOfLines={2}>
+          {itemDescription || " "}
+        </Text>
       </Pressable>
 
       {/* PRICE + ADD */}
@@ -112,71 +129,116 @@ export default function FoodCard({
             {dealPrice ?? price}
           </Text>
 
-          <Text style={[styles.currency, { color: dealPrice ? ORANGE : accent }]}>
+          <Text
+            style={[styles.currency, { color: dealPrice ? ORANGE : accent }]}
+          >
             {t("jd")}
           </Text>
 
           {!!dealPrice && <Text style={styles.oldPrice}>{price}</Text>}
         </View>
 
-        {quantity === 0 ? (
-          <Pressable
-            onPress={onAdd}
-            hitSlop={6}
-            style={({ pressed }) => [
-              styles.addButton,
-              dir.row,
-              { backgroundColor: accent },
-              pressed && styles.addPressed,
-            ]}
-          >
-            <Text style={[styles.addText, dir.noSpacing]}>{t("add")}</Text>
-
-            <Text style={styles.addPlus}>+</Text>
-          </Pressable>
-        ) : (
-          <View
-            style={[
-              styles.quantityControl,
-              dir.row,
-              {
-                backgroundColor: soft,
-                borderColor: accent,
-              },
-            ]}
-          >
-            <Pressable
-              onPress={onDecrease}
-              hitSlop={4}
-              style={({ pressed }) => [
-                styles.quantityButton,
-                pressed && styles.addPressed,
-              ]}
-            >
-              <Text style={[styles.quantityButtonText, { color: accent }]}>
-                −
-              </Text>
-            </Pressable>
-
-            <Text style={[styles.quantityText, { color: accent }]}>
-              {quantity}
-            </Text>
-
-            <Pressable
-              onPress={onAdd}
-              hitSlop={4}
-              style={({ pressed }) => [
-                styles.quantityButton,
-                { backgroundColor: accent },
-                pressed && styles.addPressed,
-              ]}
-            >
-              <Text style={styles.quantityPlusText}>+</Text>
-            </Pressable>
-          </View>
-        )}
+        <OpenArrow
+          onPress={onOpen}
+          color={accent}
+          soft={soft}
+          quantity={quantity}
+          index={index}
+          back={lang === "ar"}
+        />
       </View>
     </Animated.View>
+  );
+}
+
+/** Round arrow that invites a tap into the dish: it nudges forward every few
+ *  seconds (cards out of step with each other), a soft ring breathes out
+ *  behind it, and it springs down under the finger. */
+function OpenArrow({ onPress, color, soft, quantity, index, back }) {
+  const reduceMotion = useReducedMotion();
+  const nudge = useSharedValue(0);
+  const ring = useSharedValue(0);
+  const press = useSharedValue(1);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const wait = 1600 + (index % 4) * 350;
+    nudge.value = withDelay(
+      (index % 6) * 220,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) }),
+          withTiming(0, { duration: 420, easing: Easing.inOut(Easing.cubic) }),
+          withTiming(0.55, { duration: 200, easing: Easing.out(Easing.cubic) }),
+          withTiming(0, { duration: 360, easing: Easing.inOut(Easing.cubic) }),
+          withDelay(wait, withTiming(0, { duration: 0 })),
+        ),
+        -1,
+      ),
+    );
+    ring.value = withDelay(
+      (index % 6) * 220,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: 1240, easing: Easing.out(Easing.quad) }),
+          withDelay(wait, withTiming(0, { duration: 0 })),
+        ),
+        -1,
+      ),
+    );
+  }, [reduceMotion, index]);
+
+  const shift = back ? -4 : 4;
+  const arrowStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: nudge.value * shift }],
+  }));
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: ring.value === 0 ? 0 : 0.45 * (1 - ring.value),
+    transform: [{ scale: 1 + ring.value * 0.45 }],
+  }));
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: press.value }],
+  }));
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      hitSlop={8}
+      onPressIn={() => {
+        press.value = withSpring(0.86, { damping: 14, stiffness: 420 });
+      }}
+      onPressOut={() => {
+        press.value = withSpring(1, { damping: 9, stiffness: 260 });
+      }}
+      style={styles.arrowHit}
+    >
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.arrowRing, { backgroundColor: color }, ringStyle]}
+      />
+      <Animated.View
+        style={[styles.arrowButton, { backgroundColor: color }, pressStyle]}
+      >
+        <Animated.View style={arrowStyle}>
+          <Ionicons
+            name={back ? "chevron-back" : "chevron-forward"}
+            size={22}
+            color={WHITE}
+          />
+        </Animated.View>
+      </Animated.View>
+      {quantity > 0 && (
+        <View
+          style={[
+            styles.arrowBadge,
+            { backgroundColor: soft, borderColor: color },
+          ]}
+        >
+          <Text style={[styles.arrowBadgeText, { color }]}>{quantity}</Text>
+        </View>
+      )}
+    </Pressable>
   );
 }
 
@@ -291,83 +353,55 @@ const styles = StyleSheet.create({
     transform: [{ rotate: "-8deg" }],
   },
 
-  addButton: {
-    height: 32,
-    borderRadius: 11,
-    paddingHorizontal: 10,
-    flexDirection: "row",
+  arrowHit: {
+    width: 38,
+    height: 38,
     alignItems: "center",
-    gap: 5,
+    justifyContent: "center",
+    // web: no focus ring after a tap
+    outlineStyle: "none",
+  },
+
+  arrowRing: {
+    position: "absolute",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+  },
+
+  arrowButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
     shadowColor: "#17201F",
     shadowOffset: {
       width: 0,
-      height: 3,
+      height: 4,
     },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOpacity: 0.18,
+    shadowRadius: 7,
+    elevation: 3,
   },
 
-  addText: {
-    color: WHITE,
-    fontSize: 9.5,
-    fontWeight: "900",
-    letterSpacing: 0.6,
-  },
-
-  addPlus: {
-    color: WHITE,
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 18,
-  },
-
-  /* ================= QUANTITY ================= */
-
-  quantityControl: {
-    height: 32,
-    borderRadius: 11,
-    borderWidth: 1,
-    paddingHorizontal: 2,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-
-  quantityButton: {
-    width: 25,
-    height: 25,
-    borderRadius: 8,
+  // how many of this dish are already in the cart
+  arrowBadge: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
   },
 
-  quantityButtonText: {
-    fontSize: 17,
-    fontWeight: "800",
-    lineHeight: 20,
-  },
-
-  quantityText: {
-    minWidth: 14,
-    textAlign: "center",
-    fontSize: 13,
+  arrowBadgeText: {
+    fontSize: 10,
     fontWeight: "900",
-  },
-
-  quantityPlusText: {
-    color: WHITE,
-    fontSize: 15,
-    fontWeight: "800",
-    lineHeight: 18,
-  },
-
-  addPressed: {
-    opacity: 0.65,
-    transform: [
-      {
-        scale: 0.96,
-      },
-    ],
+    lineHeight: 12,
   },
 });

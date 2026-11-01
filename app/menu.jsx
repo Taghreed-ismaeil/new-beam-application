@@ -529,6 +529,15 @@ export default function Menu() {
                   quantity={getQuantity(item.id)}
                   onAdd={() => handleAdd(item)}
                   onDecrease={() => decreaseQuantity(item)}
+                  onOpen={() =>
+                    router.push({
+                      pathname: "/item/[id]",
+                      params: {
+                        id: String(item.id),
+                        button: index % 2 === 0 ? "orange" : "teal",
+                      },
+                    })
+                  }
                   index={index}
                 />
               ))}

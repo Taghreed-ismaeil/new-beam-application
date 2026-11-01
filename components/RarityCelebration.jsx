@@ -470,7 +470,11 @@ function Sparkles({ color }) {
  * the collection tile) and by the lucky wheel (pass `prize` instead: an emoji,
  * a badge text, an optional voucher code and button label replace the tile).
  */
-export default function RarityCelebration({ tier, itemName, apiResult, onContinue, prize }) {
+// `inline`: draw the celebration as the screen itself instead of in a native <Modal>.
+// The scan screen needs this: the result arrives while the system camera is still
+// closing, and iOS refuses to present a Modal during that — the screen just stayed
+// blank, the scan had already counted, and customers scanned again.
+export default function RarityCelebration({ tier, itemName, apiResult, onContinue, prize, inline = false }) {
   const cfg = TIERS[tier] || TIERS.normal;
   const { t, isRTL } = useAppLang();
   const item = apiResult?.item;
@@ -484,6 +488,7 @@ export default function RarityCelebration({ tier, itemName, apiResult, onContinu
   const [modalVisible, setModalVisible] = useState(true);
 
   function handleContinue() {
+    if (inline) return onContinue();
     setModalVisible(false);
     if (Platform.OS !== "ios") onContinue();
   }
@@ -586,14 +591,7 @@ export default function RarityCelebration({ tier, itemName, apiResult, onContinu
     outputRange: [1, tier === "super" ? 1.07 : 1.04],
   });
 
-  return (
-    <Modal
-      visible={modalVisible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onDismiss={onContinue}
-    >
+  const body = (
       <View style={styles.overlay}>
         <LinearGradient
           colors={[LIGHT_ORANGE, LIGHT_ORANGE_DEEP]}
@@ -712,6 +710,19 @@ export default function RarityCelebration({ tier, itemName, apiResult, onContinu
           />
         )}
       </View>
+  );
+
+  if (inline) return body;
+
+  return (
+    <Modal
+      visible={modalVisible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onDismiss={onContinue}
+    >
+      {body}
     </Modal>
   );
 }

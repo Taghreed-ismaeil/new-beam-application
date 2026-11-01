@@ -148,6 +148,7 @@ export const STRINGS = {
   mediaContactUs: ["Contact us", "تواصل معنا"],
   tabGifts: ["Gifts", "الهدايا"],
   tabProfile: ["Profile", "حسابي"],
+  tabCart: ["Cart", "السلة"],
 
   /* ================= CONTACT ================= */
   contactPhoneText: ["Let's talk.", "يلا نحكي"],

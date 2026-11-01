@@ -9,6 +9,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 
+import { useCart } from "@/context/CartContext";
 import { useAppLang } from "@/lib/app-lang";
 import { Text } from "@/lib/arabic-font";
 import { prepareTabTransition } from "@/lib/tab-transition";
@@ -46,6 +47,23 @@ const TABS = [
     route: "account",
   },
 ];
+
+// Inside a menu category the Profile slot turns into the cart, so the order
+// is one tap away while browsing.
+const CART_TAB = {
+  key: "cart",
+  label: "tabCart",
+  icon: "bag",
+  path: "/cart",
+  route: "cart",
+};
+const CART_TAB_ON = ["/menu-food", "/cart"];
+
+function tabsFor(pathname) {
+  return CART_TAB_ON.some((p) => pathname.startsWith(p))
+    ? [...TABS.slice(0, -1), CART_TAB]
+    : TABS;
+}
 
 // The item details screen has its own add-to-cart bar at the bottom.
 const HIDDEN_ON = ["/login", "/item", "/media/share", "/policies"];
@@ -97,6 +115,8 @@ export default function BottomTabBar() {
   const segments = useSegments();
   // Tabs keep the same order in Arabic — only the labels change.
   const { t } = useAppLang();
+  const cart = useCart();
+  const cartCount = cart.lines.reduce((sum, l) => sum + l.quantity, 0);
 
   // The admin panel is its own full-screen experience with its own
   // navigation (see app/admin/_layout.tsx) — the customer tab bar has no
@@ -109,15 +129,29 @@ export default function BottomTabBar() {
 
   return (
     <View style={styles.bar}>
-      {TABS.map((tab) => {
+      {tabsFor(pathname).map((tab) => {
         const active = isTabActive(tab, pathname);
+        const badge = tab.key === "cart" && cartCount > 0;
         return (
           <Pressable
             key={tab.key}
             style={styles.tab}
-            onPress={() => goToTab(tab.path, pathname, segments)}
+            onPress={() =>
+              tab.key === "cart"
+                ? !active && router.push("/cart")
+                : goToTab(tab.path, pathname, segments)
+            }
           >
-            <TabIcon name={tab.icon} active={active} />
+            <View>
+              <TabIcon name={tab.icon} active={active} />
+              {badge && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {cartCount > 99 ? "99+" : cartCount}
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text style={[styles.label, active && styles.labelActive]}>
               {t(tab.label)}
             </Text>
@@ -189,6 +223,26 @@ const styles = StyleSheet.create({
     color: "#999",
     marginTop: 3,
     fontWeight: "600",
+  },
+  badge: {
+    position: "absolute",
+    top: -5,
+    right: -10,
+    minWidth: 17,
+    height: 17,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: "#FC4A14",
+    borderWidth: 1.5,
+    borderColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: 12,
   },
   labelActive: {
     color: "#FC4A14",

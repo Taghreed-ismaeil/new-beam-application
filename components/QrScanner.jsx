@@ -1,6 +1,7 @@
 import { useAppLang } from "@/lib/app-lang";
 import { useEffect, useRef, useState } from "react";
 import {
+  InteractionManager,
   Platform,
   StyleSheet,
   TouchableOpacity,
@@ -50,10 +51,11 @@ function PhotoScanner({ cameraModule, onDecode }) {
   const [error, setError] = useState("");
   const launchedRef = useRef(false);
 
-  async function takeAndScan() {
+  async function takeAndScan(retried = false) {
     setError("");
     setBusy(true);
     let stage = "permission";
+    let retrying = false;
     try {
       const ImagePicker = require("expo-image-picker");
       const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -67,11 +69,21 @@ function PhotoScanner({ cameraModule, onDecode }) {
       }
 
       stage = "camera";
+      const openedAt = Date.now();
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
         quality: 1,
       });
-      if (result.canceled || !result.assets?.[0]) return;
+      if (result.canceled || !result.assets?.[0]) {
+        // "Cancelled" straight away means iOS never showed the camera (it can't present it
+        // while another screen or sheet is still animating) — not that the customer
+        // closed it. Try once more instead of dropping them back on an empty screen.
+        if (!retried && Date.now() - openedAt < 800) {
+          retrying = true;
+          setTimeout(() => takeAndScan(true), 500);
+        }
+        return;
+      }
 
       // The photo comes straight off the system camera, which on iOS can be HEIC and
       // full sensor resolution — scanFromURLAsync misses the code more often on those.
@@ -99,16 +111,27 @@ function PhotoScanner({ cameraModule, onDecode }) {
         `Something went wrong (${stage}): ${e?.message || e?.code || String(e)}`,
       );
     } finally {
-      setBusy(false);
+      if (!retrying) setBusy(false);
     }
   }
 
   // Opens the camera automatically the moment this screen mounts, so
   // tapping "Scan QR" goes straight into the system camera with no extra tap.
+  // Waits for the screen's slide-in to finish first: opening the camera mid-transition
+  // is what made iOS skip it and leave the customer on the page without a photo.
   useEffect(() => {
-    if (launchedRef.current) return;
-    launchedRef.current = true;
-    takeAndScan();
+    let timer;
+    const task = InteractionManager.runAfterInteractions(() => {
+      timer = setTimeout(() => {
+        if (launchedRef.current) return;
+        launchedRef.current = true;
+        takeAndScan();
+      }, 350);
+    });
+    return () => {
+      task.cancel();
+      clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
