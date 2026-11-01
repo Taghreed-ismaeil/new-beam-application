@@ -57,7 +57,7 @@ export default function FoodCard({
   // optional: { label: "-30%", offerPrice: 1.92 | null }
   deal = null,
 }) {
-  const { t, pick, pickDesc, dir, lang } = useAppLang();
+  const { t, pick, pickDesc, dir } = useAppLang();
 
   const itemName = pick(item) || t("menuItem");
 
@@ -144,7 +144,6 @@ export default function FoodCard({
           soft={soft}
           quantity={quantity}
           index={index}
-          back={lang === "ar"}
         />
       </View>
     </Animated.View>
@@ -154,7 +153,8 @@ export default function FoodCard({
 /** Round arrow that invites a tap into the dish: it nudges forward every few
  *  seconds (cards out of step with each other), a soft ring breathes out
  *  behind it, and it springs down under the finger. */
-function OpenArrow({ onPress, color, soft, quantity, index, back }) {
+// Points right (">") in Arabic too — the layout never mirrors (see lib/app-lang).
+function OpenArrow({ onPress, color, soft, quantity, index }) {
   const reduceMotion = useReducedMotion();
   const nudge = useSharedValue(0);
   const ring = useSharedValue(0);
@@ -188,7 +188,7 @@ function OpenArrow({ onPress, color, soft, quantity, index, back }) {
     );
   }, [reduceMotion, index]);
 
-  const shift = back ? -4 : 4;
+  const shift = 4;
   const arrowStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: nudge.value * shift }],
   }));
@@ -222,7 +222,7 @@ function OpenArrow({ onPress, color, soft, quantity, index, back }) {
       >
         <Animated.View style={arrowStyle}>
           <Ionicons
-            name={back ? "chevron-back" : "chevron-forward"}
+            name="chevron-forward"
             size={22}
             color={WHITE}
           />
