@@ -1,18 +1,20 @@
 import BackButton from "@/components/BackButton";
 import MadeBy from "@/components/MadeBy";
+import OrderTrackerCard from "@/components/OrderTrackerCard";
+import { useCart } from "@/context/CartContext";
 import { API_BASE, apiRequest } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { Text } from "@/lib/arabic-font";
-import { enterDown, enterFromLeft, enterPop, enterUp } from "@/lib/motion";
+import { enterSoft } from "@/lib/motion";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
-  Easing,
+  Alert,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -107,62 +109,13 @@ const TYPE_LABEL_KEY = {
   counter: "trackTypeCounter",
 };
 
-function formatTime(iso) {
-  if (!iso) return "";
-  return new Date(iso).toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-// Soft pulsing ring behind the current step's icon.
-function Pulse({ color }) {
-  const [v] = useState(() => new Animated.Value(0));
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(v, {
-        toValue: 1,
-        duration: 1400,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [v]);
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        enStyles.pulse,
-        {
-          backgroundColor: color,
-          opacity: v.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0.45, 0],
-          }),
-          transform: [
-            {
-              scale: v.interpolate({
-                inputRange: [0, 1],
-                outputRange: [1, 1.9],
-              }),
-            },
-          ],
-        },
-      ]}
-    />
-  );
-}
-
 export default function OrderTrackingScreen() {
   const { id } = useLocalSearchParams();
   const orderId = Number(id);
   const [order, setOrder] = useState(null);
   const [failed, setFailed] = useState(false);
   const { t, lang, dir } = useAppLang();
+  const { lines, editing, startEditing, startAdding } = useCart();
   const isAr = lang === "ar";
   // Arabic keeps the same layout, just with bigger text (see AR_TEXT below).
   const styles = isAr ? arStyles : enStyles;
@@ -193,6 +146,42 @@ export default function OrderTrackingScreen() {
     return () => socket.disconnect();
   }, [orderId]);
 
+  // Asks before throwing away other items already in the cart (web has no Alert buttons)
+  function confirmReplace(run) {
+    const unrelated = lines.length > 0 && editing?.orderId !== orderId;
+    if (!unrelated) return run();
+    if (Platform.OS === "web") {
+      if (window.confirm(t("cartReplaceConfirm"))) run();
+      return;
+    }
+    Alert.alert(t("cartReplaceConfirm"), "", [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("cartReplaceOk"), style: "destructive", onPress: run },
+    ]);
+  }
+
+  // change the order's items / add more — the cart opens in that mode
+  function editOrder() {
+    confirmReplace(() =>
+      apiRequest(`/api/orders/${orderId}`)
+        .then(({ order: fresh }) => {
+          setOrder((prev) => ({ ...prev, ...fresh }));
+          if (fresh.can?.edit) startEditing(fresh, {});
+          else if (fresh.can?.add) startAdding(fresh);
+          else return;
+          router.push("/cart");
+        })
+        .catch(() => {}),
+    );
+  }
+
+  function addToOrder() {
+    confirmReplace(() => {
+      startAdding(order);
+      router.push("/menu");
+    });
+  }
+
   if (!order) {
     return (
       <View style={[styles.screen, styles.centered]}>
@@ -221,10 +210,6 @@ export default function OrderTrackingScreen() {
       );
   const current = steps[stepIndex];
 
-  const logTime = {};
-  for (const l of order.statusLogs ?? []) logTime[l.status] = l.changedAt;
-  logTime.pending = logTime.pending ?? order.createdAt;
-
   const itemCount = (order.items ?? []).reduce((s, it) => s + it.quantity, 0);
 
   // Same Arabic counting rules as the confirm screen.
@@ -242,7 +227,7 @@ export default function OrderTrackingScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <BackButton />
 
       <ScrollView
@@ -253,11 +238,11 @@ export default function OrderTrackingScreen() {
             HEADER + CURRENT STATUS
         ====================================================== */}
         <View style={styles.header}>
-          <Reanimated.Text entering={enterDown(0)} style={styles.headerTitle}>
+          <Reanimated.Text entering={enterSoft(0)} style={styles.headerTitle}>
             {t("trackOrderNo", { id: order.id })}
           </Reanimated.Text>
 
-          <Reanimated.View entering={enterPop(1)} style={styles.headerChips}>
+          <Reanimated.View entering={enterSoft(1)} style={styles.headerChips}>
             <View style={styles.chip}>
               <Text style={styles.chipText}>
                 {TYPE_LABEL_KEY[order.orderType]
@@ -270,62 +255,29 @@ export default function OrderTrackingScreen() {
             </View>
           </Reanimated.View>
 
-          <Reanimated.View entering={enterUp(2)} style={styles.statusCard}>
-            {cancelled ? (
-              <>
-                <View
-                  style={[styles.statusIcon, { backgroundColor: "#FDECEA" }]}
-                >
-                  <Ionicons name="close-circle-outline" size={34} color={RED} />
-                </View>
-                <Text style={[styles.statusTitle, { color: RED }]}>
-                  {t("trackCancelled")}
-                </Text>
-                <Text style={styles.statusHint}>
-                  {order.cancelReason || t("trackCancelledHint")}
-                </Text>
-              </>
-            ) : (
-              <>
-                <View style={styles.statusIconWrap}>
-                  {!done && <Pulse color={ORANGE} />}
-                  <View
-                    style={[
-                      styles.statusIcon,
-                      done && { backgroundColor: LIGHT_TEAL },
-                    ]}
-                  >
-                    <Ionicons
-                      name={current.icon}
-                      size={32}
-                      color={done ? TEAL : ORANGE}
-                    />
-                  </View>
-                </View>
-                <Text style={styles.statusTitle}>{current.label}</Text>
-                <Text style={styles.statusHint}>
-                  {done ? t("trackEnjoy") : current.hint}
-                </Text>
-
-                {/* progress bar */}
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${((stepIndex + 1) / steps.length) * 100}%` },
-                      done && { backgroundColor: TEAL },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.progressText}>
-                  {t("trackStepOf", {
-                    step: stepIndex + 1,
-                    total: steps.length,
-                  })}
-                </Text>
-              </>
-            )}
-          </Reanimated.View>
+          {cancelled ? (
+            <Reanimated.View entering={enterSoft(2)} style={styles.statusCard}>
+              <View style={[styles.statusIcon, { backgroundColor: "#FDECEA" }]}>
+                <Ionicons name="close-circle-outline" size={34} color={RED} />
+              </View>
+              <Text style={[styles.statusTitle, { color: RED }]}>
+                {t("trackCancelled")}
+              </Text>
+              <Text style={styles.statusHint}>
+                {order.cancelReason || t("trackCancelledHint")}
+              </Text>
+            </Reanimated.View>
+          ) : (
+            <Reanimated.View entering={enterSoft(2)} style={styles.trackerWrap}>
+              <OrderTrackerCard
+                order={order}
+                showTitle={false}
+                hint={done ? t("trackEnjoy") : current.hint}
+                onEdit={editOrder}
+                onAdd={addToOrder}
+              />
+            </Reanimated.View>
+          )}
         </View>
 
         <View style={styles.body}>
@@ -375,98 +327,12 @@ export default function OrderTrackingScreen() {
             )}
 
           {/* =====================================================
-              TIMELINE
-          ====================================================== */}
-          {!cancelled && (
-            <>
-              <Text style={[styles.sectionTitle, dir.text, dir.noSpacing]}>
-                {t("trackProgress")}
-              </Text>
-              <Reanimated.View entering={enterUp(3)} style={styles.card}>
-                {steps.map((s, i) => {
-                  const isDone = i < stepIndex || done;
-                  const isCurrent = i === stepIndex && !done;
-                  const isLast = i === steps.length - 1;
-                  return (
-                    <Reanimated.View
-                      entering={enterFromLeft(i + 3)}
-                      key={s.key}
-                      style={styles.stepRow}
-                    >
-                      <View style={styles.stepRail}>
-                        <View
-                          style={[
-                            styles.stepDot,
-                            isDone && styles.stepDotDone,
-                            isCurrent && styles.stepDotCurrent,
-                          ]}
-                        >
-                          {isDone ? (
-                            <Ionicons
-                              name="checkmark"
-                              size={14}
-                              color={WHITE}
-                            />
-                          ) : (
-                            <Ionicons
-                              name={s.icon}
-                              size={13}
-                              color={isCurrent ? WHITE : "#B9BFBC"}
-                            />
-                          )}
-                        </View>
-                        {!isLast && (
-                          <View
-                            style={[
-                              styles.stepLine,
-                              i < stepIndex && styles.stepLineDone,
-                            ]}
-                          />
-                        )}
-                      </View>
-
-                      <View
-                        style={[
-                          styles.stepTextWrap,
-                          !isLast && { paddingBottom: 18 },
-                        ]}
-                      >
-                        <View style={styles.stepTitleRow}>
-                          <Text
-                            style={[
-                              styles.stepLabel,
-                              (isDone || isCurrent) && styles.stepLabelActive,
-                              isCurrent && { color: ORANGE },
-                            ]}
-                          >
-                            {s.label}
-                          </Text>
-                          {(isDone || isCurrent) && !!logTime[s.key] && (
-                            <Text style={styles.stepTime}>
-                              {formatTime(logTime[s.key])}
-                            </Text>
-                          )}
-                        </View>
-                        {isCurrent && (
-                          <Text style={[styles.stepHint, dir.text]}>
-                            {s.hint}
-                          </Text>
-                        )}
-                      </View>
-                    </Reanimated.View>
-                  );
-                })}
-              </Reanimated.View>
-            </>
-          )}
-
-          {/* =====================================================
               DETAILS
           ====================================================== */}
           <Text style={[styles.sectionTitle, dir.text, dir.noSpacing]}>
             {t("trackDetails")}
           </Text>
-          <Reanimated.View entering={enterUp(4)} style={styles.card}>
+          <Reanimated.View entering={enterSoft(3)} style={styles.card}>
             {order.orderType === "delivery" && (
               <View style={styles.detailRow}>
                 <Ionicons name="location-outline" size={18} color={TEAL} />
@@ -537,7 +403,7 @@ export default function OrderTrackingScreen() {
           <Text style={[styles.sectionTitle, dir.text, dir.noSpacing]}>
             {t("trackYourOrder")}
           </Text>
-          <Reanimated.View entering={enterUp(5)} style={styles.card}>
+          <Reanimated.View entering={enterSoft(4)} style={styles.card}>
             {(order.items ?? []).map((it, i) => (
               <View
                 key={it.id}
@@ -612,7 +478,7 @@ const baseStyles = {
   /* ---------------- HEADER ---------------- */
 
   header: {
-    backgroundColor: TEAL,
+    backgroundColor: BG,
     // title sits on the BackButton's row (top:50, 38 tall), centered and clear of it
     paddingTop: 50,
     paddingHorizontal: 16,
@@ -628,7 +494,7 @@ const baseStyles = {
     paddingHorizontal: 50,
     fontSize: 24,
     fontWeight: "900",
-    color: WHITE,
+    color: DARK,
     textAlign: "center",
   },
 
@@ -639,21 +505,28 @@ const baseStyles = {
   },
 
   chip: {
-    backgroundColor: "rgba(255,255,255,0.14)",
+    backgroundColor: LIGHT_TEAL,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 5,
   },
 
   chipText: {
-    color: LIGHT_TEAL,
+    color: TEAL,
     fontSize: 12,
     fontWeight: "800",
+  },
+
+  trackerWrap: {
+    width: "100%",
+    marginTop: 16,
   },
 
   statusCard: {
     width: "100%",
     marginTop: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
     backgroundColor: WHITE,
     borderRadius: 22,
     paddingVertical: 20,

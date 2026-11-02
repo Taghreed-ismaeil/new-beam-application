@@ -8,6 +8,7 @@ import {
   discountedPrice,
   itemsOnOffer,
   offerEndsAt,
+  offerTitle,
   spreadByCategory,
   refreshOffers,
   useOffers,
@@ -37,8 +38,10 @@ const CIRCLE_SIZE = 96;
 
 const OFFERS_POLL_MS = 15000;
 
-// most circles the ring holds before they start covering each other
-const RING_MAX = 12;
+// most circles the ring holds before they start covering each other. With more
+// items than that, the circles take turns: each one swaps to the next item while
+// it's round the back of the ring, so every item comes to the front in turn.
+const RING_SLOTS = 12;
 
 const RADIUS_X = Math.min(Dimensions.get("window").width, 480) * 0.4;
 
@@ -58,7 +61,7 @@ const GRADIENT_LOCATIONS = [0, 0.35, 0.7, 1];
 ===================================================== */
 
 export default function Menu({ refreshKey = 0 }) {
-  const { t, pick, dir } = useAppLang();
+  const { t, pick, dir, lang } = useAppLang();
   const [deals, setDeals] = useState([]);
   // The ring turns on the animation thread: the per-frame angle lives in a shared
   // value, and React only re-renders when a different item reaches the front.
@@ -121,10 +124,8 @@ export default function Menu({ refreshKey = 0 }) {
   useEffect(() => {
     if (!menuItems) return;
     // the Offers page's items, taking turns between categories, so every category the admin picked gets a circle
-    const fromOffers = spreadByCategory(
-      itemsOnOffer(offers, menuItems),
-      RING_MAX,
-    ).map(({ item, offer }) => ({
+    const live = itemsOnOffer(offers, menuItems);
+    const fromOffers = spreadByCategory(live, live.length).map(({ item, offer }) => ({
       ...item,
       offer,
     }));
@@ -147,7 +148,8 @@ export default function Menu({ refreshKey = 0 }) {
     );
   }, [menuItems, offers]);
 
-  const n = deals.length || 1;
+  // circles on the ring (at most RING_SLOTS) and the items they cycle through
+  const n = Math.min(deals.length, RING_SLOTS) || 1;
 
   /* =====================================================
      FOOD AUTO ROTATION
@@ -242,8 +244,18 @@ export default function Menu({ refreshKey = 0 }) {
 
   // round, not trunc: an item sits dead-center when rotation equals its index,
   // so trunc picked the circle half a step to the left of center.
-  const frontIndex = deals.length ? ((frontStep % n) + n) % n : 0;
-  const activeItem = deals[frontIndex];
+  const mod = (a, b) => ((a % b) + b) % b;
+  const frontIndex = deals.length ? mod(frontStep, n) : 0;
+  const activeItem = deals.length ? deals[mod(frontStep, deals.length)] : undefined;
+
+  // Which item each circle shows: circle s stands for the ring step nearest the
+  // front that lands on it, and that step picks the item — so a circle only
+  // changes item while it's at the back, half a turn from the front.
+  const half = Math.floor(n / 2);
+  const slots = Array.from({ length: deals.length ? n : 0 }, (_, s) => {
+    const step = frontStep + (mod(s - frontStep + half, n) - half);
+    return deals[mod(step, deals.length)];
+  });
 
   /* =====================================================
      DEAL BOX — crossfades to whichever item is centered
@@ -269,7 +281,7 @@ export default function Menu({ refreshKey = 0 }) {
   ====================================================== */
 
   function goToActive() {
-    const target = deals[frontIndex] ?? deals[0];
+    const target = activeItem ?? deals[0];
 
     if (target) {
       router.push(`/menu-food/${target.categoryId}`);
@@ -304,9 +316,9 @@ export default function Menu({ refreshKey = 0 }) {
       ================================================= */}
 
       <View style={styles.ring} {...panResponder.panHandlers}>
-        {deals.map((item, index) => (
+        {slots.map((item, index) => (
           <RingItem
-            key={item.id}
+            key={index}
             item={item}
             photo={itemPhoto(item, categoriesById.get(item.categoryId), FALLBACK_IMAGE)}
             index={index}
@@ -336,7 +348,7 @@ export default function Menu({ refreshKey = 0 }) {
                       : `-${Number(activeItem.offer.discountValue).toFixed(2)} ${t("jd")}`}
                   </Text>
                   <Text style={[styles.offerTitle, dir.text]} numberOfLines={1}>
-                    {activeItem.offer.title}
+                    {offerTitle(activeItem.offer, lang)}
                   </Text>
                   <OfferCountdownChip endsAt={offerEndsAt(activeItem.offer)} />
                 </View>

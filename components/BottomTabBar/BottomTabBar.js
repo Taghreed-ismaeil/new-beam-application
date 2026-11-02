@@ -9,6 +9,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 
+import CartIcon from "@/components/CartIcon";
 import { useCart } from "@/context/CartContext";
 import { useAppLang } from "@/lib/app-lang";
 import { Text } from "@/lib/arabic-font";
@@ -53,7 +54,7 @@ const TABS = [
 const CART_TAB = {
   key: "cart",
   label: "tabCart",
-  icon: "bag",
+  icon: "cart",
   path: "/cart",
   route: "cart",
 };
@@ -186,11 +187,16 @@ function TabIcon({ name, active }) {
 
   return (
     <Animated.View style={style}>
-      <Ionicons
-        name={active ? name : `${name}-outline`}
-        size={22}
-        color={active ? "#FC4A14" : "#005751"}
-      />
+      {name === "cart" ? (
+        // the app's own trolley, drawn to match the Ionicons weight
+        <CartIcon variant="line" size={24} color={active ? "#FC4A14" : "#005751"} filled={active} />
+      ) : (
+        <Ionicons
+          name={active ? name : `${name}-outline`}
+          size={22}
+          color={active ? "#FC4A14" : "#005751"}
+        />
+      )}
     </Animated.View>
   );
 }

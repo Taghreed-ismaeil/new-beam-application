@@ -24,7 +24,7 @@ const MUTED = "#68706E";
 
 /**
  * Popup opened from the Account page.
- *   mode="rating"    — 5 teal stars + an optional note
+ *   mode="rating"    — 5 orange stars + an optional note (orange, like its tile)
  *   mode="complaint" — a written complaint that goes to the admin panel
  * Both POST to /api/feedback and show a short thank-you before closing.
  */
@@ -76,7 +76,8 @@ export default function FeedbackSheet({ mode, visible, onClose }) {
     }
   }
 
-  const accent = isRating ? TEAL : ORANGE;
+  // same colour as the tile that opened it: rating orange, complaints teal
+  const accent = isRating ? ORANGE : TEAL;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -93,7 +94,7 @@ export default function FeedbackSheet({ mode, visible, onClose }) {
 
           {sent ? (
             <View style={styles.thanks}>
-              <View style={[styles.thanksIcon, { backgroundColor: isRating ? LIGHT_TEAL : LIGHT_ORANGE }]}>
+              <View style={[styles.thanksIcon, { backgroundColor: isRating ? LIGHT_ORANGE : LIGHT_TEAL }]}>
                 <Ionicons name={isRating ? "heart" : "checkmark-done"} size={34} color={accent} />
               </View>
               <Text style={styles.thanksTitle}>{t("feedbackThanks")}</Text>
@@ -103,7 +104,7 @@ export default function FeedbackSheet({ mode, visible, onClose }) {
             </View>
           ) : (
             <>
-              <View style={[styles.headIcon, { backgroundColor: isRating ? LIGHT_TEAL : LIGHT_ORANGE }]}>
+              <View style={[styles.headIcon, { backgroundColor: isRating ? LIGHT_ORANGE : LIGHT_TEAL }]}>
                 <Ionicons
                   name={isRating ? "star" : "chatbox-ellipses-outline"}
                   size={26}
@@ -132,7 +133,7 @@ export default function FeedbackSheet({ mode, visible, onClose }) {
                       <Ionicons
                         name={n <= stars ? "star" : "star-outline"}
                         size={40}
-                        color={TEAL}
+                        color={accent}
                       />
                     </Pressable>
                   ))}

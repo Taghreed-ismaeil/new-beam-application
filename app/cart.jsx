@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 
 import BackButton from "@/components/BackButton";
+import CartIcon from "@/components/CartIcon";
 import MadeBy from "@/components/MadeBy";
 import { OfferCountdownChip } from "@/components/OfferCountdown";
 import { useAuth } from "@/context/AuthContext";
@@ -10,8 +11,6 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Platform,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -33,31 +32,6 @@ const LIGHT_TEAL = "#E8F5F2";
 const DARK = "#17201F";
 const MUTED = "#68706E";
 const WHITE = "#FFFFFF";
-
-// Status label keys in lib/app-strings.ts (same as the orders screen)
-const STATUS_LABEL = {
-  pending: "statusPending",
-  accepted: "statusAccepted",
-  preparing: "statusPreparing",
-  ready: "statusReady",
-  out_for_delivery: "statusOnTheWay",
-  completed: "statusCompleted",
-  cancelled: "statusCancelled",
-};
-
-// The order tracker on the active-order card: order sent → kitchen → ready /
-// on the way → delivered. Which step is lit comes from the order's status.
-const TRACK_STEPS = [
-  { icon: "receipt-outline", statuses: ["pending", "accepted"] },
-  { icon: "restaurant-outline", statuses: ["preparing"] },
-  { icon: "bicycle-outline", statuses: ["ready", "out_for_delivery"] },
-  { icon: "home-outline", statuses: ["completed"] },
-];
-
-function trackStep(status) {
-  const at = TRACK_STEPS.findIndex((s) => s.statuses.includes(status));
-  return at < 0 ? 0 : at;
-}
 
 export default function CartScreen() {
   const {
@@ -106,7 +80,8 @@ export default function CartScreen() {
   }, [editOrder, user, authLoading]);
 
   // The customer's latest order that isn't finished yet, refreshed whenever the
-  // cart is opened, so the right button shows as the restaurant moves it along.
+  // cart is opened: keeps an order being edited in step with the kitchen. (Its
+  // tracker lives on the order-tracking page, not here.)
   const [activeOrder, setActiveOrder] = useState(null);
 
   useFocusEffect(
@@ -145,36 +120,6 @@ export default function CartScreen() {
     }, [user, editing?.orderId, editing?.mode]),
   );
 
-  // Asks before throwing away items already in the cart (web has no Alert buttons)
-  function confirmReplace(run) {
-    const unrelated = lines.length > 0 && editing?.orderId !== activeOrder?.id;
-    if (!unrelated) return run();
-    if (Platform.OS === "web") {
-      if (window.confirm(t("cartReplaceConfirm"))) run();
-      return;
-    }
-    Alert.alert(t("cartReplaceConfirm"), "", [
-      { text: t("cancel"), style: "cancel" },
-      { text: t("cartReplaceOk"), style: "destructive", onPress: run },
-    ]);
-  }
-
-  function editActive() {
-    confirmReplace(() =>
-      apiRequest(`/api/orders/${activeOrder.id}`)
-        .then(({ order }) => {
-          setActiveOrder(order);
-          if (order.can?.edit) startEditing(order, menuImages);
-          else if (order.can?.add) startAdding(order);
-        })
-        .catch(() => setEditNotice(t("cartEditMissing"))),
-    );
-  }
-
-  function addToActive() {
-    confirmReplace(() => startAdding(activeOrder));
-  }
-
   // Add mode: append the cart's lines to the order instead of placing a new one
   const [adding, setAdding] = useState(false);
 
@@ -207,8 +152,14 @@ export default function CartScreen() {
   }
 
   const addMode = editing?.mode === "add";
-  // the order box hides while that same order is already open in the cart
-  const showActive = activeOrder && editing?.orderId !== activeOrder.id;
+
+  // a line's item page, to change its size / extras / notes
+  function openLine(menuItemId) {
+    router.push({
+      pathname: "/item/[id]",
+      params: { id: String(menuItemId), fromCart: "1" },
+    });
+  }
 
   useEffect(() => {
     apiRequestCached("/api/menu", (data) => {
@@ -250,6 +201,22 @@ export default function CartScreen() {
             <Text style={[styles.title, dir.text]}>{t("cartTitle")}</Text>
           </View>
         </View>
+
+        {/* back to the menu for more, straight away */}
+        {lines.length > 0 && (
+          <TouchableOpacity
+            style={[styles.addMoreBtn, dir.row]}
+            onPress={() => router.push("/menu")}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+          >
+            <View style={styles.addMoreIcon}>
+              <Ionicons name="add" size={18} color={WHITE} />
+            </View>
+            <Text style={styles.addMoreText}>{t("cartAddMore")}</Text>
+            <Ionicons name={dir.chevron} size={16} color={TEAL} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* =====================================================
@@ -290,95 +257,6 @@ export default function CartScreen() {
         </Text>
       )}
 
-      {showActive && (
-        <View style={styles.activeBox}>
-          {/* "Order #28"  ...  "Track ›" */}
-          <View style={[styles.activeTop, dir.row]}>
-            <Text style={[styles.activeTitle, dir.text]} numberOfLines={1}>
-              {t("cartOrderNumber", { id: activeOrder.id })}
-            </Text>
-            {/* tracking only opens from here while the cart has something in it */}
-            {lines.length > 0 && (
-              <TouchableOpacity
-                style={[styles.trackLink, dir.row]}
-                onPress={() => router.push(`/order-tracking/${activeOrder.id}`)}
-                activeOpacity={0.7}
-                hitSlop={8}
-              >
-                <Text style={styles.trackLinkText}>{t("cartTrackOrder")}</Text>
-                <Ionicons name="chevron-forward" size={14} color="#9FE1CB" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* the steps: done ones white, the current one orange, the rest faint */}
-          <View style={styles.tracker}>
-            {TRACK_STEPS.map((step, i) => {
-              const at = trackStep(activeOrder.status);
-              const done = i < at;
-              const now = i === at;
-              return (
-                <View
-                  key={step.icon}
-                  style={[styles.trackPart, i > 0 && styles.trackPartLined]}
-                >
-                  {i > 0 && (
-                    <View
-                      style={[styles.trackLine, i <= at && styles.trackLineDone]}
-                    />
-                  )}
-                  <View
-                    style={[
-                      styles.trackDot,
-                      done && styles.trackDotDone,
-                      now && styles.trackDotNow,
-                    ]}
-                  >
-                    <Ionicons
-                      name={step.icon}
-                      size={now ? 17 : 15}
-                      color={now ? WHITE : done ? TEAL : "#9FE1CB"}
-                    />
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-
-          <Text style={[styles.activeStatus, dir.text]}>
-            {t(STATUS_LABEL[activeOrder.status] ?? "statusPending")}…
-          </Text>
-
-          {/* before the kitchen starts: change the order or add to it; after: add only */}
-          {(activeOrder.can?.edit || activeOrder.can?.add) && (
-            <View style={[styles.activeActions, dir.row]}>
-              {activeOrder.can?.edit && (
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionBtnGhost]}
-                  onPress={editActive}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="create-outline" size={16} color={WHITE} />
-                  <Text style={[styles.actionBtnText, { color: WHITE }]}>
-                    {t("cartChooseEdit")}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.actionBtnWhite]}
-                onPress={addToActive}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="add" size={17} color={TEAL} />
-                <Text style={[styles.actionBtnText, { color: TEAL }]}>
-                  {t("cartChooseAdd")}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      )}
-
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
@@ -386,7 +264,7 @@ export default function CartScreen() {
         {lines.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIconCircle}>
-              <Ionicons name="bag-handle-outline" size={42} color={ORANGE} />
+              <CartIcon size={50} />
             </View>
 
             <Text style={styles.emptyTitle}>{t("cartEmpty")}</Text>
@@ -409,12 +287,7 @@ export default function CartScreen() {
               <TouchableOpacity
                 style={[styles.lineOpen, dir.row]}
                 activeOpacity={0.7}
-                onPress={() =>
-                  router.push({
-                    pathname: "/item/[id]",
-                    params: { id: String(l.menuItemId), fromCart: "1" },
-                  })
-                }
+                onPress={() => openLine(l.menuItemId)}
               >
                 <Image
                   source={(() => {
@@ -480,15 +353,27 @@ export default function CartScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Delete the whole line in one tap */}
-              <TouchableOpacity
-                onPress={() => remove(l.menuItemId)}
-                style={styles.deleteBtn}
-                activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-              >
-                <Ionicons name="trash-outline" size={18} color={ORANGE} />
-              </TouchableOpacity>
+              {/* edit opens the item's page; the bin deletes the whole line */}
+              <View style={styles.lineActions}>
+                <TouchableOpacity
+                  onPress={() => openLine(l.menuItemId)}
+                  style={styles.editBtn}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 4, left: 6, right: 6 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("cartEditItem")}
+                >
+                  <Ionicons name="create-outline" size={17} color={TEAL} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => remove(l.menuItemId)}
+                  style={styles.deleteBtn}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 4, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Ionicons name="trash-outline" size={17} color={ORANGE} />
+                </TouchableOpacity>
+              </View>
             </View>
           ))
         )}
@@ -573,114 +458,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     color: MUTED,
     fontSize: 12.5,
-  },
-  // design هـ: a teal card — "Order #28 / Track ›", a row of step icons that
-  // light up as the order moves along, the status under it, then the buttons
-  activeBox: {
-    marginHorizontal: 16,
-    marginTop: 4,
-    marginBottom: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 22,
-    backgroundColor: TEAL,
-    zIndex: 2,
-    shadowColor: TEAL,
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 5,
-  },
-  activeTop: {
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  activeTitle: {
-    flexShrink: 1,
-    color: WHITE,
-    fontSize: 17,
-    fontWeight: "900",
-  },
-  trackLink: {
-    alignItems: "center",
-    gap: 2,
-  },
-  trackLinkText: {
-    color: "#9FE1CB",
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  tracker: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 14,
-  },
-  // each step after the first carries the line leading up to it
-  trackPart: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  trackPartLined: {
-    flex: 1,
-  },
-  trackLine: {
-    flex: 1,
-    height: 3,
-    borderRadius: 2,
-    marginHorizontal: 4,
-    backgroundColor: "rgba(255,255,255,0.22)",
-  },
-  trackLineDone: {
-    backgroundColor: WHITE,
-  },
-  trackDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.14)",
-  },
-  trackDotDone: {
-    backgroundColor: WHITE,
-  },
-  trackDotNow: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: ORANGE,
-    borderWidth: 2.5,
-    borderColor: WHITE,
-  },
-  activeStatus: {
-    marginTop: 10,
-    color: WHITE,
-    fontSize: 13.5,
-    fontWeight: "700",
-  },
-  activeActions: {
-    gap: 10,
-    marginTop: 12,
-  },
-  actionBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 11,
-    borderRadius: 14,
-  },
-  actionBtnGhost: {
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  actionBtnWhite: {
-    backgroundColor: WHITE,
-  },
-  actionBtnText: {
-    fontSize: 13.5,
-    fontWeight: "800",
   },
   editBannerCancel: {
     color: ORANGE,
@@ -925,6 +702,49 @@ const styles = StyleSheet.create({
   /* =====================================================
      STEPPER
   ====================================================== */
+
+  lineActions: {
+    gap: 8,
+  },
+
+  editBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: LIGHT_TEAL,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // "Add more to your order" under the title
+  addMoreBtn: {
+    alignItems: "center",
+    gap: 10,
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: "rgba(0,87,81,0.35)",
+    backgroundColor: LIGHT_TEAL,
+  },
+
+  addMoreIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: TEAL,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  addMoreText: {
+    flex: 1,
+    color: TEAL,
+    fontSize: 15,
+    fontWeight: "900",
+  },
 
   deleteBtn: {
     width: 34,

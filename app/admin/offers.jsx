@@ -38,14 +38,15 @@ import { Text } from "@/lib/arabic-font";
 import { itemPhoto } from "@/lib/category-images";
 import { useDirection, useI18n } from "@/lib/i18n";
 
-// The real backend (backend/src/routes/offers.ts) stores a single `title`
-// (no i18n split), `discountType`/`discountValue` instead of kind/value, and
+// The real backend (backend/src/routes/offers.ts) stores `title` (Arabic) and
+// an optional `titleEn`, `discountType`/`discountValue` instead of kind/value, and
 // `menuItemIds` (an item-only array — no category-level targeting exists).
 // `kind` here stays "percent"/"fixed" locally to match the offerKind_* i18n
 // keys; it's translated to the backend's "percentage"/"fixed" only at the
 // request boundary (see save()).
 const EMPTY_OFFER = {
   title: "",
+  titleEn: "",
   description: "",
   kind: "percent",
   value: "",
@@ -219,6 +220,7 @@ export default function AdminOffers() {
     setEditing({
       id: offer.id,
       title: offer.title ?? "",
+      titleEn: offer.titleEn ?? "",
       description: offer.description ?? "",
       kind: offer.discountType === "fixed" ? "fixed" : "percent",
       value: String(offer.discountValue ?? ""),
@@ -295,6 +297,8 @@ export default function AdminOffers() {
 
     const body = {
       title: editing.title?.trim() ?? "",
+      // "" clears it on an update; the app then shows the Arabic title in English too
+      titleEn: editing.titleEn?.trim() ?? "",
       description: editing.description?.trim() || undefined,
       discountType: editing.kind === "fixed" ? "fixed" : "percentage",
       discountValue: Number(editing.value),
@@ -528,6 +532,12 @@ export default function AdminOffers() {
                 value={editing?.title ?? ""}
                 onChangeText={(v) => patch({ title: v })}
                 placeholder="عرض نهاية الأسبوع"
+              />
+              <Field
+                label={t("fieldOfferTitleEn")}
+                value={editing?.titleEn ?? ""}
+                onChangeText={(v) => patch({ titleEn: v })}
+                placeholder="Weekend offer"
               />
               <Field
                 label={t("fieldOfferDescription")}

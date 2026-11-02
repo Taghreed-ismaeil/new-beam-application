@@ -17,7 +17,7 @@ import {
   categoryItems,
   getMenuSections,
 } from "@/lib/menu-sections";
-import { enterDown, enterUp } from "@/lib/motion";
+import { enterDown, enterSoft, enterUp } from "@/lib/motion";
 import { checkoutOfferFor, offerEndsAt, useOffers } from "@/lib/offers";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
@@ -33,7 +33,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
+import Animated, { Easing, FadeInDown, Keyframe } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /* =========================================================
@@ -87,13 +87,18 @@ const splitIngredients = (text) =>
     .map((s) => s.trim())
     .filter(Boolean);
 
-// Each ingredient tag pops toward the viewer, overshoots, then settles —
-// one after another. (A 3D perspective version got stuck mid-air on web.)
-const popTag = (index) =>
-  ZoomIn.delay(120 + Math.min(index * 45, 360))
-    .springify()
-    .damping(9)
-    .stiffness(180);
+// Each ingredient tag settles in like it's being set down on the card: it
+// fades up from just below and a touch to the side, unhurried, one after
+// another in reading order. No zoom, no bounce.
+const settle = Easing.bezier(0.22, 1, 0.36, 1);
+const tagIn = (index) =>
+  new Keyframe({
+    0: { opacity: 0, transform: [{ translateY: 10 }, { translateX: -6 }] },
+    60: { opacity: 1, easing: settle },
+    100: { opacity: 1, transform: [{ translateY: 0 }, { translateX: 0 }], easing: settle },
+  })
+    .duration(720)
+    .delay(260 + Math.min(index * 90, 720));
 
 export default function ItemDetails() {
   const { id, fromCart } = useLocalSearchParams();
@@ -260,12 +265,12 @@ export default function ItemDetails() {
         <View style={styles.sheet}>
           <View style={[styles.handle, { backgroundColor: headerColor }]} />
 
-          <Animated.View entering={enterUp(1)}>
+          <Animated.View entering={enterSoft(0)}>
             <Text style={styles.name}>{pick(item)}</Text>
           </Animated.View>
 
           {/* 3D teal card: one white-framed tag per ingredient, then the price */}
-          <Animated.View entering={enterUp(2)} style={styles.ingCard}>
+          <Animated.View entering={enterSoft(1)} style={styles.ingCard}>
             <View pointerEvents="none" style={styles.cardBubbleBig} />
             <View pointerEvents="none" style={styles.cardBubbleSmall} />
             {ingredients.length > 0 && (
@@ -274,7 +279,7 @@ export default function ItemDetails() {
                   {ingredients.map((ing, i) => (
                     <Animated.View
                       key={`${ing}-${i}`}
-                      entering={popTag(i)}
+                      entering={tagIn(i)}
                       style={styles.ingTag}
                     >
                       <Text style={styles.ingText}>{ing}</Text>

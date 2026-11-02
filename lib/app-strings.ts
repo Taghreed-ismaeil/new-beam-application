@@ -497,6 +497,8 @@ export const STRINGS = {
 
   /* ================= CART ================= */
   cartTitle: ["Your Cart", "سلّتك"],
+  cartAddMore: ["Add more to your order", "إضافة على الطلب"],
+  cartEditItem: ["Edit item", "تعديل الصنف"],
   cartEmpty: ["Your cart is empty", "سلّتك فاضية"],
   cartEmptyText: ["", "    "],
   cartTotal: ["Total", "المجموع"],
@@ -837,6 +839,32 @@ export const STRINGS = {
   resFailed: ["Something went wrong, try again", "صار في مشكلة، جرّب كمان مرة"],
   resToday: ["Today", "اليوم"],
   resTomorrow: ["Tomorrow", "بكرا"],
+  notifTitle: ["Notifications", "الإشعارات"],
+  notifEmpty: ["Nothing here yet", "لسا ما في إشي هون"],
+  notifEmptySub: [
+    "Likes, comments and new photos will show up here.",
+    "اللايكات والتعليقات والصور الجديدة رح تطلع هون.",
+  ],
+  notifSignIn: ["Sign in to see your notifications.", "سجّل دخول عشان تشوف إشعاراتك."],
+  notifNewPostBeam: ["Beam posted a new photo", "بيم نزّل صورة جديدة"],
+  notifNewPost: ["{name} shared a new photo", "{name} شارك صورة جديدة"],
+  notifApproved: ["Your photo is now live in Beam Media", "صورتك انتشرت ببيم ميديا"],
+  notifPostLike: ["{name} liked your photo", "{name} عمل لايك لصورتك"],
+  notifPostComment: ["{name} commented on your photo", "{name} علّق على صورتك"],
+  notifReply: ["{name} replied to your comment", "{name} ردّ على تعليقك"],
+  notifCommentLike: ["{name} liked your comment", "{name} عمل لايك لتعليقك"],
+  notifSomeone: ["Someone", "حدا"],
+  notifToday: ["Today", "اليوم"],
+  notifThisWeek: ["This week", "هالأسبوع"],
+  notifEarlier: ["Earlier", "قبل"],
+  notifNewCount: ["{n} new", "{n} جديد"],
+  notifCaughtUp: ["You're all caught up", "شفت كل إشي"],
+  notifShareCta: ["Share a photo", "شارك صورة"],
+  notifGone: ["This photo is no longer available.", "هالصورة ما عادت موجودة."],
+  notifNow: ["now", "هلأ"],
+  notifMinutes: ["{n}m", "{n} د"],
+  notifHours: ["{n}h", "{n} س"],
+  notifDays: ["{n}d", "{n} ي"],
 } as const satisfies Record<string, readonly [string, string]>;
 
 export type StringKey = keyof typeof STRINGS;

@@ -1,5 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+
+import CartIcon from "@/components/CartIcon";
 import {
   ImageBackground,
   Pressable,
@@ -55,11 +57,7 @@ export default function NavBar() {
             onPress={() => router.push("/cart")}
           >
             {({ pressed }) => (
-              <Ionicons
-                name="bag-outline"
-                size={iconSize}
-                color={pressed ? "#C94320" : "#FC4A14"}
-              />
+              <CartIcon variant="line" size={iconSize + 2} color={pressed ? "#C94320" : "#FC4A14"} />
             )}
           </Pressable>
         </View>

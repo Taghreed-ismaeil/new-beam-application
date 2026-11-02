@@ -57,7 +57,7 @@ export default function FoodCard({
   // optional: { label: "-30%", offerPrice: 1.92 | null }
   deal = null,
 }) {
-  const { t, pick, pickDesc, dir } = useAppLang();
+  const { t, pick, pickDesc, dir, lang } = useAppLang();
 
   const itemName = pick(item) || t("menuItem");
 
@@ -110,13 +110,13 @@ export default function FoodCard({
 
         {/* NAME */}
 
-        <Text style={styles.foodName} numberOfLines={2}>
+        <Text style={[styles.foodName, lang === "ar" && styles.foodNameAr]} numberOfLines={2}>
           {itemName}
         </Text>
 
         {/* DESCRIPTION */}
 
-        <Text style={styles.itemDescription} numberOfLines={2}>
+        <Text style={[styles.itemDescription, lang === "ar" && styles.itemDescriptionAr]} numberOfLines={2}>
           {itemDescription || " "}
         </Text>
       </Pressable>
@@ -206,10 +206,10 @@ function OpenArrow({ onPress, color, soft, quantity, index }) {
       disabled={!onPress}
       hitSlop={8}
       onPressIn={() => {
-        press.value = withSpring(0.86, { damping: 14, stiffness: 420 });
+        press.set(withSpring(0.86, { damping: 14, stiffness: 420 }));
       }}
       onPressOut={() => {
-        press.value = withSpring(1, { damping: 9, stiffness: 260 });
+        press.set(withSpring(1, { damping: 9, stiffness: 260 }));
       }}
       style={styles.arrowHit}
     >
@@ -287,6 +287,18 @@ const styles = StyleSheet.create({
     textAlign: "center",
     letterSpacing: -0.3,
     marginBottom: 3,
+  },
+
+  // Arabic letters reach higher and lower than Latin ones: at the Latin line
+  // height a wrapped second line ran into the first
+  foodNameAr: {
+    lineHeight: 24,
+    letterSpacing: 0,
+  },
+
+  itemDescriptionAr: {
+    lineHeight: 19,
+    minHeight: 38,
   },
 
   itemDescription: {

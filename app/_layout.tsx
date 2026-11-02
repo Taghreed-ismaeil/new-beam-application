@@ -16,6 +16,7 @@ import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 
+import ActiveOrderPill from "@/components/ActiveOrderPill";
 import BottomTabBar from "@/components/BottomTabBar/BottomTabBar";
 import IntroVideo from "@/components/IntroVideo";
 import LangToggle from "@/components/LangToggle";
@@ -101,6 +102,8 @@ export default function RootLayout() {
                       <Stack.Screen name="(tabs)" />
                       <Stack.Screen name="admin" />
                     </Stack>
+                    {/* an unfinished order's status, just above the tab bar */}
+                    <ActiveOrderPill />
                     <BottomTabBar />
                     {/* language switch in the top corner of every screen */}
                     <LangToggle />

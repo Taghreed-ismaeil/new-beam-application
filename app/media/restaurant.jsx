@@ -1,11 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   RefreshControl,
   StyleSheet,
   useWindowDimensions,
@@ -14,17 +13,18 @@ import {
 
 import MadeBy from "@/components/MadeBy";
 import BackButton from "@/components/BackButton";
+import MediaComments from "@/components/MediaComments";
+import MediaPostCard from "@/components/MediaPostCard";
 import MediaViewer from "@/components/MediaViewer";
-import { imageUrl } from "@/lib/api-client";
 import { useAppLang } from "@/lib/app-lang";
 import { fetchMediaPage } from "@/lib/media-api";
 import { Text } from "@/lib/arabic-font";
 
 /* =========================================================
    RESTAURANT GALLERY
-   Photos the restaurant posts from the admin panel, two per row
-   (every third one spans the full width for rhythm). Tap one to
-   see it full screen.
+   Photos the restaurant posts from the admin panel, one under
+   another in the same cards as the Media tab's feed — likes and
+   comments included. Tap a photo to see it full screen.
 ========================================================= */
 
 const ORANGE = "#FC4A14";
@@ -32,8 +32,6 @@ const SOFT_ORANGE = "#FC6E43";
 const WHITE = "#FFFFFF";
 const MUTED = "#68706E";
 const CREAM = "#FFF9F4";
-const GUTTER = 16;
-const GAP = 10;
 
 export default function RestaurantGallery() {
   const { t, dir } = useAppLang();
@@ -42,54 +40,68 @@ export default function RestaurantGallery() {
   const [cursor, setCursor] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [open, setOpen] = useState(null);
+  const [viewing, setViewing] = useState(null);
+  const [commentsFor, setCommentsFor] = useState(null);
+  const loadingRef = useRef(false);
 
-  const load = useCallback(async (reset) => {
-    const d = await fetchMediaPage("restaurant", reset ? null : cursor).catch(() => null);
-    if (!d) {
-      if (reset) setPosts((p) => p ?? []);
-      return;
-    }
-    setPosts((prev) => (reset ? d.posts : [...(prev ?? []), ...d.posts]));
-    setCursor(d.nextCursor);
-  }, [cursor]);
-
-  useEffect(() => {
-    load(true);
+  const loadFirst = useCallback(async () => {
+    const d = await fetchMediaPage("restaurant", null).catch(() => null);
+    if (!d) return setPosts((p) => p ?? []);
+    setPosts(d.posts ?? []);
+    setCursor(d.nextCursor ?? null);
   }, []);
 
+  // re-read on focus so new photos and fresh like counts show up
+  useFocusEffect(
+    useCallback(() => {
+      loadFirst();
+    }, [loadFirst]),
+  );
+
   async function loadMore() {
-    if (!cursor || loadingMore) return;
+    if (!cursor || loadingRef.current) return;
+    loadingRef.current = true;
     setLoadingMore(true);
-    await load(false);
-    setLoadingMore(false);
+    try {
+      const d = await fetchMediaPage("restaurant", cursor);
+      setPosts((list) => {
+        const seen = new Set((list ?? []).map((p) => p.id));
+        return [...(list ?? []), ...(d.posts ?? []).filter((p) => !seen.has(p.id))];
+      });
+      setCursor(d.nextCursor ?? null);
+    } catch {
+      // keep what we have; scrolling again retries
+    } finally {
+      loadingRef.current = false;
+      setLoadingMore(false);
+    }
   }
 
   async function refresh() {
     setRefreshing(true);
-    await load(true);
+    await loadFirst();
     setRefreshing(false);
   }
 
-  // Rows: [wide], [half, half], [wide], [half, half], …
-  const rows = [];
-  (posts ?? []).forEach((p, i) => {
-    const slot = i % 3;
-    if (slot === 0) rows.push([p]);
-    else if (slot === 1) rows.push([p]);
-    else rows[rows.length - 1].push(p);
-  });
+  // a like or a new comment count from a card / the comments sheet
+  const updatePost = useCallback((next) => {
+    setPosts((list) => (list ?? []).map((p) => (p.id === next.id ? { ...p, ...next } : p)));
+  }, []);
 
-  const half = (width - GUTTER * 2 - GAP) / 2;
-  const wide = width - GUTTER * 2;
+  const onCommentCount = useCallback((postId, commentCount) => {
+    setPosts((list) => (list ?? []).map((p) => (p.id === postId ? { ...p, commentCount } : p)));
+  }, []);
+
+  // same width as the Media tab's feed
+  const cardWidth = Math.min(width - 32, 560);
 
   return (
     <View style={styles.screen}>
       <BackButton />
 
       <FlatList
-        data={rows}
-        keyExtractor={(row) => row.map((p) => p.id).join("-")}
+        data={posts ?? []}
+        keyExtractor={(p) => String(p.id)}
         showsVerticalScrollIndicator={false}
         onEndReached={loadMore}
         onEndReachedThreshold={0.6}
@@ -108,6 +120,15 @@ export default function RestaurantGallery() {
             />
           </>
         }
+        renderItem={({ item }) => (
+          <MediaPostCard
+            post={item}
+            width={cardWidth}
+            onOpen={setViewing}
+            onComments={setCommentsFor}
+            onChange={updatePost}
+          />
+        )}
         ListEmptyComponent={
           posts === null ? (
             <ActivityIndicator color={ORANGE} style={{ marginTop: 40 }} />
@@ -125,42 +146,14 @@ export default function RestaurantGallery() {
             {posts !== null && <MadeBy />}
           </>
         }
-        renderItem={({ item: row }) => (
-          <View style={[styles.row, dir.row]}>
-            {row.map((p) => {
-              const w = row.length === 1 && (posts.indexOf(p) % 3 === 0) ? wide : half;
-              const h = w === wide ? wide * 0.62 : half * 1.2;
-              return (
-                <Pressable
-                  key={p.id}
-                  onPress={() => setOpen(p)}
-                  style={({ pressed }) => [styles.tile, { width: w, height: h }, pressed && styles.pressed]}
-                >
-                  <Image
-                    source={{ uri: imageUrl(p.imageUrl) }}
-                    cachePolicy="memory-disk"
-                    transition={150}
-                    contentFit="cover"
-                    style={StyleSheet.absoluteFill}
-                  />
-                  {!!p.caption && (
-                    <LinearGradient
-                      colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.6)"]}
-                      style={styles.tileCaption}
-                    >
-                      <Text style={[styles.tileCaptionText, dir.text]} numberOfLines={1}>
-                        {p.caption}
-                      </Text>
-                    </LinearGradient>
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
       />
 
-      <MediaViewer post={open} onClose={() => setOpen(null)} />
+      <MediaViewer post={viewing} onClose={() => setViewing(null)} />
+      <MediaComments
+        post={commentsFor}
+        onClose={() => setCommentsFor(null)}
+        onCountChange={onCommentCount}
+      />
     </View>
   );
 }
@@ -196,43 +189,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
+  // the cards start a little after the fade, like the Media tab
   headerFade: {
     height: 56,
     marginTop: -1,
-    marginBottom: -30,
-  },
-
-  row: {
-    flexDirection: "row",
-    gap: GAP,
-    paddingHorizontal: GUTTER,
-    marginBottom: GAP,
-  },
-
-  tile: {
-    borderRadius: 22,
-    overflow: "hidden",
-    backgroundColor: "#E9E4DF",
-  },
-
-  pressed: {
-    opacity: 0.9,
-  },
-
-  tileCaption: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 12,
-    paddingTop: 22,
-    paddingBottom: 10,
-  },
-
-  tileCaptionText: {
-    color: WHITE,
-    fontSize: 13,
-    fontWeight: "800",
+    marginBottom: 6,
   },
 
   empty: {

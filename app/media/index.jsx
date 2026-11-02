@@ -18,6 +18,7 @@ import MadeBy from "@/components/MadeBy";
 import MediaComments from "@/components/MediaComments";
 import MediaPostCard from "@/components/MediaPostCard";
 import MediaViewer from "@/components/MediaViewer";
+import NotificationBell from "@/components/NotificationBell";
 import { useAppLang } from "@/lib/app-lang";
 import { apiRequestCached, refreshCached } from "@/lib/api-client";
 import { fetchMediaPage } from "@/lib/media-api";
@@ -125,6 +126,8 @@ export default function MediaHub() {
     <>
       {/* ================= HEADER ================= */}
       <View style={styles.header}>
+        {/* in the header, so it scrolls away with the teal instead of floating over the feed */}
+        <NotificationBell />
         <Animated.View entering={enterDown(0)} style={styles.logoWrap}>
           <Image source={LOGO} contentFit="contain" style={styles.logo} />
         </Animated.View>

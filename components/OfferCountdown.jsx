@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { useAppLang } from "@/lib/app-lang";
+import { offerTitle } from "@/lib/offers";
 import { Text } from "@/lib/arabic-font";
 import { countdownParts, formatCountdown, useNow } from "@/lib/offers";
 
@@ -69,7 +70,8 @@ function countdownBoxes(left, t) {
  * onPress(item) gets the item showing at the moment of the tap.
  */
 export function OfferBanner({ offer, endsAt, items = [], onPress }) {
-  const { t, dir } = useAppLang();
+  const { t, dir, lang } = useAppLang();
+  const title = offerTitle(offer, lang);
   const now = useNow(1000);
   const [shown, setShown] = useState(0);
 
@@ -95,7 +97,7 @@ export function OfferBanner({ offer, endsAt, items = [], onPress }) {
     <Pressable
       onPress={() => onPress?.(item)}
       accessibilityRole="button"
-      accessibilityLabel={`${offer.title} ${item?.name ?? ""} ${formatCountdown(left)}`}
+      accessibilityLabel={`${title} ${item?.name ?? ""} ${formatCountdown(left)}`}
       style={({ pressed }) => [styles.ticketWrap, pressed && styles.pressed]}
     >
       <View style={[styles.ticket, dir.row]}>
@@ -149,7 +151,7 @@ export function OfferBanner({ offer, endsAt, items = [], onPress }) {
             </Text>
           </View>
           <Text style={[styles.title, dir.text]} numberOfLines={1}>
-            {offer.title}
+            {title}
           </Text>
           {!!item && (
             <Text style={[styles.itemName, dir.text]} numberOfLines={1}>

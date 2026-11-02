@@ -50,7 +50,9 @@ const RESTAURANT_MAPS_URL =
 export default function AccountScreen() {
   const { width } = useWindowDimensions();
   const { user, logout } = useAuth();
-  const { t, dir } = useAppLang();
+  const { t, dir, lang } = useAppLang();
+  // Arabic rows read from the right: icon on the right next to the text, arrow on the far left
+  const rtl = lang === "ar";
 
   const [orders, setOrders] = useState([]);
   const [readyRewards, setReadyRewards] = useState(0);
@@ -345,10 +347,11 @@ export default function AccountScreen() {
             onPress={() => (user ? router.push("/reservations") : goToLogin())}
             style={({ pressed }) => [
               styles.menuItem,
+              rtl && styles.rowAr,
               pressed && styles.pressed,
             ]}
           >
-            <View style={[styles.menuIcon, styles.orangeMenuIcon]}>
+            <View style={[styles.menuIcon, styles.orangeMenuIcon, rtl && styles.menuIconAr]}>
               <Ionicons
                 name="restaurant-outline"
                 size={21}
@@ -356,7 +359,7 @@ export default function AccountScreen() {
               />
             </View>
 
-            <View style={styles.menuText}>
+            <View style={[styles.menuText, rtl && styles.menuTextAr]}>
               <Text style={[styles.menuTitle, dir.text]}>
                 {t("accountReservations")}
               </Text>
@@ -366,72 +369,66 @@ export default function AccountScreen() {
               </Text>
             </View>
 
-            <Ionicons name="chevron-forward" size={20} color={ORANGE} />
+            <Ionicons name={rtl ? "chevron-back" : "chevron-forward"} size={20} color={ORANGE} />
           </Pressable>
 
-          {/* Contact */}
+          {/* My Orders → its own page */}
 
           <Pressable
-            onPress={() => router.push("/contact")}
+            onPress={() => (user ? router.push("/orders") : goToLogin())}
             style={({ pressed }) => [
               styles.menuItem,
+              rtl && styles.rowAr,
               pressed && styles.pressed,
             ]}
           >
-            <View style={[styles.menuIcon, styles.tealMenuIcon]}>
-              <Ionicons
-                name="chatbubble-ellipses-outline"
-                size={21}
-                color={LIGHT_TEAL}
-              />
+            <View style={[styles.menuIcon, styles.tealMenuIcon, rtl && styles.menuIconAr]}>
+              <Ionicons name="receipt-outline" size={21} color={LIGHT_TEAL} />
             </View>
 
-            <View style={styles.menuText}>
+            <View style={[styles.menuText, rtl && styles.menuTextAr]}>
               <Text style={[styles.menuTitle, dir.text]}>
-                {t("accountContact")}
+                {t("accountOrders")}
               </Text>
 
               <Text style={[styles.menuSubtitle, dir.text]}>
-                {t("accountContactSub")}
+                {t("accountOrdersSub")}
               </Text>
             </View>
 
-            <Ionicons name="chevron-forward" size={20} color={TEAL} />
+            <Ionicons name={rtl ? "chevron-back" : "chevron-forward"} size={20} color={TEAL} />
           </Pressable>
 
-          {/* Policies and terms */}
+          {/* Rate us (star popup) and complaints (lands in the admin panel), side by side */}
 
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/policies/[doc]",
-                params: { doc: "terms" },
-              })
-            }
-            style={({ pressed }) => [
-              styles.menuItem,
-              pressed && styles.pressed,
-            ]}
-          >
-            <View style={[styles.menuIcon, styles.tealMenuIcon]}>
-              <Ionicons
-                name="document-text-outline"
-                size={21}
-                color={LIGHT_TEAL}
-              />
-            </View>
-
-            <View style={styles.menuText}>
-              <Text style={[styles.menuTitle, dir.text]}>
-                {t("accountPolicies")}
+          {/* reading order: "rate us" comes first — on the right in Arabic */}
+          <View style={[styles.tileRow, lang === "ar" ? styles.tileRowAr : dir.row]}>
+            <Pressable
+              onPress={() => (user ? setFeedbackMode("rating") : goToLogin())}
+              style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
+            >
+              <View style={[styles.menuIcon, styles.tileIcon, styles.orangeMenuIcon]}>
+                <Ionicons name="star-outline" size={21} color={LIGHT_ORANGE} />
+              </View>
+              <Text style={styles.tileTitle}>{t("accountRate")}</Text>
+              <Text style={styles.tileSubtitle} numberOfLines={2}>
+                {t("accountRateSub")}
               </Text>
-              <Text style={[styles.menuSubtitle, dir.text]}>
-                {t("accountPoliciesSub")}
-              </Text>
-            </View>
+            </Pressable>
 
-            <Ionicons name="chevron-forward" size={20} color={TEAL} />
-          </Pressable>
+            <Pressable
+              onPress={() => (user ? setFeedbackMode("complaint") : goToLogin())}
+              style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
+            >
+              <View style={[styles.menuIcon, styles.tileIcon, styles.tealMenuIcon]}>
+                <Ionicons name="chatbox-ellipses-outline" size={21} color={LIGHT_TEAL} />
+              </View>
+              <Text style={styles.tileTitle}>{t("accountComplaint")}</Text>
+              <Text style={styles.tileSubtitle} numberOfLines={2}>
+                {t("accountComplaintSub")}
+              </Text>
+            </Pressable>
+          </View>
 
           {/* Location — map preview card */}
 
@@ -462,10 +459,11 @@ export default function AccountScreen() {
               onPress={openLocation}
               style={({ pressed }) => [
                 styles.locationRow,
+                rtl && styles.rowAr,
                 pressed && styles.pressed,
               ]}
             >
-              <View style={[styles.menuIcon, styles.orangeMenuIcon]}>
+              <View style={[styles.menuIcon, styles.orangeMenuIcon, rtl && styles.menuIconAr]}>
                 <Ionicons
                   name="location-outline"
                   size={21}
@@ -473,7 +471,7 @@ export default function AccountScreen() {
                 />
               </View>
 
-              <View style={styles.menuText}>
+              <View style={[styles.menuText, rtl && styles.menuTextAr]}>
                 <Text style={[styles.menuTitle, dir.text]}>
                   {t("accountLocation")}
                 </Text>
@@ -483,9 +481,44 @@ export default function AccountScreen() {
                 </Text>
               </View>
 
-              <Ionicons name="chevron-forward" size={20} color={ORANGE} />
+              <Ionicons name={rtl ? "chevron-back" : "chevron-forward"} size={20} color={ORANGE} />
             </Pressable>
           </View>
+
+          {/* Policies and terms */}
+
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/policies/[doc]",
+                params: { doc: "terms" },
+              })
+            }
+            style={({ pressed }) => [
+              styles.menuItem,
+              rtl && styles.rowAr,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={[styles.menuIcon, styles.tealMenuIcon, rtl && styles.menuIconAr]}>
+              <Ionicons
+                name="document-text-outline"
+                size={21}
+                color={LIGHT_TEAL}
+              />
+            </View>
+
+            <View style={[styles.menuText, rtl && styles.menuTextAr]}>
+              <Text style={[styles.menuTitle, dir.text]}>
+                {t("accountPolicies")}
+              </Text>
+              <Text style={[styles.menuSubtitle, dir.text]}>
+                {t("accountPoliciesSub")}
+              </Text>
+            </View>
+
+            <Ionicons name={rtl ? "chevron-back" : "chevron-forward"} size={20} color={TEAL} />
+          </Pressable>
 
           {/* Share */}
 
@@ -493,18 +526,19 @@ export default function AccountScreen() {
             onPress={shareApp}
             style={({ pressed }) => [
               styles.menuItem,
+              rtl && styles.rowAr,
               pressed && styles.pressed,
             ]}
           >
-            <View style={[styles.menuIcon, styles.tealMenuIcon]}>
+            <View style={[styles.menuIcon, styles.orangeMenuIcon, rtl && styles.menuIconAr]}>
               <Ionicons
                 name="share-social-outline"
                 size={21}
-                color={LIGHT_TEAL}
+                color={LIGHT_ORANGE}
               />
             </View>
 
-            <View style={styles.menuText}>
+            <View style={[styles.menuText, rtl && styles.menuTextAr]}>
               <Text style={[styles.menuTitle, dir.text]}>
                 {t("accountShare")}
               </Text>
@@ -514,90 +548,40 @@ export default function AccountScreen() {
               </Text>
             </View>
 
-            <Ionicons name="chevron-forward" size={20} color={TEAL} />
+            <Ionicons name={rtl ? "chevron-back" : "chevron-forward"} size={20} color={ORANGE} />
           </Pressable>
 
-          {/* My Orders → its own page */}
+          {/* Contact */}
 
           <Pressable
-            onPress={() => (user ? router.push("/orders") : goToLogin())}
+            onPress={() => router.push("/contact")}
             style={({ pressed }) => [
               styles.menuItem,
+              rtl && styles.rowAr,
               pressed && styles.pressed,
             ]}
           >
-            <View style={[styles.menuIcon, styles.orangeMenuIcon]}>
-              <Ionicons name="receipt-outline" size={21} color={LIGHT_ORANGE} />
-            </View>
-
-            <View style={styles.menuText}>
-              <Text style={[styles.menuTitle, dir.text]}>
-                {t("accountOrders")}
-              </Text>
-
-              <Text style={[styles.menuSubtitle, dir.text]}>
-                {t("accountOrdersSub")}
-              </Text>
-            </View>
-
-            <Ionicons name="chevron-forward" size={20} color={ORANGE} />
-          </Pressable>
-
-          {/* Rate us → star popup */}
-
-          <Pressable
-            onPress={() => (user ? setFeedbackMode("rating") : goToLogin())}
-            style={({ pressed }) => [
-              styles.menuItem,
-              pressed && styles.pressed,
-            ]}
-          >
-            <View style={[styles.menuIcon, styles.tealMenuIcon]}>
-              <Ionicons name="star-outline" size={21} color={LIGHT_TEAL} />
-            </View>
-
-            <View style={styles.menuText}>
-              <Text style={[styles.menuTitle, dir.text]}>
-                {t("accountRate")}
-              </Text>
-
-              <Text style={[styles.menuSubtitle, dir.text]}>
-                {t("accountRateSub")}
-              </Text>
-            </View>
-
-            <Ionicons name="chevron-forward" size={20} color={TEAL} />
-          </Pressable>
-
-          {/* Complaints → popup, lands in the admin panel */}
-
-          <Pressable
-            onPress={() => (user ? setFeedbackMode("complaint") : goToLogin())}
-            style={({ pressed }) => [
-              styles.menuItem,
-              pressed && styles.pressed,
-            ]}
-          >
-            <View style={[styles.menuIcon, styles.orangeMenuIcon]}>
+            <View style={[styles.menuIcon, styles.tealMenuIcon, rtl && styles.menuIconAr]}>
               <Ionicons
-                name="chatbox-ellipses-outline"
+                name="chatbubble-ellipses-outline"
                 size={21}
-                color={LIGHT_ORANGE}
+                color={LIGHT_TEAL}
               />
             </View>
 
-            <View style={styles.menuText}>
+            <View style={[styles.menuText, rtl && styles.menuTextAr]}>
               <Text style={[styles.menuTitle, dir.text]}>
-                {t("accountComplaint")}
+                {t("accountContact")}
               </Text>
 
               <Text style={[styles.menuSubtitle, dir.text]}>
-                {t("accountComplaintSub")}
+                {t("accountContactSub")}
               </Text>
             </View>
 
-            <Ionicons name="chevron-forward" size={20} color={ORANGE} />
+            <Ionicons name={rtl ? "chevron-back" : "chevron-forward"} size={20} color={TEAL} />
           </Pressable>
+
         </Animated.View>
 
         <FeedbackSheet
@@ -879,6 +863,49 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
 
+  // the two square tiles (rate us / complaints)
+  tileRow: {
+    gap: 10,
+  },
+
+  tileRowAr: {
+    flexDirection: "row-reverse",
+  },
+
+  tile: {
+    flex: 1,
+    minHeight: 132,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#ECEDEB",
+    backgroundColor: WHITE,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 14,
+  },
+
+  tileIcon: {
+    marginRight: 0,
+    marginBottom: 10,
+  },
+
+  tileTitle: {
+    color: DARK,
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "center",
+    marginBottom: 3,
+  },
+
+  tileSubtitle: {
+    color: MUTED,
+    fontSize: 10.5,
+    lineHeight: 16,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+
   menuIcon: {
     width: 48,
     height: 48,
@@ -906,6 +933,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 13,
     paddingVertical: 12,
+  },
+
+  rowAr: {
+    flexDirection: "row-reverse",
+  },
+
+  menuIconAr: {
+    marginRight: 0,
+    marginLeft: 12,
+  },
+
+  menuTextAr: {
+    paddingRight: 0,
+    paddingLeft: 8,
   },
 
   orangeMenuIcon: {
